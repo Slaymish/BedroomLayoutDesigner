@@ -1,49 +1,45 @@
 import { useRef } from "react";
 import type { RoomItem } from "../types";
 import type { Preferences } from "../types";
+import { fromBaseCm, toBaseCm } from "../utils/units";
 
 export default function EditObjectPanel({item, onChange, onRemove, unit}: {item: RoomItem; onClose: () => void; onChange: (updatedItem: RoomItem) => void; onRemove: () => void; unit: Preferences['unit']}) {
-    
-    const handleChange = (field: keyof RoomItem, value: number) => {
-        const updatedItem = { ...item, [field]: value };
+    const u = unit || 'cm';
+
+    const handleChangeBase = (field: keyof RoomItem, baseValue: number) => {
+        const updatedItem = { ...item, [field]: baseValue };
         onChange(updatedItem);
     };
 
-    const dragRef = useRef<{ field: 'width'|'height'|'x'|'y'|'rotate' | null; startX: number; startVal: number; dragging: boolean }>({
+    const dragRef = useRef<{ field: 'width'|'height'|'x'|'y'|'rotate' | null; startX: number; startDisplayVal: number; dragging: boolean }>({
         field: null,
         startX: 0,
-        startVal: 0,
+        startDisplayVal: 0,
         dragging: false,
     });
 
     const startDrag = (field: 'width'|'height'|'x'|'y'|'rotate', e: React.MouseEvent<HTMLInputElement>) => {
         e.preventDefault();
-        const currentVal = Number((item as any)[field]) || 0;
-        dragRef.current = { field, startX: e.clientX, startVal: currentVal, dragging: true };
+        const baseVal = Number((item as any)[field]) || 0;
+        const displayVal = field === 'rotate' ? baseVal : fromBaseCm(baseVal, u);
+        dragRef.current = { field, startX: e.clientX, startDisplayVal: displayVal, dragging: true };
 
         const onMove = (ev: MouseEvent) => {
             if (!dragRef.current.dragging || dragRef.current.field === null) return;
             const deltaX = ev.clientX - dragRef.current.startX;
-            // Base sensitivity: 1 unit per pixel; modifiers for fine/fast
             let step = 1;
-            if (ev.shiftKey) step = 5;       // faster
-            if (ev.altKey || ev.ctrlKey || ev.metaKey) step = 0.2; // finer
-            let newVal = dragRef.current.startVal + deltaX * step;
+            if (ev.shiftKey) step = 5;
+            if (ev.altKey || ev.ctrlKey || ev.metaKey) step = 0.2;
+            let newDisplayVal = dragRef.current.startDisplayVal + deltaX * step;
 
-            // Round to integer (keeps UX simple); rotation wraps 0..359
             if (dragRef.current.field === 'rotate') {
-                newVal = ((Math.round(newVal) % 360) + 360) % 360;
+                newDisplayVal = ((Math.round(newDisplayVal) % 360) + 360) % 360;
+                handleChangeBase('rotate', newDisplayVal);
             } else {
-                newVal = Math.round(newVal);
-                // Basic clamps to non-negative for sizes/positions
-                if (dragRef.current.field === 'width' || dragRef.current.field === 'height') {
-                    newVal = Math.max(1, newVal);
-                } else if (dragRef.current.field === 'x' || dragRef.current.field === 'y') {
-                    newVal = Math.max(0, newVal);
-                }
+                newDisplayVal = Math.max(0, newDisplayVal);
+                const baseNew = toBaseCm(newDisplayVal, u);
+                handleChangeBase(dragRef.current.field, baseNew);
             }
-
-            handleChange(dragRef.current.field, newVal);
         };
 
         const onUp = () => {
@@ -62,58 +58,68 @@ export default function EditObjectPanel({item, onChange, onRemove, unit}: {item:
             className="bg-white border border-gray-200 p-4 rounded-xl shadow-sm space-y-4"
         >
             <h3 className="text-xl font-semibold">Edit Object</h3>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm">Width ({unit}):</label>
-                <input 
-                    className="border rounded px-2 py-1 cursor-ew-resize select-none"
-                    type="number" 
-                    value={item.width} 
-                    onChange={(e) => handleChange('width', Number(e.target.value))}
-                    onMouseDown={(e) => startDrag('width', e)}
-                />
-            </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm">Height ({unit}):</label>
-                <input 
-                    className="border rounded px-2 py-1 cursor-ew-resize select-none"
-                    type="number" 
-                    value={item.height} 
-                    onChange={(e) => handleChange('height', Number(e.target.value))}
-                    onMouseDown={(e) => startDrag('height', e)}
-                />
-            </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm">X Position:</label>
-                <input 
-                    className="border rounded px-2 py-1 cursor-ew-resize select-none"
-                    type="number" 
-                    value={item.x} 
-                    onChange={(e) => handleChange('x', Number(e.target.value))}
-                    onMouseDown={(e) => startDrag('x', e)}
-                />
-            </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-sm">Y Position:</label>
-                <input 
-                    className="border rounded px-2 py-1 cursor-ew-resize select-none"
-                    type="number" 
-                    value={item.y} 
-                    onChange={(e) => handleChange('y', Number(e.target.value))}
-                    onMouseDown={(e) => startDrag('y', e)}
-                />
-            </div>
+            {(() => {
+                const displayWidth = fromBaseCm(item.width, u);
+                const displayHeight = fromBaseCm(item.height, u);
+                const displayX = fromBaseCm(item.x, u);
+                const displayY = fromBaseCm(item.y, u);
+                return (
+                    <>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm">Width ({u}):</label>
+                            <input
+                                className="border rounded px-2 py-1 cursor-ew-resize select-none"
+                                type="number"
+                                value={displayWidth}
+                                onChange={(e) => handleChangeBase('width', toBaseCm(Number(e.target.value), u))}
+                                onMouseDown={(e) => startDrag('width', e)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm">Height ({u}):</label>
+                            <input
+                                className="border rounded px-2 py-1 cursor-ew-resize select-none"
+                                type="number"
+                                value={displayHeight}
+                                onChange={(e) => handleChangeBase('height', toBaseCm(Number(e.target.value), u))}
+                                onMouseDown={(e) => startDrag('height', e)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm">X Position ({u}):</label>
+                            <input
+                                className="border rounded px-2 py-1 cursor-ew-resize select-none"
+                                type="number"
+                                value={displayX}
+                                onChange={(e) => handleChangeBase('x', toBaseCm(Number(e.target.value), u))}
+                                onMouseDown={(e) => startDrag('x', e)}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label className="text-sm">Y Position ({u}):</label>
+                            <input
+                                className="border rounded px-2 py-1 cursor-ew-resize select-none"
+                                type="number"
+                                value={displayY}
+                                onChange={(e) => handleChangeBase('y', toBaseCm(Number(e.target.value), u))}
+                                onMouseDown={(e) => startDrag('y', e)}
+                            />
+                        </div>
+                    </>
+                );
+            })()}
             <div className="flex flex-col gap-1">
                 <label className="text-sm">Rotation:</label>
-                <input 
+                <input
                     className="border rounded px-2 py-1 cursor-ew-resize select-none"
-                    type="number" 
-                    value={item.rotate || 0} 
-                    onChange={(e) => handleChange('rotate', Number(e.target.value))}
+                    type="number"
+                    value={item.rotate || 0}
+                    onChange={(e) => handleChangeBase('rotate', Number(e.target.value))}
                     onMouseDown={(e) => startDrag('rotate', e)}
                 />
             </div>
             <div className="flex gap-3">
-                <button className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50" onClick={() => handleChange('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
+                <button className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50" onClick={() => handleChangeBase('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
                 <button className="inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium bg-red-600 text-white hover:bg-red-700" onClick={onRemove}>Remove</button>
             </div>
         </div>

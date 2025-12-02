@@ -1,7 +1,8 @@
 import type { Preferences } from "../types";
+import { toBaseCm } from "../utils/units";
 
 interface AddObjectPanelProps {
-    onAddObject: (width: number, height: number, type: string) => void;
+    onAddObject: (widthCm: number, heightCm: number, type: string) => void;
     unit?: Preferences['unit'];
 }
 
@@ -11,29 +12,30 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
             <h3 className="text-xl font-semibold">Add Objects</h3>
             <button 
                 className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                onClick={() => onAddObject(100, 200, 'Bed')}
+                onClick={() => onAddObject(toBaseCm(100, unit || 'cm'), toBaseCm(200, unit || 'cm'), 'Bed')}
             >
                 Add Bed
             </button>
             <button 
                 className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                onClick={() => onAddObject(150, 60, 'Wardrobe')}
+                onClick={() => onAddObject(toBaseCm(150, unit || 'cm'), toBaseCm(60, unit || 'cm'), 'Wardrobe')}
             >
                 Add Wardrobe
             </button>
             <button 
                 className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                onClick={() => onAddObject(120, 60, 'Desk')}
+                onClick={() => onAddObject(toBaseCm(120, unit || 'cm'), toBaseCm(60, unit || 'cm'), 'Desk')}
             >
                 Add Desk
             </button>
             <form className="pt-2 mt-2 border-t border-gray-200 space-y-3" onSubmit={e => {
                 e.preventDefault();
                 const form = e.target as HTMLFormElement;
-                const width = parseInt((form.elements.namedItem('width') as HTMLInputElement).value, 10);
-                const height = parseInt((form.elements.namedItem('height') as HTMLInputElement).value, 10);
+                const widthRaw = parseFloat((form.elements.namedItem('width') as HTMLInputElement).value);
+                const heightRaw = parseFloat((form.elements.namedItem('height') as HTMLInputElement).value);
                 const type = (form.elements.namedItem('type') as HTMLInputElement).value;
-                onAddObject(width, height, type);
+                const u = unit || 'cm';
+                onAddObject(toBaseCm(widthRaw, u), toBaseCm(heightRaw, u), type);
                 form.reset();
             }}>
                 <h4 className="text-base font-semibold">Custom Object</h4>
