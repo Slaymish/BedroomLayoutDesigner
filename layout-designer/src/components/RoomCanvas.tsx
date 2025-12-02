@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import RoomObject from "./RoomObject"
 import type { RoomItem } from "../types"
+import EditObjectPanel from "./EditObjectPanel"
 
 interface RoomCanvasProps {
     items: RoomItem[];
@@ -14,11 +15,16 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     
     const [draggingId, setDraggingId] = useState<number | null>(null);
     const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    const hasDragged = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
 
+    const [editObjectPanelOpen, setEditObjectPanelOpen] = useState(false);
+    const [editingItemId, setEditingItemId] = useState<number | null>(null);
+
     const handleObjectMouseDown = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
+        hasDragged.current = false;
         const item = items.find(i => i.id === id);
         if (item && canvasRef.current) {
             const rect = canvasRef.current.getBoundingClientRect();
@@ -33,6 +39,18 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                 y: mouseYInCanvas - item.y
             });
         }
+    };
+
+    const handleObjectClick = (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();
+        if (hasDragged.current) return;
+        
+        const item = items.find(i => i.id === id);
+        if (item) {
+            setEditingItemId(id);
+            setEditObjectPanelOpen(true);
+        }
+        
     };
 
     useEffect(() => {
@@ -51,6 +69,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                     setHeight(Math.max(minHeight, e.clientY - rect.top));
                 }
             } else if (draggingId !== null && canvasRef.current) {
+                hasDragged.current = true;
                 const rect = canvasRef.current.getBoundingClientRect();
                 const mouseXInCanvas = e.clientX - rect.left;
                 const mouseYInCanvas = e.clientY - rect.top;
@@ -103,6 +122,15 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                 backgroundColor: 'white'
             }}
         >
+            {editObjectPanelOpen && editingItemId !== null && (
+                <EditObjectPanel
+                    item={items.find(i => i.id === editingItemId)!}
+                    onClose={() => setEditObjectPanelOpen(false)}
+                    onChange={(updatedItem) => {
+                        onItemsChange(prevItems => prevItems.map(i => i.id === updatedItem.id ? updatedItem : i));
+                    }}
+                />
+            )}
             {items.map(item => (
                 <RoomObject 
                     key={item.id}
@@ -112,6 +140,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                     y={item.y}
                     label={item.type}
                     onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
+                    onMouseClick={(e) => handleObjectClick(e, item.id)}
                 />
             ))}
 
