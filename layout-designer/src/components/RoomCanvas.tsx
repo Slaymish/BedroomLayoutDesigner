@@ -6,6 +6,8 @@ interface RoomCanvasProps {
     items: RoomItem[];
     onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
     onEditItem: (id: number | null) => void;
+    gridSize?: number; // in px
+    gridColor?: string; // CSS color string to override --grid-color
 }
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
@@ -18,7 +20,7 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
-export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCanvasProps) {
+export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize = 40, gridColor }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
@@ -135,10 +137,12 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCan
         <div
             ref={canvasRef}
             onClick={() => onEditItem(null)}
-            className="relative border border-black bg-white"
+            className="relative bg-white bg-grid rounded-xs shadow-sm ring-1 ring-gray-200"
             style={{
                 width,
                 height,
+                ["--grid-size" as any]: `${gridSize}px`,
+                ...(gridColor ? { ["--grid-color" as any]: gridColor } : {}),
             }}
         >
             {items.map(item => (
@@ -158,19 +162,19 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCan
             {/* Right Handle */}
             <div
                 onMouseDown={() => setIsResizing('right')}
-                className="absolute -right-[5px] top-0 bottom-0 w-[10px] cursor-col-resize z-10"
+                className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10"
             />
 
             {/* Bottom Handle */}
             <div
                 onMouseDown={() => setIsResizing('bottom')}
-                className="absolute left-0 right-0 -bottom-[5px] h-[10px] cursor-row-resize z-10"
+                className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10"
             />
 
             {/* Corner Handle */}
             <div
                 onMouseDown={() => setIsResizing('corner')}
-                className="absolute -right-[5px] -bottom-[5px] w-[15px] h-[15px] cursor-nwse-resize bg-gray-300 z-20"
+                className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-gray-300 z-20"
             />
         </div>
     )
