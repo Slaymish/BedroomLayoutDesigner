@@ -4,5 +4,6 @@ export interface RoomItem {
     height: number;
     x: number;
     y: number;
+    rotate?: number;
     type?: string;
 }

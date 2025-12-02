@@ -8,6 +8,16 @@ interface RoomCanvasProps {
     onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
 }
 
+const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
+    const rad = (rotation * Math.PI) / 180;
+    const sin = Math.abs(Math.sin(rad));
+    const cos = Math.abs(Math.cos(rad));
+    return {
+        width: w * cos + h * sin,
+        height: w * sin + h * cos
+    };
+};
+
 export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
@@ -59,8 +69,14 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                 const rect = canvasRef.current.getBoundingClientRect();
                 
                 // Calculate minimum dimensions based on objects
-                const minWidth = Math.max(100, ...items.map(i => i.x + i.width));
-                const minHeight = Math.max(100, ...items.map(i => i.y + i.height));
+                const minWidth = Math.max(100, ...items.map(i => {
+                    const { width: bboxW } = getBoundingBox(i.width, i.height, i.rotate);
+                    return i.x + i.width / 2 + bboxW / 2;
+                }));
+                const minHeight = Math.max(100, ...items.map(i => {
+                    const { height: bboxH } = getBoundingBox(i.width, i.height, i.rotate);
+                    return i.y + i.height / 2 + bboxH / 2;
+                }));
 
                 if (isResizing === 'right' || isResizing === 'corner') {
                     setWidth(Math.max(minWidth, e.clientX - rect.left));
@@ -79,9 +95,22 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                         const newX = mouseXInCanvas - dragOffset.x;
                         const newY = mouseYInCanvas - dragOffset.y;
 
+                        const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
+
+                        // Calculate valid range for x and y
+                        // The bounding box extends from x + width/2 - bboxW/2 to x + width/2 + bboxW/2
+                        // We want x + width/2 - bboxW/2 >= 0  => x >= (bboxW - width) / 2
+                        // We want x + width/2 + bboxW/2 <= roomWidth => x <= roomWidth - (width + bboxW) / 2
+
+                        const minX = (bboxW - item.width) / 2;
+                        const maxX = width - (item.width + bboxW) / 2;
+                        
+                        const minY = (bboxH - item.height) / 2;
+                        const maxY = height - (item.height + bboxH) / 2;
+
                         // Clamp position within room bounds
-                        const clampedX = Math.max(0, Math.min(newX, width - item.width));
-                        const clampedY = Math.max(0, Math.min(newY, height - item.height));
+                        const clampedX = Math.max(minX, Math.min(newX, maxX));
+                        const clampedY = Math.max(minY, Math.min(newY, maxY));
 
                         return {
                             ...item,
@@ -113,6 +142,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     return (
         <div
             ref={canvasRef}
+            onClick={() => setEditObjectPanelOpen(false)}
             style={{
                 width,
                 height,
@@ -138,6 +168,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                     height={item.height} 
                     x={item.x}
                     y={item.y}
+                    rotate={item.rotate}
                     label={item.type}
                     onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
                     onMouseClick={(e) => handleObjectClick(e, item.id)}
