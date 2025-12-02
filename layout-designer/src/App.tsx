@@ -70,6 +70,7 @@ function App() {
               onEditItem={handleEditItem}
               gridSize={preferences.gridSize}
               gridColor={preferences.gridColor}
+              unit={preferences.unit}
             />
           </section>
           {editingItemId !== null && (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import RoomObject from "./RoomObject"
 import type { RoomItem } from "../types"
+import { fromBaseCm } from "../utils/units"
 
 interface RoomCanvasProps {
     items: RoomItem[];
@@ -8,6 +9,7 @@ interface RoomCanvasProps {
     onEditItem: (id: number | null) => void;
     gridSize?: number; // in px
     gridColor?: string; // CSS color string to override --grid-color
+    unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
 }
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
@@ -20,7 +22,7 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
-export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize = 40, gridColor }: RoomCanvasProps) {
+export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize = 40, gridColor, unit = 'cm' }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
@@ -133,6 +135,9 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
         };
     }, [isResizing, draggingId, dragOffset, onItemsChange, items, width, height]);
 
+    const displayWidth = fromBaseCm(width, unit);
+    const displayHeight = fromBaseCm(height, unit);
+
     return (
         <div
             ref={canvasRef}
@@ -145,6 +150,14 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
                 ...(gridColor ? { ["--grid-color" as any]: gridColor } : {}),
             }}
         >
+            {/* Width label (top center) */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full text-[10px] px-1 py-0.5 bg-white/70 backdrop-blur rounded border border-gray-200 shadow-sm pointer-events-none select-none">
+                {Math.round(displayWidth * 100) / 100}{unit}
+            </div>
+            {/* Height label (left middle rotated) */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full text-[10px] px-1 py-0.5 bg-white/70 backdrop-blur rounded border border-gray-200 shadow-sm pointer-events-none select-none origin-center -rotate-90">
+                {Math.round(displayHeight * 100) / 100}{unit}
+            </div>
             {items.map(item => (
                 <RoomObject 
                     key={item.id}
