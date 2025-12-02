@@ -1,6 +1,6 @@
 import type { RoomItem } from "../types";
 
-export default function EditObjectPanel({item, onChange}: {item: RoomItem; onClose: () => void; onChange: (updatedItem: RoomItem) => void}) {
+export default function EditObjectPanel({item, onChange, onRemove}: {item: RoomItem; onClose: () => void; onChange: (updatedItem: RoomItem) => void; onRemove: () => void}) {
     
     const handleChange = (field: keyof RoomItem, value: number) => {
         const updatedItem = { ...item, [field]: value };
@@ -10,9 +10,9 @@ export default function EditObjectPanel({item, onChange}: {item: RoomItem; onClo
     return (
         <div 
             onClick={(e) => e.stopPropagation()}
-            style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'white', border: '1px solid #ccc', padding: '10px', zIndex: 1000 }}
+            style={{ backgroundColor: 'white', border: '1px solid #ccc', padding: '10px' }}
         >
-            <h3>Edit Object</h3>
+            <h3>Edit {item.type || 'Object'}</h3>
             <div>
                 <label>
                     Width:
@@ -65,6 +65,9 @@ export default function EditObjectPanel({item, onChange}: {item: RoomItem; onClo
             </div>
             <div>
                 <button onClick={(e) => handleChange('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
+            </div>
+            <div>
+                <button style={{ backgroundColor: 'red', color: 'white' }} onClick={onRemove}>Remove</button>
             </div>
         </div>
     );

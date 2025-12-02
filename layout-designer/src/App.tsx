@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import AddObjectPanel from './components/AddObjectPanel'
 import RoomCanvas from './components/RoomCanvas'
+import EditObjectPanel from './components/EditObjectPanel'
 import type { RoomItem } from './types'
 
 function App() {
@@ -10,6 +11,7 @@ function App() {
     { id: 2, width: 100, height: 100, x: 200, y: 100 },
     { id: 3, width: 200, height: 150, x: 400, y: 200 }
   ]);
+  const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
   const handleAddItem = (width: number, height: number, type: string) => {
     const newItem: RoomItem = {
@@ -23,6 +25,21 @@ function App() {
     setItems([...items, newItem]);
   };
 
+  const handleEditItem = (id: number | null) => {
+    setEditingItemId(id);
+  };
+
+  const handleUpdateItem = (updatedItem: RoomItem) => {
+    setItems(prevItems => prevItems.map(i => i.id === updatedItem.id ? updatedItem : i));
+  };
+
+  const handleRemoveItem = () => {
+    if (editingItemId !== null) {
+      setItems(prevItems => prevItems.filter(i => i.id !== editingItemId));
+      setEditingItemId(null);
+    }
+  };
+
   return (
     <>
       <div>
@@ -30,7 +47,21 @@ function App() {
       </div>
       <div style={{ display: 'flex' }}>
         <AddObjectPanel onAddObject={handleAddItem} />
-        <RoomCanvas items={items} onItemsChange={setItems} />
+        <RoomCanvas 
+          items={items} 
+          onItemsChange={setItems} 
+          onEditItem={handleEditItem}
+        />
+        {editingItemId !== null && (
+          <div style={{ marginLeft: '10px', position: 'relative', width: '200px' }}>
+             <EditObjectPanel
+              item={items.find(i => i.id === editingItemId)!}
+              onClose={() => setEditingItemId(null)}
+              onChange={handleUpdateItem}
+              onRemove={handleRemoveItem}
+            />
+          </div>
+        )}
       </div>
     </>
   )

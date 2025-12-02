@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from "react"
 import RoomObject from "./RoomObject"
 import type { RoomItem } from "../types"
-import EditObjectPanel from "./EditObjectPanel"
 
 interface RoomCanvasProps {
     items: RoomItem[];
     onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
+    onEditItem: (id: number | null) => void;
 }
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
@@ -18,7 +18,7 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
-export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
+export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
@@ -28,9 +28,6 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     const hasDragged = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
-
-    const [editObjectPanelOpen, setEditObjectPanelOpen] = useState(false);
-    const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
     const handleObjectMouseDown = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
@@ -55,12 +52,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
         e.stopPropagation();
         if (hasDragged.current) return;
         
-        const item = items.find(i => i.id === id);
-        if (item) {
-            setEditingItemId(id);
-            setEditObjectPanelOpen(true);
-        }
-        
+        onEditItem(id);
     };
 
     useEffect(() => {
@@ -142,7 +134,7 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     return (
         <div
             ref={canvasRef}
-            onClick={() => setEditObjectPanelOpen(false)}
+            onClick={() => onEditItem(null)}
             style={{
                 width,
                 height,
@@ -152,15 +144,6 @@ export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
                 backgroundColor: 'white'
             }}
         >
-            {editObjectPanelOpen && editingItemId !== null && (
-                <EditObjectPanel
-                    item={items.find(i => i.id === editingItemId)!}
-                    onClose={() => setEditObjectPanelOpen(false)}
-                    onChange={(updatedItem) => {
-                        onItemsChange(prevItems => prevItems.map(i => i.id === updatedItem.id ? updatedItem : i));
-                    }}
-                />
-            )}
             {items.map(item => (
                 <RoomObject 
                     key={item.id}
