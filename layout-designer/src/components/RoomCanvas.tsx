@@ -1,38 +1,86 @@
 import { useState, useEffect, useRef } from "react"
 import RoomObject from "./RoomObject"
+import type { RoomItem } from "../types"
 
-export default function RoomCanvas() {
+interface RoomCanvasProps {
+    items: RoomItem[];
+    onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
+}
+
+export default function RoomCanvas({ items, onItemsChange }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
+    
+    const [draggingId, setDraggingId] = useState<number | null>(null);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
     const canvasRef = useRef<HTMLDivElement>(null);
 
-    let objects = [
-        <RoomObject width={30} height={50} key={1} />,
-        <RoomObject width={100} height={100} key={2} />,
-        <RoomObject width={200} height={150} key={3} />
-    ]
+    const handleObjectMouseDown = (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();
+        const item = items.find(i => i.id === id);
+        if (item && canvasRef.current) {
+            const rect = canvasRef.current.getBoundingClientRect();
+            setDraggingId(id);
+            // Calculate offset relative to the item's top-left
+            // We need the mouse position relative to the canvas, minus the item's x/y
+            const mouseXInCanvas = e.clientX - rect.left;
+            const mouseYInCanvas = e.clientY - rect.top;
+            
+            setDragOffset({
+                x: mouseXInCanvas - item.x,
+                y: mouseYInCanvas - item.y
+            });
+        }
+    };
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            if (!isResizing) return;
-
-            if (canvasRef.current) {
+            if (isResizing && canvasRef.current) {
                 const rect = canvasRef.current.getBoundingClientRect();
+                
+                // Calculate minimum dimensions based on objects
+                const minWidth = Math.max(100, ...items.map(i => i.x + i.width));
+                const minHeight = Math.max(100, ...items.map(i => i.y + i.height));
+
                 if (isResizing === 'right' || isResizing === 'corner') {
-                    setWidth(Math.max(100, e.clientX - rect.left));
+                    setWidth(Math.max(minWidth, e.clientX - rect.left));
                 }
                 if (isResizing === 'bottom' || isResizing === 'corner') {
-                    setHeight(Math.max(100, e.clientY - rect.top));
+                    setHeight(Math.max(minHeight, e.clientY - rect.top));
                 }
+            } else if (draggingId !== null && canvasRef.current) {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const mouseXInCanvas = e.clientX - rect.left;
+                const mouseYInCanvas = e.clientY - rect.top;
+
+                onItemsChange(prevItems => prevItems.map(item => {
+                    if (item.id === draggingId) {
+                        const newX = mouseXInCanvas - dragOffset.x;
+                        const newY = mouseYInCanvas - dragOffset.y;
+
+                        // Clamp position within room bounds
+                        const clampedX = Math.max(0, Math.min(newX, width - item.width));
+                        const clampedY = Math.max(0, Math.min(newY, height - item.height));
+
+                        return {
+                            ...item,
+                            x: clampedX,
+                            y: clampedY
+                        };
+                    }
+                    return item;
+                }));
             }
         };
 
         const handleMouseUp = () => {
             setIsResizing(null);
+            setDraggingId(null);
         };
 
-        if (isResizing) {
+        if (isResizing || draggingId !== null) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
@@ -41,7 +89,7 @@ export default function RoomCanvas() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isResizing]);
+    }, [isResizing, draggingId, dragOffset, onItemsChange, items, width, height]);
 
     return (
         <div
@@ -51,10 +99,21 @@ export default function RoomCanvas() {
                 height,
                 border: '1px solid black',
                 position: 'relative',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                backgroundColor: 'white'
             }}
         >
-            {objects}
+            {items.map(item => (
+                <RoomObject 
+                    key={item.id}
+                    width={item.width} 
+                    height={item.height} 
+                    x={item.x}
+                    y={item.y}
+                    label={item.type}
+                    onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
+                />
+            ))}
 
             {/* Right Handle */}
             <div
