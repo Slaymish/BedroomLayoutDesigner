@@ -135,13 +135,10 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCan
         <div
             ref={canvasRef}
             onClick={() => onEditItem(null)}
+            className="relative border border-black bg-white"
             style={{
                 width,
                 height,
-                border: '1px solid black',
-                position: 'relative',
-                boxSizing: 'border-box',
-                backgroundColor: 'white'
             }}
         >
             {items.map(item => (
@@ -161,44 +158,19 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem }: RoomCan
             {/* Right Handle */}
             <div
                 onMouseDown={() => setIsResizing('right')}
-                style={{
-                    position: 'absolute',
-                    right: -5,
-                    top: 0,
-                    bottom: 0,
-                    width: 10,
-                    cursor: 'col-resize',
-                    zIndex: 10
-                }}
+                className="absolute -right-[5px] top-0 bottom-0 w-[10px] cursor-col-resize z-10"
             />
 
             {/* Bottom Handle */}
             <div
                 onMouseDown={() => setIsResizing('bottom')}
-                style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: -5,
-                    height: 10,
-                    cursor: 'row-resize',
-                    zIndex: 10
-                }}
+                className="absolute left-0 right-0 -bottom-[5px] h-[10px] cursor-row-resize z-10"
             />
 
             {/* Corner Handle */}
             <div
                 onMouseDown={() => setIsResizing('corner')}
-                style={{
-                    position: 'absolute',
-                    right: -5,
-                    bottom: -5,
-                    width: 15,
-                    height: 15,
-                    cursor: 'nwse-resize',
-                    backgroundColor: '#ccc',
-                    zIndex: 20
-                }}
+                className="absolute -right-[5px] -bottom-[5px] w-[15px] h-[15px] cursor-nwse-resize bg-gray-300 z-20"
             />
         </div>
     )

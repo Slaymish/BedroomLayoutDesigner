@@ -42,10 +42,10 @@ function App() {
 
   return (
     <>
-      <div>
-        <h1>Bedroom Layout Designer</h1>
+      <div className="p-4 border-b border-gray-300">
+        <h1 className="text-2xl font-semibold mb-4">Bedroom Layout Designer</h1>
       </div>
-      <div style={{ display: 'flex' }}>
+      <div className="flex">
         <AddObjectPanel onAddObject={handleAddItem} />
         <RoomCanvas 
           items={items} 
@@ -53,7 +53,7 @@ function App() {
           onEditItem={handleEditItem}
         />
         {editingItemId !== null && (
-          <div style={{ marginLeft: '10px', position: 'relative', width: '200px' }}>
+          <div className="ml-2 relative w-48">
              <EditObjectPanel
               item={items.find(i => i.id === editingItemId)!}
               onClose={() => setEditingItemId(null)}

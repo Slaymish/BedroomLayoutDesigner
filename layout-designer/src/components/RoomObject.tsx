@@ -15,22 +15,12 @@ export default function RoomObject({ width = 100, height = 100, x = 0, y = 0, ro
         <div
             onMouseDown={onMouseDown}
             onClick={onMouseClick}
+            className="absolute bg-gray-200 border border-gray-400 cursor-move select-none flex items-center justify-center overflow-hidden text-xs"
             style={{
                 width,
                 height,
-                position: 'absolute',
                 left: x,
                 top: y,
-                backgroundColor: 'lightgray',
-                border: '1px solid gray',
-                boxSizing: 'border-box',
-                cursor: 'move',
-                userSelect: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                overflow: 'hidden',
-                fontSize: '12px',
                 transform: `rotate(${rotate}deg)`
             }}
         >
