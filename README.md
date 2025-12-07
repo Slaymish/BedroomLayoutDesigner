@@ -12,3 +12,5 @@ This project is a web-based application that allows users to design and visualis
 - [ ] Implement snapping and alignment guides for furniture placement
 - [ ] Add export options (e.g., image, PDF)
 - [x] Add dropdown for bed sizes (single, double, queen, king)
+- [ ] Typed room dimensions input
+- [ ] Non rectangular room shapes
