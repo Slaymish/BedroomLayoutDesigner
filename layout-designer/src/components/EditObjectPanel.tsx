@@ -108,6 +108,39 @@ export default function EditObjectPanel({item, onChange, onRemove, unit}: {item:
                     </>
                 );
             })()}
+            {item.type === 'Door' && (
+                <div className="space-y-2 border-t border-gray-200 pt-2">
+                    <h4 className="text-sm font-semibold">Door Settings</h4>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-sm">Open Direction</label>
+                        <select 
+                            className="border rounded px-2 py-1"
+                            value={item.doorOpenDirection || 'in'}
+                            onChange={(e) => {
+                                const updatedItem = { ...item, doorOpenDirection: e.target.value as 'in' | 'out' };
+                                onChange(updatedItem);
+                            }}
+                        >
+                            <option value="in">In</option>
+                            <option value="out">Out</option>
+                        </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        <label className="text-sm">Hinge Side</label>
+                        <select 
+                            className="border rounded px-2 py-1"
+                            value={item.doorOpenSide || 'left'}
+                            onChange={(e) => {
+                                const updatedItem = { ...item, doorOpenSide: e.target.value as 'left' | 'right' };
+                                onChange(updatedItem);
+                            }}
+                        >
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                        </select>
+                    </div>
+                </div>
+            )}
             <div className="flex flex-col gap-1">
                 <label className="text-sm">Rotation:</label>
                 <input

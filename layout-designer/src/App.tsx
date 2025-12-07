@@ -7,11 +7,7 @@ import PreferencesPanel from './components/PreferencesPanel'
 import type { RoomItem, Preferences } from './types'
 
 function App() {
-  const [items, setItems] = useState<RoomItem[]>([
-    { id: 1, width: 30, height: 50, x: 50, y: 50 },
-    { id: 2, width: 100, height: 100, x: 200, y: 100 },
-    { id: 3, width: 200, height: 150, x: 400, y: 200 }
-  ]);
+  const [items, setItems] = useState<RoomItem[]>([]);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
 
   const [preferences, setPreferences] = useState<Preferences>({
@@ -27,6 +23,7 @@ function App() {
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
 
   const handleAddItem = (width: number, height: number, type: string) => {
+    // TODO: get current room width/height to position new item in center
     const newItem: RoomItem = {
       id: Date.now(),
       width,

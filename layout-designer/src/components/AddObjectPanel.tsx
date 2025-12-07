@@ -1,5 +1,14 @@
+import { useState } from 'react';
 import type { Preferences } from "../types";
 import { toBaseCm } from "../utils/units";
+
+const BED_SIZES = [
+    { name: 'Single (90x190cm)', width: 90, height: 190 },
+    { name: 'Double (135x190cm)', width: 135, height: 190 },
+    { name: 'Queen (150x190cm)', width: 150, height: 190 },
+    { name: 'King (150x200cm)', width: 150, height: 200 },
+    { name: 'Super King (180x200cm)', width: 180, height: 200 },
+];
 
 interface AddObjectPanelProps {
     onAddObject: (widthCm: number, heightCm: number, type: string) => void;
@@ -7,15 +16,34 @@ interface AddObjectPanelProps {
 }
 
 export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProps) {
+    const [selectedBedSize, setSelectedBedSize] = useState(BED_SIZES[0]);
+
     return (
         <div className="p-4 border border-gray-200 bg-white rounded-xl shadow-sm space-y-3">
             <h3 className="text-xl font-semibold">Add Objects</h3>
-            <button 
-                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                onClick={() => onAddObject(toBaseCm(100, unit || 'cm'), toBaseCm(200, unit || 'cm'), 'Bed')}
-            >
-                Add Bed
-            </button>
+            <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-gray-700">Bed Size</label>
+                <div className="flex gap-2">
+                    <select 
+                        className="block w-full rounded-md border-0 py-1.5 px-2 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                        value={selectedBedSize.name}
+                        onChange={(e) => {
+                            const size = BED_SIZES.find(s => s.name === e.target.value);
+                            if (size) setSelectedBedSize(size);
+                        }}
+                    >
+                        {BED_SIZES.map((size) => (
+                            <option key={size.name} value={size.name}>{size.name}</option>
+                        ))}
+                    </select>
+                    <button 
+                        className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50 whitespace-nowrap"
+                        onClick={() => onAddObject(toBaseCm(selectedBedSize.width, 'cm'), toBaseCm(selectedBedSize.height, 'cm'), 'Bed')}
+                    >
+                        Add
+                    </button>
+                </div>
+            </div>
             <button 
                 className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                 onClick={() => onAddObject(toBaseCm(150, unit || 'cm'), toBaseCm(60, unit || 'cm'), 'Wardrobe')}
@@ -27,6 +55,18 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                 onClick={() => onAddObject(toBaseCm(120, unit || 'cm'), toBaseCm(60, unit || 'cm'), 'Desk')}
             >
                 Add Desk
+            </button>
+            <button 
+                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                onClick={() => onAddObject(toBaseCm(80, unit || 'cm'), toBaseCm(10, unit || 'cm'), 'Door')}
+            >
+                Add Door
+            </button>
+            <button 
+                className="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                onClick={() => onAddObject(toBaseCm(100, unit || 'cm'), toBaseCm(10, unit || 'cm'), 'Window')}
+            >
+                Add Window
             </button>
             <form className="pt-2 mt-2 border-t border-gray-200 space-y-3" onSubmit={e => {
                 e.preventDefault();

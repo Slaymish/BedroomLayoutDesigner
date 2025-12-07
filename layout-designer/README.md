@@ -6,9 +6,9 @@ This project is a web-based application that allows users to design and visualis
 - [ ] Implement saving and loading of room layouts
 - [ ] Add more furniture item types
 - [ ] Improve UI/UX design
-- [ ] Implement rotation of furniture items
-- [ ] Add real unit measurements and scaling options
-- [ ] Add window and door placement options
+- [x] Implement rotation of furniture items
+- [x] Add real unit measurements and scaling options
+- [x] Add window and door placement options
 - [ ] Implement snapping and alignment guides for furniture placement
 - [ ] Add export options (e.g., image, PDF)
-- [ ] Add dropdown for bed sizes (single, double, queen, king)
+- [x] Add dropdown for bed sizes (single, double, queen, king)

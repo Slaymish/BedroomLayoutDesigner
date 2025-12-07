@@ -6,6 +6,8 @@ export interface RoomItem {
     y: number;
     rotate?: number;
     type?: string;
+    doorOpenDirection?: 'in' | 'out';
+    doorOpenSide?: 'left' | 'right';
 }
 
 export interface Preferences {

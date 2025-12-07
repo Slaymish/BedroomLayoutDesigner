@@ -88,6 +88,73 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
 
                 onItemsChange(prevItems => prevItems.map(item => {
                     if (item.id === draggingId) {
+                        // Special handling for Doors and Windows to snap to walls
+                        if (item.type === 'Door' || item.type === 'Window') {
+                            // Calculate distances to each wall
+                            const distTop = Math.abs(mouseYInCanvas);
+                            const distBottom = Math.abs(mouseYInCanvas - height);
+                            const distLeft = Math.abs(mouseXInCanvas);
+                            const distRight = Math.abs(mouseXInCanvas - width);
+
+                            const minDist = Math.min(distTop, distBottom, distLeft, distRight);
+
+                            let newX = 0;
+                            let newY = 0;
+                            let newRotate = 0;
+
+                            // Snap to closest wall
+                            if (minDist === distTop) {
+                                // Top Wall
+                                newRotate = 180; // Face in
+                                // Center X is mouseX, Center Y is 0
+                                // x = cx - w/2, y = cy - h/2
+                                // But wait, if rotated 180, w and h are same orientation.
+                                newX = mouseXInCanvas - item.width / 2;
+                                newY = 0 - item.height / 2;
+                            } else if (minDist === distBottom) {
+                                // Bottom Wall
+                                newRotate = 0; // Face in (up)
+                                newX = mouseXInCanvas - item.width / 2;
+                                newY = height - item.height / 2;
+                            } else if (minDist === distLeft) {
+                                // Left Wall
+                                newRotate = 90; // Face in (right)
+                                // Center X is 0, Center Y is mouseY
+                                newX = 0 - item.width / 2;
+                                newY = mouseYInCanvas - item.height / 2;
+                            } else {
+                                // Right Wall
+                                newRotate = 270; // Face in (left)
+                                newX = width - item.width / 2;
+                                newY = mouseYInCanvas - item.height / 2;
+                            }
+
+                            // Clamp along the wall
+                            if (newRotate === 0 || newRotate === 180) {
+                                // Horizontal walls: clamp X
+                                newX = Math.max(0, Math.min(newX, width - item.width));
+                            } else {
+                                // Vertical walls: clamp Y
+                                // When rotated 90/270, the visual height is the item.width
+                                // The item.y is the top-left of the unrotated box.
+                                // The visual center is y + h/2.
+                                // We want visual center between 0 + w/2 and height - w/2?
+                                // Actually, let's just clamp the center position.
+                                // Center Y = newY + item.height / 2
+                                // We want Center Y to be within [item.width/2, height - item.width/2]
+                                const centerY = newY + item.height / 2;
+                                const clampedCenterY = Math.max(item.width / 2, Math.min(centerY, height - item.width / 2));
+                                newY = clampedCenterY - item.height / 2;
+                            }
+
+                            return {
+                                ...item,
+                                x: newX,
+                                y: newY,
+                                rotate: newRotate
+                            };
+                        }
+
                         const newX = mouseXInCanvas - dragOffset.x;
                         const newY = mouseYInCanvas - dragOffset.y;
 
@@ -167,6 +234,9 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
                     y={item.y}
                     rotate={item.rotate}
                     label={item.type}
+                    type={item.type}
+                    doorOpenDirection={item.doorOpenDirection}
+                    doorOpenSide={item.doorOpenSide}
                     onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
                     onMouseClick={(e) => handleObjectClick(e, item.id)}
                 />
