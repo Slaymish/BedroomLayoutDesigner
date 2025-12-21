@@ -32,7 +32,6 @@ export default function RoomObject({
     const renderDoorSwing = () => {
         if (!isDoor) return null;
 
-        const swingSize = width; // The door panel width is roughly the frame width
         // We assume the door frame height (depth) is small, e.g. 10cm.
         // The swing starts from the edge of the frame.
         
