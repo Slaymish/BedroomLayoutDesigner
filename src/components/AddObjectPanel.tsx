@@ -68,11 +68,11 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                 {FURNITURE_PRESETS.map((preset) => (
                     <button
                         key={preset.type}
-                        className="ui-btn ui-btn-ghost w-full justify-between px-3"
+                        className="ui-btn ui-btn-ghost w-full justify-between px-3 overflow-hidden"
                         onClick={() => onAddObject(toBaseCm(preset.widthCm, 'cm'), toBaseCm(preset.heightCm, 'cm'), preset.type)}
                     >
-                        <span>{preset.type}</span>
-                        <span className="text-xs text-slate-500">{preset.widthCm}x{preset.heightCm}cm</span>
+                        <span className="min-w-0 truncate text-left">{preset.type}</span>
+                        <span className="shrink-0 text-[11px] text-slate-500 whitespace-nowrap">{preset.widthCm}x{preset.heightCm}cm</span>
                     </button>
                 ))}
             </div>

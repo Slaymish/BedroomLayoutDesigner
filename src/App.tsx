@@ -112,6 +112,8 @@ function App() {
     doorOpenSide: 'left',
   });
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handlePreferencesChange = (newPreferences: Preferences) => {
     setPreferences(newPreferences);
@@ -446,6 +448,64 @@ function App() {
     setOnboardingComplete(true);
   };
 
+  const handleExportPdf = async () => {
+    if (isExportingPdf) return;
+    setExportError(null);
+    setIsExportingPdf(true);
+
+    try {
+      const exportTarget = document.querySelector<HTMLElement>('[data-floorplan-export="true"]');
+      if (!exportTarget) {
+        throw new Error('Could not find the floorplan to export.');
+      }
+
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
+      const canvas = await html2canvas(exportTarget, {
+        backgroundColor: '#ffffff',
+        scale: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
+        useCORS: true,
+        logging: false,
+      });
+
+      const roomWidth = fromBaseCm(roomWidthCm, activeUnit);
+      const roomHeight = fromBaseCm(roomHeightCm, activeUnit);
+      const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+      const roomSizeLabel = `${roomWidth.toFixed(decimals)}${activeUnit} x ${roomHeight.toFixed(decimals)}${activeUnit}`;
+      const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+      const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 28;
+      const headerHeight = 58;
+      const availableWidth = pageWidth - margin * 2;
+      const availableHeight = pageHeight - margin * 2 - headerHeight;
+      const renderScale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+      const renderWidth = canvas.width * renderScale;
+      const renderHeight = canvas.height * renderScale;
+      const renderX = (pageWidth - renderWidth) / 2;
+      const renderY = margin + headerHeight + Math.max(0, (availableHeight - renderHeight) / 2);
+
+      pdf.setFontSize(14);
+      pdf.setTextColor(15, 23, 42);
+      pdf.text('Bedroom Layout Floorplan', margin, margin + 14);
+      pdf.setFontSize(10);
+      pdf.setTextColor(71, 85, 105);
+      pdf.text(`Room dimensions: ${roomSizeLabel}`, margin, margin + 32);
+      pdf.text(`Exported: ${new Date().toLocaleString()}`, margin, margin + 46);
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
+      pdf.save(`bedroom-floorplan-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to export PDF.';
+      setExportError(message);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
   const editingItem = useMemo(
     () => (editingItemId !== null ? items.find(i => i.id === editingItemId) || null : null),
     [editingItemId, items]
@@ -640,15 +700,27 @@ function App() {
       <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
         <div className="mx-auto max-w-[1440px] flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
-          <button
-            className="ui-btn ui-btn-ghost"
-            onClick={() => setPreferencesPanelOpen(true)}
-          >
-            Preferences
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="ui-btn ui-btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+            >
+              {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+            </button>
+            <button
+              className="ui-btn ui-btn-ghost"
+              onClick={() => setPreferencesPanelOpen(true)}
+            >
+              Preferences
+            </button>
+          </div>
         </div>
       </header>
       <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip">
+        {exportError && (
+          <p className="mx-auto mb-3 max-w-[1440px] text-sm text-rose-600">{exportError}</p>
+        )}
         <div className="mx-auto max-w-[1440px] grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 xl:[grid-template-columns:17.5rem_minmax(0,1fr)_19.5rem] items-start">
           <section className="order-1 md:col-span-2 xl:col-span-1 xl:col-start-2 panel-shell min-w-0">
             <RoomCanvas

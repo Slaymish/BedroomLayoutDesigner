@@ -210,6 +210,7 @@ export default function RoomCanvas({
                     <div
                         ref={canvasRef}
                         onClick={() => onEditItem(null)}
+                        data-floorplan-export="true"
                         className="relative bg-white bg-grid rounded-xl shadow-sm ring-1 ring-slate-300 overflow-hidden"
                         style={canvasStyle}
                     >
