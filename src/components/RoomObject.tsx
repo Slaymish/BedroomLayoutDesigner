@@ -1,3 +1,6 @@
+import type { OpeningWall } from "../types";
+import { inferWallFromRotation, rotationForWall } from "../utils/openings";
+
 interface RoomObjectProps {
     width?: number;
     height?: number;
@@ -8,6 +11,7 @@ interface RoomObjectProps {
     type?: string;
     doorOpenDirection?: 'in' | 'out';
     doorOpenSide?: 'left' | 'right';
+    openingWall?: OpeningWall;
     isSelected?: boolean;
     showLabel?: boolean;
     onMouseDown?: (e: React.MouseEvent) => void;
@@ -24,6 +28,7 @@ export default function RoomObject({
     type,
     doorOpenDirection = 'in',
     doorOpenSide = 'left',
+    openingWall,
     isSelected = false,
     showLabel = true,
     onMouseDown, 
@@ -32,53 +37,22 @@ export default function RoomObject({
     
     const isDoor = type === 'Door';
     const isWindow = type === 'Window';
+    const resolvedWall = openingWall ?? inferWallFromRotation(rotate) ?? 'bottom';
+    const appliedRotate = isDoor || isWindow ? rotationForWall(resolvedWall) : rotate;
+    const openingHitInset = isDoor || isWindow ? 14 : 0;
 
     const renderDoorSwing = () => {
         if (!isDoor) return null;
 
-        // We assume the door frame height (depth) is small, e.g. 10cm.
-        // The swing starts from the edge of the frame.
-        
-        // Determine hinge position and swing direction
-        // Local coordinates: 0,0 is top-left of the frame box.
-        // Frame is width x height.
-        
-        // 'in' = +Y direction (down), 'out' = -Y direction (up)
-        const dirY = doorOpenDirection === 'in' ? 1 : -1;
-        
-        // Hinge X: 'left' = 0, 'right' = width
+        // Openings are normalized so local -Y points toward room interior.
+        const swingDirection = doorOpenDirection === 'in' ? -1 : 1;
         const hingeX = doorOpenSide === 'left' ? 0 : width;
-        
-        // Hinge Y: 'in' => bottom edge (height), 'out' => top edge (0)
-        const hingeY = doorOpenDirection === 'in' ? height : 0;
-
-        // End point of the door panel when fully open (90 degrees)
-        // If hinge left (0), open in (+Y): panel goes from (0, height) to (0, height + width)
-        // If hinge left (0), open out (-Y): panel goes from (0, 0) to (0, -width)
-        // If hinge right (width), open in (+Y): panel goes from (width, height) to (width, height + width)
-        // If hinge right (width), open out (-Y): panel goes from (width, 0) to (width, -width)
-        
-        // Arc start point (closed position):
-        // If hinge left: (width, hingeY)
-        // If hinge right: (0, hingeY)
+        const hingeY = doorOpenDirection === 'in' ? 0 : height;
         const arcStartX = doorOpenSide === 'left' ? width : 0;
         const arcStartY = hingeY;
-
-        // Arc end point (open position):
-        // (hingeX, hingeY + dirY * width)
         const arcEndX = hingeX;
-        const arcEndY = hingeY + dirY * width;
-
-        // SVG Path for Arc
-        // M hingeX hingeY L arcStartX arcStartY A width width 0 0 1 arcEndX arcEndY L hingeX hingeY
-        // Sweep flag depends on side/direction.
-        // Left/In: (0,h) -> (w,h) -> (0, h+w). Clockwise? No, (w,h) is right of (0,h). (0, h+w) is below. 
-        // Angle 0 to 90. Clockwise.
-        
-        // Let's just draw the path relative to the container.
-        // Since the swing extends outside the container, we need overflow-visible on the container.
-        
-        const sweep = (doorOpenSide === 'left' && doorOpenDirection === 'in') || (doorOpenSide === 'right' && doorOpenDirection === 'out') ? 1 : 0;
+        const arcEndY = hingeY + swingDirection * width;
+        const sweep = (doorOpenSide === 'left' && doorOpenDirection === 'out') || (doorOpenSide === 'right' && doorOpenDirection === 'in') ? 1 : 0;
 
         return (
             <svg className="absolute overflow-visible pointer-events-none" style={{ left: 0, top: 0, width: '100%', height: '100%' }}>
@@ -108,18 +82,30 @@ export default function RoomObject({
             onClick={onMouseClick}
             className={`absolute ring-1 rounded-sm cursor-move select-none flex items-center justify-center text-xs font-medium text-slate-800
                 ${isWindow ? 'bg-sky-100 ring-sky-400' : 'bg-slate-100 ring-slate-300'}
-                ${isSelected ? 'ring-2 ring-amber-400 shadow-md z-20' : ''}
-                ${isDoor ? 'overflow-visible' : 'overflow-hidden'}
+                ${isSelected ? 'ring-2 ring-slate-500 shadow-md z-20' : ''}
+                ${(isDoor || isWindow) ? 'overflow-visible' : 'overflow-hidden'}
             `}
             style={{
                 width,
                 height,
                 left: x,
                 top: y,
-                transform: `rotate(${rotate}deg)`,
+                transform: `rotate(${appliedRotate}deg)`,
                 transformOrigin: 'center center'
             }}
         >
+            {(isDoor || isWindow) && (
+                <div
+                    className="absolute"
+                    style={{
+                        left: -openingHitInset,
+                        right: -openingHitInset,
+                        top: -openingHitInset,
+                        bottom: -openingHitInset,
+                    }}
+                    aria-hidden="true"
+                />
+            )}
             {renderDoorSwing()}
             {isWindow && (
                 <div className="w-full h-1/3 bg-sky-300 absolute top-1/3 pointer-events-none" />

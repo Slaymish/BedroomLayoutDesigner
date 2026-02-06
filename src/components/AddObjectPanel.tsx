@@ -37,15 +37,12 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
 
     return (
         <div className="p-4 border border-slate-200 bg-white rounded-2xl shadow-sm space-y-5">
-            <div className="space-y-1">
-                <h3 className="text-xl font-semibold text-slate-900">Add Furniture</h3>
-                <p className="text-xs text-slate-500">Use presets for speed, then tweak details in the edit panel.</p>
-            </div>
+            <h3 className="text-xl font-semibold text-slate-900">Add Furniture</h3>
             <div className="space-y-2">
                 <div className="flex gap-2">
                     <select 
                         aria-label="Bed size preset"
-                        className="block w-full rounded-lg border border-slate-300 bg-white py-2 px-3 text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        className="block w-full rounded-lg border border-slate-300 bg-white py-2 px-3 text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
                         value={selectedBedSize.name}
                         onChange={(e) => {
                             const size = BED_SIZES.find(s => s.name === e.target.value);
@@ -57,21 +54,18 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                         ))}
                     </select>
                     <button 
-                        className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 whitespace-nowrap transition-colors"
+                        className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700 whitespace-nowrap transition-colors"
                         onClick={addBed}
                     >
                         Add Bed
                     </button>
                 </div>
-                <p className="text-xs text-slate-500">
-                    {selectedBedSize.width} x {selectedBedSize.height} cm
-                </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {FURNITURE_PRESETS.map((preset) => (
                     <button
                         key={preset.type}
-                        className="inline-flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium border border-slate-300 bg-slate-50 hover:bg-slate-100 transition-colors"
+                        className="inline-flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium border border-slate-300 bg-white hover:bg-slate-50 transition-colors"
                         onClick={() => onAddObject(toBaseCm(preset.widthCm, 'cm'), toBaseCm(preset.heightCm, 'cm'), preset.type)}
                     >
                         <span>{preset.type}</span>

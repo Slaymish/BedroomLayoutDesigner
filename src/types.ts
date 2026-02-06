@@ -1,3 +1,5 @@
+export type OpeningWall = 'top' | 'right' | 'bottom' | 'left';
+
 export interface RoomItem {
     id: number;
     width: number;
@@ -8,6 +10,7 @@ export interface RoomItem {
     type?: string;
     doorOpenDirection?: 'in' | 'out';
     doorOpenSide?: 'left' | 'right';
+    openingWall?: OpeningWall;
 }
 
 export interface Preferences {

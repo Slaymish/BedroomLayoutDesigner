@@ -62,10 +62,7 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
             className="w-full bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-4"
         >
             <div className="flex items-start justify-between gap-2">
-                <div>
-                    <h3 className="text-xl font-semibold text-slate-900">Edit Object</h3>
-                    <p className="text-xs text-slate-500">Tip: hold Alt and drag left/right on a number field to scrub quickly.</p>
-                </div>
+                <h3 className="text-xl font-semibold text-slate-900">Edit Object</h3>
                 <button
                     className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
                     onClick={onClose}
@@ -169,7 +166,7 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
             </div>
             <div className="flex flex-wrap gap-3">
                 <button className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-100" onClick={() => handleChangeBase('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
-                <button className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700" onClick={onRemove}>Remove</button>
+                <button className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold bg-slate-200 text-slate-800 hover:bg-slate-300" onClick={onRemove}>Remove</button>
             </div>
         </div>
     );

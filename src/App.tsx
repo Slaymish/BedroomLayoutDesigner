@@ -4,8 +4,14 @@ import AddObjectPanel from './components/AddObjectPanel'
 import RoomCanvas from './components/RoomCanvas'
 import EditObjectPanel from './components/EditObjectPanel'
 import PreferencesPanel from './components/PreferencesPanel'
-import type { RoomItem, Preferences } from './types'
+import type { OpeningWall, RoomItem, Preferences } from './types'
 import { fromBaseCm, toBaseCm, type Unit } from './utils/units'
+import {
+  inferNearestWall,
+  inferWallFromRotation,
+  isOpening,
+  normalizeOpeningOnWall,
+} from './utils/openings'
 
 type OnboardingStep = 'welcome' | 'dimensions' | 'openings'
 
@@ -30,7 +36,7 @@ interface AddItemOptions {
 }
 
 const STORAGE_KEY = 'bedroom-layout-designer:v1';
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const DEFAULT_ROOM_WIDTH_CM = 360;
 const DEFAULT_ROOM_HEIGHT_CM = 320;
 
@@ -45,11 +51,6 @@ const DEFAULT_PREFERENCES: Preferences = {
   gridColor: '#c8d2dd',
   unit: 'cm'
 };
-const ONBOARDING_STEPS: Array<{ id: OnboardingStep; label: string }> = [
-  { id: 'welcome', label: 'Welcome' },
-  { id: 'dimensions', label: 'Dimensions' },
-  { id: 'openings', label: 'Doors & Windows' },
-];
 
 const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
   const converted = fromBaseCm(valueCm, unit);
@@ -59,6 +60,30 @@ const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
 
 const isValidUnit = (unit: string | undefined): unit is Unit =>
   !!unit && UNIT_OPTIONS.includes(unit as Unit);
+
+const isValidOpeningWall = (wall: string | undefined): wall is OpeningWall =>
+  wall === 'top' || wall === 'right' || wall === 'bottom' || wall === 'left';
+
+const normalizeOpeningForRoom = (
+  item: RoomItem,
+  roomWidthCm: number,
+  roomHeightCm: number
+): RoomItem => {
+  const wall =
+    inferWallFromRotation(item.rotate) ||
+    (isValidOpeningWall(item.openingWall) ? item.openingWall : null) ||
+    inferNearestWall(item.x + item.width / 2, item.y + item.height / 2, roomWidthCm, roomHeightCm);
+  return normalizeOpeningOnWall(
+    {
+      ...item,
+      doorOpenDirection: item.type === 'Door' ? (item.doorOpenDirection || 'in') : item.doorOpenDirection,
+      doorOpenSide: item.type === 'Door' ? (item.doorOpenSide || 'left') : item.doorOpenSide,
+    },
+    wall,
+    roomWidthCm,
+    roomHeightCm
+  );
+};
 
 function App() {
   const [items, setItems] = useState<RoomItem[]>([]);
@@ -78,7 +103,6 @@ function App() {
   });
   const [onboardingWindowDraft, setOnboardingWindowDraft] = useState({
     width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, activeUnit),
-    height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, activeUnit),
   });
   const [onboardingDoorDefaults, setOnboardingDoorDefaults] = useState<{
     doorOpenDirection: 'in' | 'out';
@@ -104,7 +128,7 @@ function App() {
       }
 
       const parsed = JSON.parse(rawState) as Partial<StoredLayoutState>;
-      if (parsed.version !== STORAGE_VERSION) {
+      if (parsed.version !== 1 && parsed.version !== STORAGE_VERSION) {
         setIsHydrated(true);
         return;
       }
@@ -122,8 +146,12 @@ function App() {
       });
 
       if (Array.isArray(parsed.items)) {
-        setItems(parsed.items);
-        const highestId = parsed.items.reduce((max, item) => Math.max(max, item.id), 0);
+        const migratedItems = parsed.items.map(item => {
+          if (!isOpening(item)) return item;
+          return normalizeOpeningForRoom(item, loadedRoomWidth, loadedRoomHeight);
+        });
+        setItems(migratedItems);
+        const highestId = migratedItems.reduce((max, item) => Math.max(max, item.id), 0);
         nextItemId.current = Math.max(highestId + 1, parsed.nextItemId || 1);
       } else if (typeof parsed.nextItemId === 'number' && parsed.nextItemId > 0) {
         nextItemId.current = parsed.nextItemId;
@@ -143,7 +171,6 @@ function App() {
       });
       setOnboardingWindowDraft({
         width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, loadedUnit),
-        height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, loadedUnit),
       });
     } catch {
       // If local storage is malformed, fall back to defaults.
@@ -189,9 +216,23 @@ function App() {
       const offset = 36 + (prevItems.length % 8) * 22;
       const requestedX = options?.x ?? offset;
       const requestedY = options?.y ?? offset;
+      const draftItem = { ...newItem, x: requestedX, y: requestedY };
+
+      if (isOpening(draftItem)) {
+        const inferredWall =
+          (typeof options?.rotate === 'number' ? inferWallFromRotation(options.rotate) : null) ||
+          inferNearestWall(
+            requestedX + draftItem.width / 2,
+            requestedY + draftItem.height / 2,
+            roomWidthCm,
+            roomHeightCm
+          );
+        return [...prevItems, normalizeOpeningOnWall(draftItem, inferredWall, roomWidthCm, roomHeightCm)];
+      }
+
       const safeX = Math.max(0, Math.min(requestedX, roomWidthCm - width));
       const safeY = Math.max(0, Math.min(requestedY, roomHeightCm - height));
-      return [...prevItems, { ...newItem, x: safeX, y: safeY }];
+      return [...prevItems, { ...draftItem, x: safeX, y: safeY }];
     });
     if (options?.select ?? true) {
       setEditingItemId(newId);
@@ -203,7 +244,13 @@ function App() {
   };
 
   const handleUpdateItem = (updatedItem: RoomItem) => {
-    setItems(prevItems => prevItems.map(i => i.id === updatedItem.id ? updatedItem : i));
+    setItems(prevItems =>
+      prevItems.map(existing => {
+        if (existing.id !== updatedItem.id) return existing;
+        if (!isOpening(updatedItem)) return updatedItem;
+        return normalizeOpeningForRoom(updatedItem, roomWidthCm, roomHeightCm);
+      })
+    );
   };
 
   const handleRemoveItem = () => {
@@ -217,6 +264,28 @@ function App() {
     setRoomWidthCm(current => (current === nextWidthCm ? current : nextWidthCm));
     setRoomHeightCm(current => (current === nextHeightCm ? current : nextHeightCm));
   }, []);
+
+  useEffect(() => {
+    setItems(prevItems => {
+      let changed = false;
+      const normalizedItems = prevItems.map(item => {
+        if (!isOpening(item)) return item;
+        const normalized = normalizeOpeningForRoom(item, roomWidthCm, roomHeightCm);
+        if (
+          normalized.x !== item.x ||
+          normalized.y !== item.y ||
+          normalized.width !== item.width ||
+          normalized.height !== item.height ||
+          normalized.rotate !== item.rotate ||
+          normalized.openingWall !== item.openingWall
+        ) {
+          changed = true;
+        }
+        return normalized;
+      });
+      return changed ? normalizedItems : prevItems;
+    });
+  }, [roomWidthCm, roomHeightCm]);
 
   const handleResetSetup = () => {
     const confirmed = window.confirm('Reset room setup and start onboarding again? This removes your current layout from this browser.');
@@ -235,7 +304,6 @@ function App() {
     });
     setOnboardingWindowDraft({
       width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, 'cm'),
-      height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, 'cm'),
     });
     setOnboardingDoorDefaults({
       doorOpenDirection: 'in',
@@ -260,11 +328,9 @@ function App() {
     const widthRaw = parseFloat(dimensionDraft.width);
     const heightRaw = parseFloat(dimensionDraft.height);
     const windowWidthRaw = parseFloat(onboardingWindowDraft.width);
-    const windowHeightRaw = parseFloat(onboardingWindowDraft.height);
     const widthCm = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : roomWidthCm;
     const heightCm = Number.isFinite(heightRaw) ? toBaseCm(heightRaw, activeUnit) : roomHeightCm;
     const windowWidthCm = Number.isFinite(windowWidthRaw) ? toBaseCm(windowWidthRaw, activeUnit) : OPENING_PRESETS.Window.widthCm;
-    const windowHeightCm = Number.isFinite(windowHeightRaw) ? toBaseCm(windowHeightRaw, activeUnit) : OPENING_PRESETS.Window.heightCm;
 
     setPreferences(prev => ({ ...prev, unit: newUnit }));
     setDimensionDraft({
@@ -273,7 +339,6 @@ function App() {
     });
     setOnboardingWindowDraft({
       width: toDimensionInputValue(windowWidthCm, newUnit),
-      height: toDimensionInputValue(windowHeightCm, newUnit),
     });
   };
 
@@ -295,7 +360,11 @@ function App() {
 
     setRoomWidthCm(widthCm);
     setRoomHeightCm(heightCm);
-    setItems(prevItems => prevItems.filter(item => item.type === 'Door' || item.type === 'Window'));
+    setItems(prevItems =>
+      prevItems
+        .filter(item => item.type === 'Door' || item.type === 'Window')
+        .map(item => normalizeOpeningForRoom(item, widthCm, heightCm))
+    );
     setEditingItemId(null);
     setOnboardingError(null);
     setOnboardingStep('openings');
@@ -307,17 +376,15 @@ function App() {
 
     if (type === 'Window') {
       const widthRaw = parseFloat(onboardingWindowDraft.width);
-      const heightRaw = parseFloat(onboardingWindowDraft.height);
       const convertedWidth = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : NaN;
-      const convertedHeight = Number.isFinite(heightRaw) ? toBaseCm(heightRaw, activeUnit) : NaN;
 
-      if (!Number.isFinite(convertedWidth) || !Number.isFinite(convertedHeight) || convertedWidth <= 0 || convertedHeight <= 0) {
+      if (!Number.isFinite(convertedWidth) || convertedWidth <= 0) {
         setOnboardingError('Enter a valid window size before adding a window.');
         return;
       }
 
       openingWidthCm = Math.round(convertedWidth);
-      openingHeightCm = Math.round(convertedHeight);
+      openingHeightCm = OPENING_PRESETS.Window.heightCm;
     }
 
     const spawnX = Math.max(0, roomWidthCm / 2 - openingWidthCm / 2);
@@ -389,10 +456,6 @@ function App() {
   const selectedDoorInOnboarding = onboardingComplete ? null : (editingItem?.type === 'Door' ? editingItem : null);
   const onboardingDoorDirection = selectedDoorInOnboarding?.doorOpenDirection ?? onboardingDoorDefaults.doorOpenDirection;
   const onboardingDoorSide = selectedDoorInOnboarding?.doorOpenSide ?? onboardingDoorDefaults.doorOpenSide;
-  const onboardingStepIndex = ONBOARDING_STEPS.findIndex(step => step.id === onboardingStep);
-  const onboardingProgressPct = `${Math.max(1, onboardingStepIndex + 1) / ONBOARDING_STEPS.length * 100}%`;
-  const hasRequiredDoor = doorCount > 0;
-  const hasAnyOpening = doorCount + windowCount > 0;
 
   if (!isHydrated) {
     return (
@@ -407,48 +470,19 @@ function App() {
   if (!onboardingComplete) {
     return (
       <div className="min-h-screen app-shell">
-        <header className="px-5 py-8 md:px-8 md:py-10 border-b border-slate-200/70">
-          <div className="mx-auto max-w-[1200px]">
-            <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">Bedroom Layout Designer</h1>
-            <p className="mt-2 text-sm md:text-base text-slate-600">Let&apos;s set up your room first, then you can start designing.</p>
-          </div>
-        </header>
+      <header className="px-5 py-8 md:px-8 md:py-10 border-b border-slate-200/70">
+        <div className="mx-auto max-w-[1200px]">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">Bedroom Layout Designer</h1>
+        </div>
+      </header>
         <main className="px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto max-w-[1200px]">
-            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                <span>Setup Progress</span>
-                <span>{Math.max(1, onboardingStepIndex + 1)} / {ONBOARDING_STEPS.length}</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
-                <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: onboardingProgressPct }} />
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {ONBOARDING_STEPS.map((step, index) => {
-                  const isActive = step.id === onboardingStep;
-                  const isCompleted = index < onboardingStepIndex;
-                  return (
-                    <span
-                      key={step.id}
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium
-                      ${isActive ? 'bg-amber-100 text-amber-900 border border-amber-200' : ''}
-                      ${isCompleted ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : ''}
-                      ${!isActive && !isCompleted ? 'bg-slate-100 text-slate-600 border border-slate-200' : ''}
-                    `}
-                    >
-                      {isCompleted ? 'Done' : `Step ${index + 1}`}: {step.label}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
             {onboardingStep === 'welcome' && (
               <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
-                <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Step 1 of 3</p>
+                <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 1 of 3</p>
                 <h2 className="mt-4 text-3xl font-bold text-slate-900">Welcome, ready to design your bedroom?</h2>
-                <p className="mt-3 text-slate-600 max-w-2xl">We&apos;ll quickly collect your room dimensions and place doors/windows first, so your layout is accurate from the start.</p>
                 <button
-                  className="mt-6 inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                  className="mt-5 inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
                   onClick={startOnboarding}
                 >
                   Start Setup
@@ -458,9 +492,8 @@ function App() {
 
             {onboardingStep === 'dimensions' && (
               <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
-                <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Step 2 of 3</p>
+                <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 2 of 3</p>
                 <h2 className="mt-4 text-2xl font-bold text-slate-900">What are your bedroom dimensions?</h2>
-                <p className="mt-2 text-slate-600">Enter the inside wall-to-wall measurements of your room.</p>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-sm text-slate-700">Width</label>
@@ -518,12 +551,11 @@ function App() {
             {onboardingStep === 'openings' && (
               <section className="space-y-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Step 3 of 3</p>
+                  <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 3 of 3</p>
                   <h2 className="mt-4 text-2xl font-bold text-slate-900">Place doors and windows</h2>
-                  <p className="mt-2 text-slate-600">Add openings, then drag them to the correct wall. They snap automatically.</p>
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400"
+                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700"
                       onClick={() => addOpening('Door')}
                     >
                       Add Door
@@ -545,7 +577,7 @@ function App() {
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">New Window Size</p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div className="mt-2 grid grid-cols-1 gap-2">
                         <div className="flex flex-col gap-1">
                           <label className="text-xs text-slate-600">Width ({activeUnit})</label>
                           <input
@@ -555,17 +587,6 @@ function App() {
                             step={0.1}
                             value={onboardingWindowDraft.width}
                             onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, width: e.target.value }))}
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-xs text-slate-600">Height ({activeUnit})</label>
-                          <input
-                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-                            type="number"
-                            min={0.1}
-                            step={0.1}
-                            value={onboardingWindowDraft.height}
-                            onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, height: e.target.value }))}
                           />
                         </div>
                       </div>
@@ -603,20 +624,6 @@ function App() {
                   <p className="mt-3 text-sm text-slate-600">
                     Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows: <span className="font-semibold text-slate-800">{windowCount}</span>
                   </p>
-                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Checklist</p>
-                    <ul className="mt-2 space-y-1 text-sm">
-                      <li className={hasRequiredDoor ? 'text-emerald-700' : 'text-slate-700'}>
-                        {hasRequiredDoor ? '✓' : '○'} Add at least one door (required)
-                      </li>
-                      <li className={hasAnyOpening ? 'text-emerald-700' : 'text-slate-700'}>
-                        {hasAnyOpening ? '✓' : '○'} Place openings on the correct wall
-                      </li>
-                      <li className={windowCount > 0 ? 'text-emerald-700' : 'text-slate-700'}>
-                        {windowCount > 0 ? '✓' : '○'} Add windows (optional)
-                      </li>
-                    </ul>
-                  </div>
                   {onboardingError && <p className="mt-2 text-sm text-rose-600">{onboardingError}</p>}
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button
@@ -662,19 +669,14 @@ function App() {
       <header className="px-5 py-8 md:px-8 md:py-10 border-b border-slate-200/70">
         <div className="mx-auto max-w-[1500px]">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">Bedroom Layout Designer</h1>
-          <p className="mt-2 text-sm md:text-base text-slate-600">Add furniture presets, drag to position, and fine-tune dimensions from the edit panel.</p>
         </div>
       </header>
       <main className="px-4 py-6 md:px-8 md:py-8">
-        <div className="mx-auto max-w-[1500px] grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)] 2xl:grid-cols-[18rem_minmax(0,1fr)_18rem] gap-5 lg:gap-6 items-start">
-          <section className="w-full min-w-0">
+        <div className="mx-auto max-w-[1500px] grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem] gap-4 md:gap-5 xl:gap-6 items-start">
+          <section className="order-2 xl:order-1 w-full min-w-0">
             <AddObjectPanel onAddObject={handleAddItem} unit={preferences.unit} />
           </section>
-          <section className="w-full min-w-0 space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
-              Drag objects to move. Drag canvas edges to resize room.
-            </div>
+          <section className="order-1 xl:order-2 w-full min-w-0 space-y-2 lg:col-span-2 xl:col-span-1">
             <div className="overflow-x-auto pb-2 max-w-full">
               <div className="inline-block">
                 <RoomCanvas
@@ -692,9 +694,9 @@ function App() {
               </div>
             </div>
           </section>
-          <section className="w-full min-w-0 xl:col-span-2 2xl:col-span-1">
+          <section className="order-3 w-full min-w-0 lg:col-span-1 xl:col-span-1">
             {editingItem ? (
-              <div className="max-w-[22rem]">
+              <div className="max-w-[22rem] lg:max-w-none xl:max-w-[22rem]">
                 <EditObjectPanel
                   item={editingItem}
                   onClose={() => setEditingItemId(null)}
@@ -704,7 +706,7 @@ function App() {
                 />
               </div>
             ) : (
-              <div className="max-w-[22rem] p-4 border border-slate-200 bg-white rounded-2xl shadow-sm">
+              <div className="max-w-[22rem] lg:max-w-none xl:max-w-[22rem] p-4 border border-slate-200 bg-white rounded-2xl shadow-sm">
                 <h3 className="text-xl font-semibold text-slate-900">Edit Object</h3>
                 <p className="mt-2 text-sm text-slate-600">Select any object on the canvas to edit size, position, or rotation.</p>
               </div>
