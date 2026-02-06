@@ -459,23 +459,29 @@ function App() {
         throw new Error('Could not find the floorplan to export.');
       }
 
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import('html2canvas'),
+      const [{ toPng }, { jsPDF }] = await Promise.all([
+        import('html-to-image'),
         import('jspdf'),
       ]);
 
-      const canvas = await html2canvas(exportTarget, {
+      const imageData = await toPng(exportTarget, {
+        pixelRatio: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
         backgroundColor: '#ffffff',
-        scale: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
-        useCORS: true,
-        logging: false,
+        cacheBust: true,
+        skipFonts: true,
+      });
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Failed to render floorplan image.'));
+        img.src = imageData;
       });
 
       const roomWidth = fromBaseCm(roomWidthCm, activeUnit);
       const roomHeight = fromBaseCm(roomHeightCm, activeUnit);
       const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
       const roomSizeLabel = `${roomWidth.toFixed(decimals)}${activeUnit} x ${roomHeight.toFixed(decimals)}${activeUnit}`;
-      const orientation = canvas.width >= canvas.height ? 'landscape' : 'portrait';
+      const orientation = image.width >= image.height ? 'landscape' : 'portrait';
       const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
@@ -483,9 +489,9 @@ function App() {
       const headerHeight = 58;
       const availableWidth = pageWidth - margin * 2;
       const availableHeight = pageHeight - margin * 2 - headerHeight;
-      const renderScale = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
-      const renderWidth = canvas.width * renderScale;
-      const renderHeight = canvas.height * renderScale;
+      const renderScale = Math.min(availableWidth / image.width, availableHeight / image.height);
+      const renderWidth = image.width * renderScale;
+      const renderHeight = image.height * renderScale;
       const renderX = (pageWidth - renderWidth) / 2;
       const renderY = margin + headerHeight + Math.max(0, (availableHeight - renderHeight) / 2);
 
@@ -496,7 +502,7 @@ function App() {
       pdf.setTextColor(71, 85, 105);
       pdf.text(`Room dimensions: ${roomSizeLabel}`, margin, margin + 32);
       pdf.text(`Exported: ${new Date().toLocaleString()}`, margin, margin + 46);
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
+      pdf.addImage(imageData, 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
       pdf.save(`bedroom-floorplan-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to export PDF.';
