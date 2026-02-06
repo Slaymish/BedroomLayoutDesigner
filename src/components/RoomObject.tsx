@@ -8,6 +8,7 @@ interface RoomObjectProps {
     type?: string;
     doorOpenDirection?: 'in' | 'out';
     doorOpenSide?: 'left' | 'right';
+    isSelected?: boolean;
     onMouseDown?: (e: React.MouseEvent) => void;
     onMouseClick?: (e: React.MouseEvent) => void;
 }
@@ -22,6 +23,7 @@ export default function RoomObject({
     type,
     doorOpenDirection = 'in',
     doorOpenSide = 'left',
+    isSelected = false,
     onMouseDown, 
     onMouseClick 
 }: RoomObjectProps) {
@@ -102,8 +104,9 @@ export default function RoomObject({
         <div
             onMouseDown={onMouseDown}
             onClick={onMouseClick}
-            className={`absolute ring-1 rounded-xs cursor-move select-none flex items-center justify-center text-xs
-                ${isWindow ? 'bg-blue-100 ring-blue-400' : 'bg-gray-100 ring-gray-300'}
+            className={`absolute ring-1 rounded-sm cursor-move select-none flex items-center justify-center text-xs font-medium text-slate-800
+                ${isWindow ? 'bg-sky-100 ring-sky-400' : 'bg-slate-100 ring-slate-300'}
+                ${isSelected ? 'ring-2 ring-amber-400 shadow-md z-20' : ''}
                 ${isDoor ? 'overflow-visible' : 'overflow-hidden'}
             `}
             style={{
@@ -111,12 +114,13 @@ export default function RoomObject({
                 height,
                 left: x,
                 top: y,
-                transform: `rotate(${rotate}deg)`
+                transform: `rotate(${rotate}deg)`,
+                transformOrigin: 'center center'
             }}
         >
             {renderDoorSwing()}
             {isWindow && (
-                <div className="w-full h-1/3 bg-blue-300 absolute top-1/3 pointer-events-none" />
+                <div className="w-full h-1/3 bg-sky-300 absolute top-1/3 pointer-events-none" />
             )}
             <span className="z-10 pointer-events-none">{label}</span>
         </div>

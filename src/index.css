@@ -1,14 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap');
 @import "tailwindcss";
 
-/* Minimal base resets; rely on Tailwind for styling */
-html, body, #root { height: 100%; }
+:root {
+	--font-ui: "DM Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+	--font-display: "Space Grotesk", "Avenir Next", sans-serif;
+}
+
+/* Minimal base resets; rely on Tailwind for component styling */
+html, body, #root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: var(--font-ui);
+	color: #0f172a;
+}
+
+h1, h2, h3, h4 {
+	font-family: var(--font-display);
+}
 
 /* Utility: subtle grid background for canvases */
 @layer utilities {
 	.bg-grid {
 		/* Customize with CSS vars as needed */
 		--grid-size: 40px;
-		--grid-color: rgb(148 163 184 / 0.35); /* slate-400 @ 35% */
+		--grid-color: rgb(148 163 184 / 0.32); /* slate-400 @ 32% */
 
 		background-image:
 			linear-gradient(to right, var(--grid-color) 1px, transparent 1px),

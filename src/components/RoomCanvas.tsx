@@ -7,6 +7,7 @@ interface RoomCanvasProps {
     items: RoomItem[];
     onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
     onEditItem: (id: number | null) => void;
+    selectedItemId: number | null;
     gridSize?: number; // in px
     gridColor?: string; // CSS color string to override --grid-color
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
@@ -22,7 +23,7 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
-export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize = 40, gridColor, unit = 'cm' }: RoomCanvasProps) {
+export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedItemId, gridSize = 40, gridColor, unit = 'cm' }: RoomCanvasProps) {
     const [width, setWidth] = useState(800);
     const [height, setHeight] = useState(600);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
@@ -204,25 +205,26 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
 
     const displayWidth = fromBaseCm(width, unit);
     const displayHeight = fromBaseCm(height, unit);
+    const canvasStyle = {
+        width,
+        height,
+        '--grid-size': `${gridSize}px`,
+        '--grid-color': gridColor ?? 'rgb(148 163 184 / 0.32)',
+    } as React.CSSProperties & Record<'--grid-size' | '--grid-color', string>;
 
     return (
         <div
             ref={canvasRef}
             onClick={() => onEditItem(null)}
-            className="relative bg-white bg-grid rounded-xs shadow-sm ring-1 ring-gray-200"
-            style={{
-                width,
-                height,
-                ["--grid-size" as any]: `${gridSize}px`,
-                ...(gridColor ? { ["--grid-color" as any]: gridColor } : {}),
-            }}
+            className="relative bg-white bg-grid rounded-xl shadow-md ring-1 ring-slate-300 overflow-hidden"
+            style={canvasStyle}
         >
             {/* Width label (top center) */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full text-[10px] px-1 py-0.5 bg-white/70 backdrop-blur rounded border border-gray-200 shadow-sm pointer-events-none select-none">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full text-[10px] px-1.5 py-0.5 bg-white/70 backdrop-blur rounded border border-slate-200 shadow-sm pointer-events-none select-none">
                 {Math.round(displayWidth * 100) / 100}{unit}
             </div>
             {/* Height label (left middle rotated) */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full text-[10px] px-1 py-0.5 bg-white/70 backdrop-blur rounded border border-gray-200 shadow-sm pointer-events-none select-none origin-center -rotate-90">
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full text-[10px] px-1.5 py-0.5 bg-white/70 backdrop-blur rounded border border-slate-200 shadow-sm pointer-events-none select-none origin-center -rotate-90">
                 {Math.round(displayHeight * 100) / 100}{unit}
             </div>
             {items.map(item => (
@@ -237,6 +239,7 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
                     type={item.type}
                     doorOpenDirection={item.doorOpenDirection}
                     doorOpenSide={item.doorOpenSide}
+                    isSelected={item.id === selectedItemId}
                     onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
                     onMouseClick={(e) => handleObjectClick(e, item.id)}
                 />
@@ -245,19 +248,19 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, gridSize 
             {/* Right Handle */}
             <div
                 onMouseDown={() => setIsResizing('right')}
-                className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10"
+                className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-amber-400/20 transition-colors"
             />
 
             {/* Bottom Handle */}
             <div
                 onMouseDown={() => setIsResizing('bottom')}
-                className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10"
+                className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-amber-400/20 transition-colors"
             />
 
             {/* Corner Handle */}
             <div
                 onMouseDown={() => setIsResizing('corner')}
-                className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-gray-300 z-20"
+                className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-amber-400 z-20"
             />
         </div>
     )
