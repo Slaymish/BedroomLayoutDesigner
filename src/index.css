@@ -4,6 +4,16 @@
 :root {
 	--font-ui: "DM Sans", "Segoe UI", "Helvetica Neue", sans-serif;
 	--font-display: "Space Grotesk", "Avenir Next", sans-serif;
+	--surface-base: #f5f6f8;
+	--surface-soft: #f8fafc;
+	--surface-card: #ffffff;
+	--text-strong: #0f172a;
+	--text-muted: #475569;
+	--border-subtle: #d9e1ea;
+	--border-strong: #c2cedb;
+	--shadow-soft: 0 10px 26px -20px rgb(15 23 42 / 0.3);
+	--shadow-card: 0 1px 0 rgb(255 255 255 / 0.8), var(--shadow-soft);
+	--radius-card: 16px;
 }
 
 /* Minimal base resets; rely on Tailwind for component styling */
@@ -12,13 +22,25 @@ html, body, #root {
 	margin: 0;
 }
 
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
 body {
 	font-family: var(--font-ui);
-	color: #0f172a;
+	color: var(--text-strong);
+	background: var(--surface-base);
+	line-height: 1.35;
 }
 
 h1, h2, h3, h4 {
 	font-family: var(--font-display);
+}
+
+#root {
+	overflow-x: clip;
 }
 
 /* Utility: subtle grid background for canvases */

@@ -460,7 +460,7 @@ function App() {
   if (!isHydrated) {
     return (
       <div className="min-h-screen app-shell flex items-center justify-center px-6">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm text-slate-700">
+        <div className="surface-card p-6 text-slate-700">
           Loading your layout...
         </div>
       </div>
@@ -470,19 +470,22 @@ function App() {
   if (!onboardingComplete) {
     return (
       <div className="min-h-screen app-shell">
-      <header className="px-5 py-8 md:px-8 md:py-10 border-b border-slate-200/70">
-        <div className="mx-auto max-w-[1200px]">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">Bedroom Layout Designer</h1>
+      <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
+        <div className="mx-auto max-w-6xl">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
         </div>
       </header>
-        <main className="px-4 py-6 md:px-8 md:py-8">
-          <div className="mx-auto max-w-[1200px]">
+        <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7">
+          <div className="mx-auto max-w-6xl">
             {onboardingStep === 'welcome' && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
-                <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 1 of 3</p>
-                <h2 className="mt-4 text-3xl font-bold text-slate-900">Welcome, ready to design your bedroom?</h2>
+              <section className="surface-card p-5 sm:p-6 md:p-7">
+                <p className="badge-step">Step 1 of 3</p>
+                <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-slate-900">Welcome, ready to design your bedroom?</h2>
+                <p className="mt-2 text-sm text-slate-600 max-w-2xl">
+                  You will set room dimensions, place doors and windows, then start arranging furniture.
+                </p>
                 <button
-                  className="mt-5 inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700 transition-colors"
+                  className="ui-btn ui-btn-primary mt-6"
                   onClick={startOnboarding}
                 >
                   Start Setup
@@ -491,14 +494,14 @@ function App() {
             )}
 
             {onboardingStep === 'dimensions' && (
-              <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
-                <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 2 of 3</p>
-                <h2 className="mt-4 text-2xl font-bold text-slate-900">What are your bedroom dimensions?</h2>
+              <section className="surface-card p-5 sm:p-6 md:p-7">
+                <p className="badge-step">Step 2 of 3</p>
+                <h2 className="mt-4 text-xl sm:text-2xl font-bold text-slate-900">What are your bedroom dimensions?</h2>
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-700">Width</label>
+                  <div className="ui-field">
+                    <label className="ui-label">Width</label>
                     <input
-                      className="border border-slate-300 rounded-lg px-3 py-2"
+                      className="ui-input"
                       type="number"
                       value={dimensionDraft.width}
                       min={1}
@@ -506,10 +509,10 @@ function App() {
                       onChange={(e) => setDimensionDraft(prev => ({ ...prev, width: e.target.value }))}
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-700">Depth</label>
+                  <div className="ui-field">
+                    <label className="ui-label">Depth</label>
                     <input
-                      className="border border-slate-300 rounded-lg px-3 py-2"
+                      className="ui-input"
                       type="number"
                       value={dimensionDraft.height}
                       min={1}
@@ -517,10 +520,10 @@ function App() {
                       onChange={(e) => setDimensionDraft(prev => ({ ...prev, height: e.target.value }))}
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-sm text-slate-700">Unit</label>
+                  <div className="ui-field">
+                    <label className="ui-label">Unit</label>
                     <select
-                      className="border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                      className="ui-select"
                       value={activeUnit}
                       onChange={(e) => handleDimensionUnitChange(e.target.value as Unit)}
                     >
@@ -533,13 +536,13 @@ function App() {
                 {onboardingError && <p className="mt-3 text-sm text-rose-600">{onboardingError}</p>}
                 <div className="mt-6 flex flex-wrap gap-3">
                   <button
-                    className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-100"
+                    className="ui-btn ui-btn-ghost"
                     onClick={() => setOnboardingStep('welcome')}
                   >
                     Back
                   </button>
                   <button
-                    className="inline-flex items-center justify-center rounded-lg px-5 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700"
+                    className="ui-btn ui-btn-primary"
                     onClick={goToOpeningPlacement}
                   >
                     Continue
@@ -549,112 +552,80 @@ function App() {
             )}
 
             {onboardingStep === 'openings' && (
-              <section className="space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="inline-flex rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-800">Step 3 of 3</p>
-                  <h2 className="mt-4 text-2xl font-bold text-slate-900">Place doors and windows</h2>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700"
-                      onClick={() => addOpening('Door')}
-                    >
-                      Add Door
-                    </button>
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-slate-200 text-slate-800 hover:bg-slate-300"
-                      onClick={() => addOpening('Window')}
-                    >
-                      Add Window
-                    </button>
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-40"
-                      onClick={handleRemoveItem}
-                      disabled={!editingItem}
-                    >
-                      Remove Selected
-                    </button>
+              <section className="grid gap-4 xl:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
+                <div className="surface-card panel-shell p-4 sm:p-5 space-y-4">
+                  <p className="badge-step">Step 3 of 3</p>
+                  <h2 className="text-xl font-bold text-slate-900">Place doors and windows</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button className="ui-btn ui-btn-primary" onClick={() => addOpening('Door')}>Add Door</button>
+                    <button className="ui-btn ui-btn-secondary" onClick={() => addOpening('Window')}>Add Window</button>
+                    <button className="ui-btn ui-btn-ghost disabled:opacity-40" onClick={handleRemoveItem} disabled={!editingItem}>Remove</button>
                   </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">New Window Size</p>
-                      <div className="mt-2 grid grid-cols-1 gap-2">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-xs text-slate-600">Width ({activeUnit})</label>
-                          <input
-                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-                            type="number"
-                            min={0.1}
-                            step={0.1}
-                            value={onboardingWindowDraft.width}
-                            onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, width: e.target.value }))}
-                          />
-                        </div>
-                      </div>
+                  <div className="surface-card-muted p-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Window</p>
+                    <div className="ui-field">
+                      <label className="ui-label">Width ({activeUnit})</label>
+                      <input
+                        className="ui-input"
+                        type="number"
+                        min={0.1}
+                        step={0.1}
+                        value={onboardingWindowDraft.width}
+                        onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, width: e.target.value }))}
+                      />
                     </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                        {selectedDoorInOnboarding ? 'Selected Door Swing' : 'Default Door Swing'}
-                      </p>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="flex flex-col gap-1">
-                          <label className="text-xs text-slate-600">Open Direction</label>
-                          <select
-                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-                            value={onboardingDoorDirection}
-                            onChange={(e) => handleOnboardingDoorSettingChange('doorOpenDirection', e.target.value as 'in' | 'out')}
-                          >
-                            <option value="in">In</option>
-                            <option value="out">Out</option>
-                          </select>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <label className="text-xs text-slate-600">Hinge Side</label>
-                          <select
-                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-                            value={onboardingDoorSide}
-                            onChange={(e) => handleOnboardingDoorSettingChange('doorOpenSide', e.target.value as 'left' | 'right')}
-                          >
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                          </select>
-                        </div>
+                  </div>
+                  <div className="surface-card-muted p-3 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                      {selectedDoorInOnboarding ? 'Selected Door Swing' : 'Default Door Swing'}
+                    </p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                      <div className="ui-field">
+                        <label className="ui-label">Open Direction</label>
+                        <select
+                          className="ui-select"
+                          value={onboardingDoorDirection}
+                          onChange={(e) => handleOnboardingDoorSettingChange('doorOpenDirection', e.target.value as 'in' | 'out')}
+                        >
+                          <option value="in">In</option>
+                          <option value="out">Out</option>
+                        </select>
+                      </div>
+                      <div className="ui-field">
+                        <label className="ui-label">Hinge Side</label>
+                        <select
+                          className="ui-select"
+                          value={onboardingDoorSide}
+                          onChange={(e) => handleOnboardingDoorSettingChange('doorOpenSide', e.target.value as 'left' | 'right')}
+                        >
+                          <option value="left">Left</option>
+                          <option value="right">Right</option>
+                        </select>
                       </div>
                     </div>
                   </div>
-                  <p className="mt-3 text-sm text-slate-600">
+                  <p className="text-sm text-slate-600">
                     Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows: <span className="font-semibold text-slate-800">{windowCount}</span>
                   </p>
-                  {onboardingError && <p className="mt-2 text-sm text-rose-600">{onboardingError}</p>}
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-100"
-                      onClick={() => setOnboardingStep('dimensions')}
-                    >
-                      Back
-                    </button>
-                    <button
-                      className="inline-flex items-center justify-center rounded-lg px-5 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700"
-                      onClick={finishOnboarding}
-                    >
-                      Start Designing
-                    </button>
+                  {onboardingError && <p className="text-sm text-rose-600">{onboardingError}</p>}
+                  <div className="flex flex-wrap gap-3">
+                    <button className="ui-btn ui-btn-ghost" onClick={() => setOnboardingStep('dimensions')}>Back</button>
+                    <button className="ui-btn ui-btn-primary" onClick={finishOnboarding}>Start Designing</button>
                   </div>
                 </div>
-                <div className="overflow-x-auto pb-2">
-                  <div className="inline-block">
-                    <RoomCanvas
-                      items={items}
-                      onItemsChange={setItems}
-                      onEditItem={setEditingItemId}
-                      selectedItemId={editingItem?.id ?? null}
-                      roomWidthCm={roomWidthCm}
-                      roomHeightCm={roomHeightCm}
-                      allowResize={false}
-                      gridSize={preferences.gridSize}
-                      gridColor={preferences.gridColor}
-                      unit={activeUnit}
-                    />
-                  </div>
+                <div className="panel-shell min-w-0">
+                  <RoomCanvas
+                    items={items}
+                    onItemsChange={setItems}
+                    onEditItem={setEditingItemId}
+                    selectedItemId={editingItem?.id ?? null}
+                    roomWidthCm={roomWidthCm}
+                    roomHeightCm={roomHeightCm}
+                    allowResize={false}
+                    gridSize={preferences.gridSize}
+                    gridColor={preferences.gridColor}
+                    unit={activeUnit}
+                  />
                 </div>
               </section>
             )}
@@ -666,48 +637,48 @@ function App() {
 
   return (
     <div className="min-h-screen app-shell">
-      <header className="px-5 py-8 md:px-8 md:py-10 border-b border-slate-200/70">
-        <div className="mx-auto max-w-[1500px]">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-slate-900">Bedroom Layout Designer</h1>
+      <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
+        <div className="mx-auto max-w-[1440px] flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
+          <button
+            className="ui-btn ui-btn-ghost"
+            onClick={() => setPreferencesPanelOpen(true)}
+          >
+            Preferences
+          </button>
         </div>
       </header>
-      <main className="px-4 py-6 md:px-8 md:py-8">
-        <div className="mx-auto max-w-[1500px] grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[17.5rem_minmax(0,1fr)_17.5rem] gap-4 md:gap-5 xl:gap-6 items-start">
-          <section className="order-2 xl:order-1 w-full min-w-0">
+      <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip">
+        <div className="mx-auto max-w-[1440px] grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 xl:[grid-template-columns:17.5rem_minmax(0,1fr)_19.5rem] items-start">
+          <section className="order-1 md:col-span-2 xl:col-span-1 xl:col-start-2 panel-shell min-w-0">
+            <RoomCanvas
+              items={items}
+              onItemsChange={setItems}
+              onEditItem={handleEditItem}
+              selectedItemId={editingItem?.id ?? null}
+              roomWidthCm={roomWidthCm}
+              roomHeightCm={roomHeightCm}
+              onRoomSizeChange={handleRoomSizeChange}
+              gridSize={preferences.gridSize}
+              gridColor={preferences.gridColor}
+              unit={activeUnit}
+            />
+          </section>
+          <section className="order-2 panel-shell min-w-0 xl:col-start-1 xl:row-start-1">
             <AddObjectPanel onAddObject={handleAddItem} unit={preferences.unit} />
           </section>
-          <section className="order-1 xl:order-2 w-full min-w-0 space-y-2 lg:col-span-2 xl:col-span-1">
-            <div className="overflow-x-auto pb-2 max-w-full">
-              <div className="inline-block">
-                <RoomCanvas
-                  items={items}
-                  onItemsChange={setItems}
-                  onEditItem={handleEditItem}
-                  selectedItemId={editingItem?.id ?? null}
-                  roomWidthCm={roomWidthCm}
-                  roomHeightCm={roomHeightCm}
-                  onRoomSizeChange={handleRoomSizeChange}
-                  gridSize={preferences.gridSize}
-                  gridColor={preferences.gridColor}
-                  unit={activeUnit}
-                />
-              </div>
-            </div>
-          </section>
-          <section className="order-3 w-full min-w-0 lg:col-span-1 xl:col-span-1">
+          <section className="order-3 panel-shell min-w-0 xl:col-start-3 xl:row-start-1">
             {editingItem ? (
-              <div className="max-w-[22rem] lg:max-w-none xl:max-w-[22rem]">
-                <EditObjectPanel
-                  item={editingItem}
-                  onClose={() => setEditingItemId(null)}
-                  onChange={handleUpdateItem}
-                  onRemove={handleRemoveItem}
-                  unit={activeUnit}
-                />
-              </div>
+              <EditObjectPanel
+                item={editingItem}
+                onClose={() => setEditingItemId(null)}
+                onChange={handleUpdateItem}
+                onRemove={handleRemoveItem}
+                unit={activeUnit}
+              />
             ) : (
-              <div className="max-w-[22rem] lg:max-w-none xl:max-w-[22rem] p-4 border border-slate-200 bg-white rounded-2xl shadow-sm">
-                <h3 className="text-xl font-semibold text-slate-900">Edit Object</h3>
+              <div className="surface-card panel-shell p-4 sm:p-5">
+                <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
                 <p className="mt-2 text-sm text-slate-600">Select any object on the canvas to edit size, position, or rotation.</p>
               </div>
             )}
@@ -715,11 +686,11 @@ function App() {
         </div>
         {preferencesPanelOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-900/35 backdrop-blur-[1px]">
-            <div className="bg-white p-5 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
+            <div className="modal-shell p-5 w-full max-w-md">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-slate-900">Layout Preferences</h2>
                 <button
-                  className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
                   onClick={() => setPreferencesPanelOpen(false)}
                 >
                   Close
@@ -732,14 +703,6 @@ function App() {
               />
             </div>
           </div>
-        )}
-        {!preferencesPanelOpen && (
-          <button
-            className="fixed bottom-5 right-5 md:bottom-6 md:right-6 bg-slate-900 text-white rounded-full px-4 py-3 shadow-lg hover:bg-slate-700 transition-colors"
-            onClick={() => setPreferencesPanelOpen(true)}
-          >
-            Preferences
-          </button>
         )}
       </main>
     </div>

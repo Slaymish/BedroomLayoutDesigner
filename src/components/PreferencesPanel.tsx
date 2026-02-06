@@ -18,35 +18,35 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
     };
 
     return (
-        <div className="p-4 border border-slate-200 bg-white rounded-2xl shadow-sm space-y-4">
-            <h3 className="text-xl font-semibold text-slate-900">Preferences</h3>
-            <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-700 w-28">Grid Size (px)</label>
+        <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900">Preferences</h3>
+            <div className="ui-field">
+                <label className="ui-label">Grid Size (px)</label>
                 <input
                     type="number"
                     min={2}
                     step={1}
                     value={preferences.gridSize}
                     onChange={handleGridSizeChange}
-                    className="border border-slate-300 rounded-lg px-3 py-2 w-28"
+                    className="ui-input"
                 />
             </div>
-            <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-700 w-28">Grid Color</label>
+            <div className="ui-field">
+                <label className="ui-label">Grid Color</label>
                 <input
                     type="color"
                     value={preferences.gridColor ?? "#94a3b8"}
                     onChange={handleGridColorChange}
-                    className="h-9 w-12 p-0 border border-slate-300 rounded-lg"
+                    className="h-10 w-14 p-1 border border-slate-300 rounded-lg bg-white"
                     title="Pick grid line color"
                 />
             </div>
-            <div className="flex items-center gap-3">
-                <label className="text-sm text-slate-700 w-28">Unit</label>
+            <div className="ui-field">
+                <label className="ui-label">Unit</label>
                 <select
                     value={preferences.unit}
                     onChange={e => onChange({ ...preferences, unit: e.target.value as Preferences['unit'] })}
-                    className="border border-slate-300 rounded-lg px-3 py-2 w-28 bg-white"
+                    className="ui-select"
                 >
                     <option value="mm">mm</option>
                     <option value="cm">cm</option>
@@ -58,7 +58,7 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
             {onResetSetup && (
                 <div className="pt-3 border-t border-slate-200 space-y-2">
                     <button
-                        className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold bg-slate-900 text-white hover:bg-slate-700"
+                        className="ui-btn ui-btn-secondary w-full"
                         onClick={onResetSetup}
                     >
                         Reset Setup

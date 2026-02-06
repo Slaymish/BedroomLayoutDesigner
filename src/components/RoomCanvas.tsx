@@ -185,8 +185,8 @@ export default function RoomCanvas({
         .map(item => {
             const rawX = item.x + item.width / 2;
             const rawY = item.y + item.height / 2;
-            const labelX = clamp(rawX, 34, width - 34);
-            const labelY = clamp(rawY, 16, height - 16);
+            const labelX = clamp(rawX, 44, width - 44);
+            const labelY = clamp(rawY, 20, height - 20);
             return {
                 id: item.id,
                 label: item.type || 'Opening',
@@ -204,73 +204,77 @@ export default function RoomCanvas({
     } as React.CSSProperties & Record<'--grid-size' | '--grid-color', string>;
 
     return (
-        <div
-            ref={canvasRef}
-            onClick={() => onEditItem(null)}
-            className="relative bg-white bg-grid rounded-xl shadow-md ring-1 ring-slate-300 overflow-hidden"
-            style={canvasStyle}
-        >
-            {/* Width label (top center) */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-full text-[10px] px-1.5 py-0.5 bg-white/70 backdrop-blur rounded border border-slate-200 shadow-sm pointer-events-none select-none">
-                {Math.round(displayWidth * 100) / 100}{unit}
-            </div>
-            {/* Height label (left middle rotated) */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full text-[10px] px-1.5 py-0.5 bg-white/70 backdrop-blur rounded border border-slate-200 shadow-sm pointer-events-none select-none origin-center -rotate-90">
-                {Math.round(displayHeight * 100) / 100}{unit}
-            </div>
-            {items.map(item => (
-                <RoomObject 
-                    key={item.id}
-                    width={item.width} 
-                    height={item.height} 
-                    x={item.x}
-                    y={item.y}
-                    rotate={item.rotate}
-                    label={item.type}
-                    type={item.type}
-                    doorOpenDirection={item.doorOpenDirection}
-                    doorOpenSide={item.doorOpenSide}
-                    openingWall={item.openingWall}
-                    isSelected={item.id === selectedItemId}
-                    showLabel={item.type !== 'Door' && item.type !== 'Window'}
-                    onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
-                    onMouseClick={(e) => handleObjectClick(e, item.id)}
-                />
-            ))}
-            {openingLabels.map((label) => (
-                <div
-                    key={`opening-label-${label.id}`}
-                    className={`absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2 py-0.5 text-[10px] font-semibold border shadow-sm
-                    ${label.isDoor ? 'bg-slate-100 text-slate-800 border-slate-300' : 'bg-sky-100 text-sky-900 border-sky-300'}
-                    ${label.selected ? 'ring-1 ring-slate-500' : ''}
-                `}
-                    style={{ left: label.x, top: label.y }}
-                >
-                    {label.label}
+        <div className="workspace-card">
+            <div className="workspace-scroll">
+                <div className="mx-auto w-fit">
+                    <div
+                        ref={canvasRef}
+                        onClick={() => onEditItem(null)}
+                        className="relative bg-white bg-grid rounded-xl shadow-sm ring-1 ring-slate-300 overflow-hidden"
+                        style={canvasStyle}
+                    >
+                        <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 bg-white/86 rounded-md border border-slate-200 shadow-sm pointer-events-none select-none text-slate-600">
+                            {Math.round(displayWidth * 100) / 100}{unit}
+                        </div>
+                        <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 bg-white/86 rounded-md border border-slate-200 shadow-sm pointer-events-none select-none text-slate-600 origin-center -rotate-90">
+                            {Math.round(displayHeight * 100) / 100}{unit}
+                        </div>
+                        {items.map(item => (
+                            <RoomObject 
+                                key={item.id}
+                                width={item.width} 
+                                height={item.height} 
+                                x={item.x}
+                                y={item.y}
+                                rotate={item.rotate}
+                                label={item.type}
+                                type={item.type}
+                                doorOpenDirection={item.doorOpenDirection}
+                                doorOpenSide={item.doorOpenSide}
+                                openingWall={item.openingWall}
+                                isSelected={item.id === selectedItemId}
+                                showLabel={item.type !== 'Door' && item.type !== 'Window'}
+                                onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
+                                onMouseClick={(e) => handleObjectClick(e, item.id)}
+                            />
+                        ))}
+                        {openingLabels.map((label) => (
+                            <div
+                                key={`opening-label-${label.id}`}
+                                className={`absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border shadow-sm
+                                ${label.isDoor ? 'bg-white text-slate-700 border-slate-300' : 'bg-sky-50 text-sky-800 border-sky-300'}
+                                ${label.selected ? 'ring-1 ring-slate-500' : ''}
+                            `}
+                                style={{ left: label.x, top: label.y }}
+                            >
+                                {label.label}
+                            </div>
+                        ))}
+
+                        {allowResize && (
+                            <>
+                                {/* Right Handle */}
+                                <div
+                                    onMouseDown={() => setIsResizing('right')}
+                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-slate-500/15 transition-colors"
+                                />
+
+                                {/* Bottom Handle */}
+                                <div
+                                    onMouseDown={() => setIsResizing('bottom')}
+                                    className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-slate-500/15 transition-colors"
+                                />
+
+                                {/* Corner Handle */}
+                                <div
+                                    onMouseDown={() => setIsResizing('corner')}
+                                    className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-slate-400 z-20"
+                                />
+                            </>
+                        )}
+                    </div>
                 </div>
-            ))}
-
-            {allowResize && (
-                <>
-                    {/* Right Handle */}
-                    <div
-                        onMouseDown={() => setIsResizing('right')}
-                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-slate-500/20 transition-colors"
-                    />
-
-                    {/* Bottom Handle */}
-                    <div
-                        onMouseDown={() => setIsResizing('bottom')}
-                        className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-slate-500/20 transition-colors"
-                    />
-
-                    {/* Corner Handle */}
-                    <div
-                        onMouseDown={() => setIsResizing('corner')}
-                        className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-slate-400 z-20"
-                    />
-                </>
-            )}
+            </div>
         </div>
     )
 }
