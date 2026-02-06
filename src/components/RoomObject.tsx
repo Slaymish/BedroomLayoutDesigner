@@ -9,6 +9,7 @@ interface RoomObjectProps {
     doorOpenDirection?: 'in' | 'out';
     doorOpenSide?: 'left' | 'right';
     isSelected?: boolean;
+    showLabel?: boolean;
     onMouseDown?: (e: React.MouseEvent) => void;
     onMouseClick?: (e: React.MouseEvent) => void;
 }
@@ -24,6 +25,7 @@ export default function RoomObject({
     doorOpenDirection = 'in',
     doorOpenSide = 'left',
     isSelected = false,
+    showLabel = true,
     onMouseDown, 
     onMouseClick 
 }: RoomObjectProps) {
@@ -122,7 +124,7 @@ export default function RoomObject({
             {isWindow && (
                 <div className="w-full h-1/3 bg-sky-300 absolute top-1/3 pointer-events-none" />
             )}
-            <span className="z-10 pointer-events-none">{label}</span>
+            {showLabel && <span className="z-10 pointer-events-none">{label}</span>}
         </div>
     );
 }

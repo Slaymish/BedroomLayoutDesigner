@@ -27,6 +27,8 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+
 export default function RoomCanvas({
     items,
     onItemsChange,
@@ -233,6 +235,22 @@ export default function RoomCanvas({
 
     const displayWidth = fromBaseCm(width, unit);
     const displayHeight = fromBaseCm(height, unit);
+    const openingLabels = items
+        .filter(item => item.type === 'Door' || item.type === 'Window')
+        .map(item => {
+            const rawX = item.x + item.width / 2;
+            const rawY = item.y + item.height / 2;
+            const labelX = clamp(rawX, 34, width - 34);
+            const labelY = clamp(rawY, 16, height - 16);
+            return {
+                id: item.id,
+                label: item.type || 'Opening',
+                x: labelX,
+                y: labelY,
+                selected: item.id === selectedItemId,
+                isDoor: item.type === 'Door',
+            };
+        });
     const canvasStyle = {
         width,
         height,
@@ -268,9 +286,22 @@ export default function RoomCanvas({
                     doorOpenDirection={item.doorOpenDirection}
                     doorOpenSide={item.doorOpenSide}
                     isSelected={item.id === selectedItemId}
+                    showLabel={item.type !== 'Door' && item.type !== 'Window'}
                     onMouseDown={(e) => handleObjectMouseDown(e, item.id)}
                     onMouseClick={(e) => handleObjectClick(e, item.id)}
                 />
+            ))}
+            {openingLabels.map((label) => (
+                <div
+                    key={`opening-label-${label.id}`}
+                    className={`absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2 py-0.5 text-[10px] font-semibold border shadow-sm
+                    ${label.isDoor ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-sky-100 text-sky-900 border-sky-300'}
+                    ${label.selected ? 'ring-1 ring-amber-400' : ''}
+                `}
+                    style={{ left: label.x, top: label.y }}
+                >
+                    {label.label}
+                </div>
             ))}
 
             {allowResize && (

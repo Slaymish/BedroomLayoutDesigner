@@ -25,6 +25,8 @@ interface AddItemOptions {
   x?: number;
   y?: number;
   rotate?: number;
+  doorOpenDirection?: 'in' | 'out';
+  doorOpenSide?: 'left' | 'right';
 }
 
 const STORAGE_KEY = 'bedroom-layout-designer:v1';
@@ -73,6 +75,17 @@ function App() {
   const [dimensionDraft, setDimensionDraft] = useState({
     width: toDimensionInputValue(DEFAULT_ROOM_WIDTH_CM, activeUnit),
     height: toDimensionInputValue(DEFAULT_ROOM_HEIGHT_CM, activeUnit),
+  });
+  const [onboardingWindowDraft, setOnboardingWindowDraft] = useState({
+    width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, activeUnit),
+    height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, activeUnit),
+  });
+  const [onboardingDoorDefaults, setOnboardingDoorDefaults] = useState<{
+    doorOpenDirection: 'in' | 'out';
+    doorOpenSide: 'left' | 'right';
+  }>({
+    doorOpenDirection: 'in',
+    doorOpenSide: 'left',
   });
   const [onboardingError, setOnboardingError] = useState<string | null>(null);
 
@@ -128,6 +141,10 @@ function App() {
         width: toDimensionInputValue(loadedRoomWidth, loadedUnit),
         height: toDimensionInputValue(loadedRoomHeight, loadedUnit),
       });
+      setOnboardingWindowDraft({
+        width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, loadedUnit),
+        height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, loadedUnit),
+      });
     } catch {
       // If local storage is malformed, fall back to defaults.
     } finally {
@@ -160,7 +177,12 @@ function App() {
       y: 0,
       type,
       rotate: options?.rotate ?? 0,
-      ...(type === 'Door' ? { doorOpenDirection: 'in' as const, doorOpenSide: 'left' as const } : {})
+      ...(type === 'Door'
+        ? {
+            doorOpenDirection: options?.doorOpenDirection ?? 'in',
+            doorOpenSide: options?.doorOpenSide ?? 'left',
+          }
+        : {})
     };
 
     setItems(prevItems => {
@@ -211,6 +233,14 @@ function App() {
       width: toDimensionInputValue(DEFAULT_ROOM_WIDTH_CM, 'cm'),
       height: toDimensionInputValue(DEFAULT_ROOM_HEIGHT_CM, 'cm'),
     });
+    setOnboardingWindowDraft({
+      width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, 'cm'),
+      height: toDimensionInputValue(OPENING_PRESETS.Window.heightCm, 'cm'),
+    });
+    setOnboardingDoorDefaults({
+      doorOpenDirection: 'in',
+      doorOpenSide: 'left',
+    });
     setOnboardingError(null);
     setOnboardingStep('welcome');
     setOnboardingComplete(false);
@@ -229,13 +259,21 @@ function App() {
   const handleDimensionUnitChange = (newUnit: Unit) => {
     const widthRaw = parseFloat(dimensionDraft.width);
     const heightRaw = parseFloat(dimensionDraft.height);
+    const windowWidthRaw = parseFloat(onboardingWindowDraft.width);
+    const windowHeightRaw = parseFloat(onboardingWindowDraft.height);
     const widthCm = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : roomWidthCm;
     const heightCm = Number.isFinite(heightRaw) ? toBaseCm(heightRaw, activeUnit) : roomHeightCm;
+    const windowWidthCm = Number.isFinite(windowWidthRaw) ? toBaseCm(windowWidthRaw, activeUnit) : OPENING_PRESETS.Window.widthCm;
+    const windowHeightCm = Number.isFinite(windowHeightRaw) ? toBaseCm(windowHeightRaw, activeUnit) : OPENING_PRESETS.Window.heightCm;
 
     setPreferences(prev => ({ ...prev, unit: newUnit }));
     setDimensionDraft({
       width: toDimensionInputValue(widthCm, newUnit),
       height: toDimensionInputValue(heightCm, newUnit),
+    });
+    setOnboardingWindowDraft({
+      width: toDimensionInputValue(windowWidthCm, newUnit),
+      height: toDimensionInputValue(windowHeightCm, newUnit),
     });
   };
 
@@ -264,12 +302,69 @@ function App() {
   };
 
   const addOpening = (type: 'Door' | 'Window') => {
-    const preset = OPENING_PRESETS[type];
-    const spawnX = Math.max(0, roomWidthCm / 2 - preset.widthCm / 2);
+    let openingWidthCm = OPENING_PRESETS[type].widthCm;
+    let openingHeightCm = OPENING_PRESETS[type].heightCm;
+
+    if (type === 'Window') {
+      const widthRaw = parseFloat(onboardingWindowDraft.width);
+      const heightRaw = parseFloat(onboardingWindowDraft.height);
+      const convertedWidth = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : NaN;
+      const convertedHeight = Number.isFinite(heightRaw) ? toBaseCm(heightRaw, activeUnit) : NaN;
+
+      if (!Number.isFinite(convertedWidth) || !Number.isFinite(convertedHeight) || convertedWidth <= 0 || convertedHeight <= 0) {
+        setOnboardingError('Enter a valid window size before adding a window.');
+        return;
+      }
+
+      openingWidthCm = Math.round(convertedWidth);
+      openingHeightCm = Math.round(convertedHeight);
+    }
+
+    const spawnX = Math.max(0, roomWidthCm / 2 - openingWidthCm / 2);
     const spawnY = type === 'Door'
-      ? Math.max(0, roomHeightCm - preset.heightCm / 2)
-      : Math.max(0, preset.heightCm);
-    handleAddItem(preset.widthCm, preset.heightCm, type, { x: spawnX, y: spawnY });
+      ? Math.max(0, roomHeightCm - openingHeightCm / 2)
+      : Math.max(0, openingHeightCm);
+
+    handleAddItem(openingWidthCm, openingHeightCm, type, {
+      x: spawnX,
+      y: spawnY,
+      doorOpenDirection: type === 'Door' ? onboardingDoorDefaults.doorOpenDirection : undefined,
+      doorOpenSide: type === 'Door' ? onboardingDoorDefaults.doorOpenSide : undefined,
+    });
+    setOnboardingError(null);
+  };
+
+  const handleOnboardingDoorSettingChange = (
+    field: 'doorOpenDirection' | 'doorOpenSide',
+    value: 'in' | 'out' | 'left' | 'right'
+  ) => {
+    const selectedDoor = editingItem?.type === 'Door' ? editingItem : null;
+    if (selectedDoor) {
+      if (field === 'doorOpenDirection') {
+        handleUpdateItem({
+          ...selectedDoor,
+          doorOpenDirection: value as 'in' | 'out',
+        });
+      } else {
+        handleUpdateItem({
+          ...selectedDoor,
+          doorOpenSide: value as 'left' | 'right',
+        });
+      }
+      return;
+    }
+
+    if (field === 'doorOpenDirection') {
+      setOnboardingDoorDefaults(prev => ({
+        ...prev,
+        doorOpenDirection: value as 'in' | 'out',
+      }));
+    } else {
+      setOnboardingDoorDefaults(prev => ({
+        ...prev,
+        doorOpenSide: value as 'left' | 'right',
+      }));
+    }
   };
 
   const finishOnboarding = () => {
@@ -291,6 +386,9 @@ function App() {
 
   const doorCount = items.filter(item => item.type === 'Door').length;
   const windowCount = items.filter(item => item.type === 'Window').length;
+  const selectedDoorInOnboarding = onboardingComplete ? null : (editingItem?.type === 'Door' ? editingItem : null);
+  const onboardingDoorDirection = selectedDoorInOnboarding?.doorOpenDirection ?? onboardingDoorDefaults.doorOpenDirection;
+  const onboardingDoorSide = selectedDoorInOnboarding?.doorOpenSide ?? onboardingDoorDefaults.doorOpenSide;
   const onboardingStepIndex = ONBOARDING_STEPS.findIndex(step => step.id === onboardingStep);
   const onboardingProgressPct = `${Math.max(1, onboardingStepIndex + 1) / ONBOARDING_STEPS.length * 100}%`;
   const hasRequiredDoor = doorCount > 0;
@@ -443,6 +541,64 @@ function App() {
                     >
                       Remove Selected
                     </button>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">New Window Size</p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-slate-600">Width ({activeUnit})</label>
+                          <input
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+                            type="number"
+                            min={0.1}
+                            step={0.1}
+                            value={onboardingWindowDraft.width}
+                            onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, width: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-slate-600">Height ({activeUnit})</label>
+                          <input
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+                            type="number"
+                            min={0.1}
+                            step={0.1}
+                            value={onboardingWindowDraft.height}
+                            onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, height: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                        {selectedDoorInOnboarding ? 'Selected Door Swing' : 'Default Door Swing'}
+                      </p>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-slate-600">Open Direction</label>
+                          <select
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+                            value={onboardingDoorDirection}
+                            onChange={(e) => handleOnboardingDoorSettingChange('doorOpenDirection', e.target.value as 'in' | 'out')}
+                          >
+                            <option value="in">In</option>
+                            <option value="out">Out</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs text-slate-600">Hinge Side</label>
+                          <select
+                            className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+                            value={onboardingDoorSide}
+                            onChange={(e) => handleOnboardingDoorSettingChange('doorOpenSide', e.target.value as 'left' | 'right')}
+                          >
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <p className="mt-3 text-sm text-slate-600">
                     Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows: <span className="font-semibold text-slate-800">{windowCount}</span>
