@@ -38,6 +38,16 @@ const OPENING_PRESETS: Record<'Door' | 'Window', { widthCm: number; heightCm: nu
 };
 
 const UNIT_OPTIONS: Unit[] = ['mm', 'cm', 'm', 'in', 'ft'];
+const DEFAULT_PREFERENCES: Preferences = {
+  gridSize: 30,
+  gridColor: '#c8d2dd',
+  unit: 'cm'
+};
+const ONBOARDING_STEPS: Array<{ id: OnboardingStep; label: string }> = [
+  { id: 'welcome', label: 'Welcome' },
+  { id: 'dimensions', label: 'Dimensions' },
+  { id: 'openings', label: 'Doors & Windows' },
+];
 
 const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
   const converted = fromBaseCm(valueCm, unit);
@@ -56,11 +66,7 @@ function App() {
   const [roomHeightCm, setRoomHeightCm] = useState(DEFAULT_ROOM_HEIGHT_CM);
   const [isHydrated, setIsHydrated] = useState(false);
 
-  const [preferences, setPreferences] = useState<Preferences>({
-    gridSize: 30,
-    gridColor: '#c8d2dd',
-    unit: 'cm'
-  });
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const activeUnit: Unit = preferences.unit || 'cm';
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
@@ -97,8 +103,8 @@ function App() {
       setRoomWidthCm(loadedRoomWidth);
       setRoomHeightCm(loadedRoomHeight);
       setPreferences({
-        gridSize: typeof parsed.preferences?.gridSize === 'number' ? Math.max(2, parsed.preferences.gridSize) : 30,
-        gridColor: parsed.preferences?.gridColor || '#c8d2dd',
+        gridSize: typeof parsed.preferences?.gridSize === 'number' ? Math.max(2, parsed.preferences.gridSize) : DEFAULT_PREFERENCES.gridSize,
+        gridColor: parsed.preferences?.gridColor || DEFAULT_PREFERENCES.gridColor,
         unit: loadedUnit,
       });
 
@@ -190,6 +196,27 @@ function App() {
     setRoomHeightCm(current => (current === nextHeightCm ? current : nextHeightCm));
   }, []);
 
+  const handleResetSetup = () => {
+    const confirmed = window.confirm('Reset room setup and start onboarding again? This removes your current layout from this browser.');
+    if (!confirmed) return;
+
+    window.localStorage.removeItem(STORAGE_KEY);
+    nextItemId.current = 1;
+    setItems([]);
+    setEditingItemId(null);
+    setRoomWidthCm(DEFAULT_ROOM_WIDTH_CM);
+    setRoomHeightCm(DEFAULT_ROOM_HEIGHT_CM);
+    setPreferences(DEFAULT_PREFERENCES);
+    setDimensionDraft({
+      width: toDimensionInputValue(DEFAULT_ROOM_WIDTH_CM, 'cm'),
+      height: toDimensionInputValue(DEFAULT_ROOM_HEIGHT_CM, 'cm'),
+    });
+    setOnboardingError(null);
+    setOnboardingStep('welcome');
+    setOnboardingComplete(false);
+    setPreferencesPanelOpen(false);
+  };
+
   const startOnboarding = () => {
     setOnboardingError(null);
     setDimensionDraft({
@@ -264,6 +291,10 @@ function App() {
 
   const doorCount = items.filter(item => item.type === 'Door').length;
   const windowCount = items.filter(item => item.type === 'Window').length;
+  const onboardingStepIndex = ONBOARDING_STEPS.findIndex(step => step.id === onboardingStep);
+  const onboardingProgressPct = `${Math.max(1, onboardingStepIndex + 1) / ONBOARDING_STEPS.length * 100}%`;
+  const hasRequiredDoor = doorCount > 0;
+  const hasAnyOpening = doorCount + windowCount > 0;
 
   if (!isHydrated) {
     return (
@@ -286,6 +317,33 @@ function App() {
         </header>
         <main className="px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto max-w-[1200px]">
+            <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                <span>Setup Progress</span>
+                <span>{Math.max(1, onboardingStepIndex + 1)} / {ONBOARDING_STEPS.length}</span>
+              </div>
+              <div className="mt-2 h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full rounded-full bg-amber-400 transition-all duration-300" style={{ width: onboardingProgressPct }} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ONBOARDING_STEPS.map((step, index) => {
+                  const isActive = step.id === onboardingStep;
+                  const isCompleted = index < onboardingStepIndex;
+                  return (
+                    <span
+                      key={step.id}
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium
+                      ${isActive ? 'bg-amber-100 text-amber-900 border border-amber-200' : ''}
+                      ${isCompleted ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : ''}
+                      ${!isActive && !isCompleted ? 'bg-slate-100 text-slate-600 border border-slate-200' : ''}
+                    `}
+                    >
+                      {isCompleted ? 'Done' : `Step ${index + 1}`}: {step.label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
             {onboardingStep === 'welcome' && (
               <section className="rounded-2xl border border-slate-200 bg-white p-6 md:p-8 shadow-sm">
                 <p className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Step 1 of 3</p>
@@ -389,6 +447,20 @@ function App() {
                   <p className="mt-3 text-sm text-slate-600">
                     Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows: <span className="font-semibold text-slate-800">{windowCount}</span>
                   </p>
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Checklist</p>
+                    <ul className="mt-2 space-y-1 text-sm">
+                      <li className={hasRequiredDoor ? 'text-emerald-700' : 'text-slate-700'}>
+                        {hasRequiredDoor ? '✓' : '○'} Add at least one door (required)
+                      </li>
+                      <li className={hasAnyOpening ? 'text-emerald-700' : 'text-slate-700'}>
+                        {hasAnyOpening ? '✓' : '○'} Place openings on the correct wall
+                      </li>
+                      <li className={windowCount > 0 ? 'text-emerald-700' : 'text-slate-700'}>
+                        {windowCount > 0 ? '✓' : '○'} Add windows (optional)
+                      </li>
+                    </ul>
+                  </div>
                   {onboardingError && <p className="mt-2 text-sm text-rose-600">{onboardingError}</p>}
                   <div className="mt-5 flex flex-wrap gap-3">
                     <button
@@ -495,7 +567,11 @@ function App() {
                   Close
                 </button>
               </div>
-              <PreferencesPanel onChange={handlePreferencesChange} preferences={preferences} />
+              <PreferencesPanel
+                onChange={handlePreferencesChange}
+                preferences={preferences}
+                onResetSetup={handleResetSetup}
+              />
             </div>
           </div>
         )}

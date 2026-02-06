@@ -1,6 +1,12 @@
 import type { Preferences } from "../types";
 
-export default function PreferencesPanel({ onChange, preferences }: { onChange: (prefs: Preferences) => void; preferences: Preferences }) {
+interface PreferencesPanelProps {
+    onChange: (prefs: Preferences) => void;
+    preferences: Preferences;
+    onResetSetup?: () => void;
+}
+
+export default function PreferencesPanel({ onChange, preferences, onResetSetup }: PreferencesPanelProps) {
     const handleGridSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const newSize = Math.max(2, parseInt(e.target.value, 10) || 2);
         onChange({ ...preferences, gridSize: newSize });
@@ -49,6 +55,17 @@ export default function PreferencesPanel({ onChange, preferences }: { onChange: 
                     <option value="ft">ft</option>
                 </select>
             </div>
+            {onResetSetup && (
+                <div className="pt-3 border-t border-slate-200 space-y-2">
+                    <p className="text-sm text-slate-700">Need to start room setup again?</p>
+                    <button
+                        className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700"
+                        onClick={onResetSetup}
+                    >
+                        Reset Setup
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
