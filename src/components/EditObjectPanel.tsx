@@ -59,7 +59,7 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
     return (
         <div 
             onClick={(e) => e.stopPropagation()}
-            className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-4"
+            className="w-full bg-white border border-slate-200 p-4 rounded-2xl shadow-sm space-y-4"
         >
             <div className="flex items-start justify-between gap-2">
                 <div>
@@ -167,7 +167,7 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
                     onMouseDown={(e) => startDrag('rotate', e)}
                 />
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
                 <button className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-100" onClick={() => handleChangeBase('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
                 <button className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700" onClick={onRemove}>Remove</button>
             </div>

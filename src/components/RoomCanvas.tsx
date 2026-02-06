@@ -8,6 +8,10 @@ interface RoomCanvasProps {
     onItemsChange: React.Dispatch<React.SetStateAction<RoomItem[]>>;
     onEditItem: (id: number | null) => void;
     selectedItemId: number | null;
+    roomWidthCm?: number;
+    roomHeightCm?: number;
+    allowResize?: boolean;
+    onRoomSizeChange?: (roomWidthCm: number, roomHeightCm: number) => void;
     gridSize?: number; // in px
     gridColor?: string; // CSS color string to override --grid-color
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
@@ -23,9 +27,21 @@ const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
     };
 };
 
-export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedItemId, gridSize = 40, gridColor, unit = 'cm' }: RoomCanvasProps) {
-    const [width, setWidth] = useState(800);
-    const [height, setHeight] = useState(600);
+export default function RoomCanvas({
+    items,
+    onItemsChange,
+    onEditItem,
+    selectedItemId,
+    roomWidthCm = 800,
+    roomHeightCm = 600,
+    allowResize = true,
+    onRoomSizeChange,
+    gridSize = 40,
+    gridColor,
+    unit = 'cm'
+}: RoomCanvasProps) {
+    const [width, setWidth] = useState(roomWidthCm);
+    const [height, setHeight] = useState(roomHeightCm);
     const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
     
     const [draggingId, setDraggingId] = useState<number | null>(null);
@@ -33,6 +49,18 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedI
     const hasDragged = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        setWidth(roomWidthCm);
+    }, [roomWidthCm]);
+
+    useEffect(() => {
+        setHeight(roomHeightCm);
+    }, [roomHeightCm]);
+
+    useEffect(() => {
+        onRoomSizeChange?.(width, height);
+    }, [width, height, onRoomSizeChange]);
 
     const handleObjectMouseDown = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
@@ -62,7 +90,7 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedI
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            if (isResizing && canvasRef.current) {
+            if (allowResize && isResizing && canvasRef.current) {
                 const rect = canvasRef.current.getBoundingClientRect();
                 
                 // Calculate minimum dimensions based on objects
@@ -192,7 +220,7 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedI
             setDraggingId(null);
         };
 
-        if (isResizing || draggingId !== null) {
+        if ((allowResize && isResizing) || draggingId !== null) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
@@ -201,7 +229,7 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedI
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isResizing, draggingId, dragOffset, onItemsChange, items, width, height]);
+    }, [allowResize, isResizing, draggingId, dragOffset, onItemsChange, items, width, height]);
 
     const displayWidth = fromBaseCm(width, unit);
     const displayHeight = fromBaseCm(height, unit);
@@ -245,23 +273,27 @@ export default function RoomCanvas({ items, onItemsChange, onEditItem, selectedI
                 />
             ))}
 
-            {/* Right Handle */}
-            <div
-                onMouseDown={() => setIsResizing('right')}
-                className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-amber-400/20 transition-colors"
-            />
+            {allowResize && (
+                <>
+                    {/* Right Handle */}
+                    <div
+                        onMouseDown={() => setIsResizing('right')}
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-amber-400/20 transition-colors"
+                    />
 
-            {/* Bottom Handle */}
-            <div
-                onMouseDown={() => setIsResizing('bottom')}
-                className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-amber-400/20 transition-colors"
-            />
+                    {/* Bottom Handle */}
+                    <div
+                        onMouseDown={() => setIsResizing('bottom')}
+                        className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-amber-400/20 transition-colors"
+                    />
 
-            {/* Corner Handle */}
-            <div
-                onMouseDown={() => setIsResizing('corner')}
-                className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-amber-400 z-20"
-            />
+                    {/* Corner Handle */}
+                    <div
+                        onMouseDown={() => setIsResizing('corner')}
+                        className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-amber-400 z-20"
+                    />
+                </>
+            )}
         </div>
     )
 }
