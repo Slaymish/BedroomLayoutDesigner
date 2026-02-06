@@ -16,6 +16,8 @@ interface RoomCanvasProps {
     gridSize?: number; // in px
     gridColor?: string; // CSS color string to override --grid-color
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
+    onLayoutInteractionStart?: () => void;
+    onLayoutInteractionEnd?: () => void;
 }
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
@@ -41,7 +43,9 @@ export default function RoomCanvas({
     onRoomSizeChange,
     gridSize = 40,
     gridColor,
-    unit = 'cm'
+    unit = 'cm',
+    onLayoutInteractionStart,
+    onLayoutInteractionEnd
 }: RoomCanvasProps) {
     const [width, setWidth] = useState(roomWidthCm);
     const [height, setHeight] = useState(roomHeightCm);
@@ -70,6 +74,7 @@ export default function RoomCanvas({
         hasDragged.current = false;
         const item = items.find(i => i.id === id);
         if (item && canvasRef.current) {
+            onLayoutInteractionStart?.();
             const rect = canvasRef.current.getBoundingClientRect();
             setDraggingId(id);
             const mouseXInCanvas = e.clientX - rect.left;
@@ -163,8 +168,12 @@ export default function RoomCanvas({
         };
 
         const handleMouseUp = () => {
+            const hadInteraction = (allowResize && isResizing !== null) || draggingId !== null;
             setIsResizing(null);
             setDraggingId(null);
+            if (hadInteraction) {
+                onLayoutInteractionEnd?.();
+            }
         };
 
         if ((allowResize && isResizing) || draggingId !== null) {
@@ -176,7 +185,7 @@ export default function RoomCanvas({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [allowResize, isResizing, draggingId, dragOffset, onItemsChange, items, width, height]);
+    }, [allowResize, isResizing, draggingId, dragOffset, onItemsChange, items, width, height, onLayoutInteractionEnd]);
 
     const displayWidth = fromBaseCm(width, unit);
     const displayHeight = fromBaseCm(height, unit);
@@ -256,19 +265,28 @@ export default function RoomCanvas({
                             <>
                                 {/* Right Handle */}
                                 <div
-                                    onMouseDown={() => setIsResizing('right')}
+                                    onMouseDown={() => {
+                                        onLayoutInteractionStart?.();
+                                        setIsResizing('right');
+                                    }}
                                     className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-slate-500/15 transition-colors"
                                 />
 
                                 {/* Bottom Handle */}
                                 <div
-                                    onMouseDown={() => setIsResizing('bottom')}
+                                    onMouseDown={() => {
+                                        onLayoutInteractionStart?.();
+                                        setIsResizing('bottom');
+                                    }}
                                     className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-slate-500/15 transition-colors"
                                 />
 
                                 {/* Corner Handle */}
                                 <div
-                                    onMouseDown={() => setIsResizing('corner')}
+                                    onMouseDown={() => {
+                                        onLayoutInteractionStart?.();
+                                        setIsResizing('corner');
+                                    }}
                                     className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-slate-400 z-20"
                                 />
                             </>

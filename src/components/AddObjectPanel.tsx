@@ -14,6 +14,8 @@ const BED_SIZES = [
 const FURNITURE_PRESETS = [
     { type: 'Wardrobe', widthCm: 150, heightCm: 60 },
     { type: 'Desk', widthCm: 120, heightCm: 60 },
+    { type: 'Couch', widthCm: 200, heightCm: 90 },
+    { type: 'Bedside Table', widthCm: 45, heightCm: 45 },
     { type: 'Door', widthCm: 80, heightCm: 10 },
     { type: 'Window', widthCm: 100, heightCm: 10 },
 ];
@@ -99,7 +101,7 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                         <input className="ui-input" type="number" name="width" min={0.1} step={0.1} required />
                     </div>
                     <div className="ui-field">
-                        <label className="ui-label">Height ({activeUnit})</label>
+                        <label className="ui-label">Length ({activeUnit})</label>
                         <input className="ui-input" type="number" name="height" min={0.1} step={0.1} required />
                     </div>
                 </div>

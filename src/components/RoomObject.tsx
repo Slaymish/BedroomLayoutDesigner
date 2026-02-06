@@ -37,6 +37,12 @@ export default function RoomObject({
     
     const isDoor = type === 'Door';
     const isWindow = type === 'Window';
+    const normalizedType = (type || '').trim().toLowerCase();
+    const isBed = normalizedType === 'bed';
+    const isCouch = normalizedType === 'couch';
+    const isDesk = normalizedType === 'desk';
+    const isWardrobe = normalizedType === 'wardrobe';
+    const isBedsideTable = normalizedType === 'bedside table';
     const resolvedWall = openingWall ?? inferWallFromRotation(rotate) ?? 'bottom';
     const appliedRotate = isDoor || isWindow ? rotationForWall(resolvedWall) : rotate;
     const openingHitInset = isDoor || isWindow ? 14 : 0;
@@ -76,6 +82,69 @@ export default function RoomObject({
         );
     };
 
+    const renderFurnitureDetail = () => {
+        if (isDoor || isWindow) return null;
+
+        if (isBed) {
+            return (
+                <div className="absolute inset-[8%] pointer-events-none">
+                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
+                    <div className="absolute left-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border border-slate-400/70 bg-slate-300/90" />
+                    <div className="absolute right-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border border-slate-400/70 bg-slate-300/90" />
+                    <div className="absolute left-[6%] right-[6%] top-[32%] bottom-[8%] rounded-sm border border-slate-300/80" />
+                </div>
+            );
+        }
+
+        if (isCouch) {
+            return (
+                <div className="absolute inset-[8%] pointer-events-none">
+                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
+                    <div className="absolute left-[6%] right-[6%] top-[6%] h-[16%] rounded-sm bg-slate-400/60" />
+                    <div className="absolute left-[10%] right-[10%] top-[30%] bottom-[8%] rounded-sm border border-slate-400/80" />
+                    <div className="absolute left-1/3 top-[30%] bottom-[8%] border-l border-slate-400/80" />
+                    <div className="absolute left-2/3 top-[30%] bottom-[8%] border-l border-slate-400/80" />
+                </div>
+            );
+        }
+
+        if (isDesk) {
+            return (
+                <div className="absolute inset-[8%] pointer-events-none">
+                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
+                    <div className="absolute left-[8%] right-[8%] top-[8%] h-[18%] rounded-sm bg-slate-300/90 border border-slate-400/80" />
+                    <div className="absolute left-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
+                    <div className="absolute right-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
+                    <div className="absolute right-[18%] top-[30%] h-[46%] w-[18%] rounded-sm border border-slate-400/80 bg-slate-200/80" />
+                </div>
+            );
+        }
+
+        if (isWardrobe) {
+            return (
+                <div className="absolute inset-[8%] pointer-events-none">
+                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
+                    <div className="absolute left-1/2 top-0 bottom-0 border-l border-slate-400/80" />
+                    <div className="absolute left-[44%] top-[30%] h-[40%] border-l border-slate-400/80" />
+                    <div className="absolute left-[56%] top-[30%] h-[40%] border-l border-slate-400/80" />
+                </div>
+            );
+        }
+
+        if (isBedsideTable) {
+            return (
+                <div className="absolute inset-[10%] pointer-events-none">
+                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
+                    <div className="absolute left-[8%] right-[8%] top-[12%] h-[12%] rounded-sm bg-slate-300/90" />
+                    <div className="absolute left-[10%] right-[10%] top-[44%] border-t border-slate-400/80" />
+                    <div className="absolute left-[10%] right-[10%] top-[68%] border-t border-slate-400/80" />
+                </div>
+            );
+        }
+
+        return null;
+    };
+
     return (
         <div
             onMouseDown={onMouseDown}
@@ -110,6 +179,7 @@ export default function RoomObject({
             {isWindow && (
                 <div className="w-full h-1/3 bg-sky-300 absolute top-1/3 pointer-events-none" />
             )}
+            {renderFurnitureDetail()}
             {showLabel && <span className="z-10 pointer-events-none">{label}</span>}
         </div>
     );

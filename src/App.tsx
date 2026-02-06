@@ -35,6 +35,14 @@ interface AddItemOptions {
   doorOpenSide?: 'left' | 'right';
 }
 
+interface LayoutSnapshot {
+  items: RoomItem[];
+  roomWidthCm: number;
+  roomHeightCm: number;
+  editingItemId: number | null;
+  nextItemId: number;
+}
+
 const STORAGE_KEY = 'bedroom-layout-designer:v1';
 const STORAGE_VERSION = 2;
 const DEFAULT_ROOM_WIDTH_CM = 360;
@@ -85,6 +93,46 @@ const normalizeOpeningForRoom = (
   );
 };
 
+const cloneItem = (item: RoomItem): RoomItem => ({ ...item });
+
+const roomItemEquals = (left: RoomItem, right: RoomItem): boolean => (
+  left.id === right.id &&
+  left.width === right.width &&
+  left.height === right.height &&
+  left.x === right.x &&
+  left.y === right.y &&
+  left.rotate === right.rotate &&
+  left.type === right.type &&
+  left.doorOpenDirection === right.doorOpenDirection &&
+  left.doorOpenSide === right.doorOpenSide &&
+  left.openingWall === right.openingWall
+);
+
+const layoutSnapshotEquals = (left: LayoutSnapshot, right: LayoutSnapshot): boolean => {
+  if (
+    left.roomWidthCm !== right.roomWidthCm ||
+    left.roomHeightCm !== right.roomHeightCm ||
+    left.editingItemId !== right.editingItemId ||
+    left.nextItemId !== right.nextItemId ||
+    left.items.length !== right.items.length
+  ) {
+    return false;
+  }
+
+  for (let index = 0; index < left.items.length; index += 1) {
+    if (!roomItemEquals(left.items[index], right.items[index])) {
+      return false;
+    }
+  }
+  return true;
+};
+
+const isEditableElement = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+};
+
 function App() {
   const [items, setItems] = useState<RoomItem[]>([]);
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
@@ -120,6 +168,82 @@ function App() {
   };
 
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
+  const [historyPast, setHistoryPast] = useState<LayoutSnapshot[]>([]);
+  const [historyFuture, setHistoryFuture] = useState<LayoutSnapshot[]>([]);
+  const interactionStartSnapshotRef = useRef<LayoutSnapshot | null>(null);
+  const latestSnapshotRef = useRef<LayoutSnapshot | null>(null);
+
+  const captureSnapshot = useCallback(
+    (): LayoutSnapshot => ({
+      items: items.map(cloneItem),
+      roomWidthCm,
+      roomHeightCm,
+      editingItemId,
+      nextItemId: nextItemId.current,
+    }),
+    [items, roomWidthCm, roomHeightCm, editingItemId]
+  );
+
+  const restoreSnapshot = useCallback((snapshot: LayoutSnapshot) => {
+    setItems(snapshot.items.map(cloneItem));
+    setRoomWidthCm(snapshot.roomWidthCm);
+    setRoomHeightCm(snapshot.roomHeightCm);
+    setEditingItemId(snapshot.editingItemId);
+    nextItemId.current = snapshot.nextItemId;
+  }, []);
+
+  const pushUndoSnapshot = useCallback((snapshot: LayoutSnapshot) => {
+    setHistoryPast(prev => {
+      const nextSnapshot = {
+        ...snapshot,
+        items: snapshot.items.map(cloneItem),
+      };
+      const last = prev[prev.length - 1];
+      if (last && layoutSnapshotEquals(last, nextSnapshot)) {
+        return prev;
+      }
+      return [...prev, nextSnapshot];
+    });
+    setHistoryFuture([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistoryPast(prev => {
+      if (prev.length === 0) return prev;
+      const previous = prev[prev.length - 1];
+      const current = latestSnapshotRef.current;
+      if (current) {
+        setHistoryFuture(futurePrev => [
+          ...futurePrev,
+          {
+            ...current,
+            items: current.items.map(cloneItem),
+          },
+        ]);
+      }
+      restoreSnapshot(previous);
+      return prev.slice(0, -1);
+    });
+  }, [restoreSnapshot]);
+
+  const redo = useCallback(() => {
+    setHistoryFuture(prev => {
+      if (prev.length === 0) return prev;
+      const next = prev[prev.length - 1];
+      const current = latestSnapshotRef.current;
+      if (current) {
+        setHistoryPast(pastPrev => [
+          ...pastPrev,
+          {
+            ...current,
+            items: current.items.map(cloneItem),
+          },
+        ]);
+      }
+      restoreSnapshot(next);
+      return prev.slice(0, -1);
+    });
+  }, [restoreSnapshot]);
 
   useEffect(() => {
     try {
@@ -196,7 +320,41 @@ function App() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   }, [isHydrated, onboardingComplete, onboardingStep, roomWidthCm, roomHeightCm, items, preferences]);
 
+  useEffect(() => {
+    latestSnapshotRef.current = captureSnapshot();
+  }, [captureSnapshot]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const hasModifier = event.metaKey || event.ctrlKey;
+      if (!hasModifier || event.altKey) return;
+      if (isEditableElement(event.target)) return;
+
+      const key = event.key.toLowerCase();
+      const undoShortcut = key === 'z' && !event.shiftKey;
+      const redoShortcut = (key === 'z' && event.shiftKey) || (key === 'y' && event.ctrlKey && !event.metaKey);
+      if (!undoShortcut && !redoShortcut) return;
+
+      if (undoShortcut && historyPast.length > 0) {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (redoShortcut && historyFuture.length > 0) {
+        event.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [historyPast.length, historyFuture.length, redo, undo]);
+
   const handleAddItem = (width: number, height: number, type: string, options?: AddItemOptions) => {
+    const snapshotBefore = captureSnapshot();
     const newId = nextItemId.current++;
     const newItem: RoomItem = {
       id: newId,
@@ -236,9 +394,11 @@ function App() {
       const safeY = Math.max(0, Math.min(requestedY, roomHeightCm - height));
       return [...prevItems, { ...draftItem, x: safeX, y: safeY }];
     });
+
     if (options?.select ?? true) {
       setEditingItemId(newId);
     }
+    pushUndoSnapshot(snapshotBefore);
   };
 
   const handleEditItem = (id: number | null) => {
@@ -246,17 +406,37 @@ function App() {
   };
 
   const handleUpdateItem = (updatedItem: RoomItem) => {
-    setItems(prevItems =>
-      prevItems.map(existing => {
-        if (existing.id !== updatedItem.id) return existing;
-        if (!isOpening(updatedItem)) return updatedItem;
-        return normalizeOpeningForRoom(updatedItem, roomWidthCm, roomHeightCm);
-      })
+    const existing = items.find(item => item.id === updatedItem.id);
+    if (!existing) return;
+
+    let nextItem = { ...updatedItem };
+    const windowResized = existing.type === 'Window' && (
+      existing.width !== updatedItem.width ||
+      existing.height !== updatedItem.height
     );
+
+    if (windowResized) {
+      const centerX = existing.x + existing.width / 2;
+      const centerY = existing.y + existing.height / 2;
+      nextItem = {
+        ...nextItem,
+        x: centerX - updatedItem.width / 2,
+        y: centerY - updatedItem.height / 2,
+      };
+    }
+
+    if (isOpening(nextItem)) {
+      nextItem = normalizeOpeningForRoom(nextItem, roomWidthCm, roomHeightCm);
+    }
+    if (roomItemEquals(existing, nextItem)) return;
+
+    pushUndoSnapshot(captureSnapshot());
+    setItems(prevItems => prevItems.map(item => (item.id === nextItem.id ? nextItem : item)));
   };
 
   const handleRemoveItem = () => {
     if (editingItemId !== null) {
+      pushUndoSnapshot(captureSnapshot());
       setItems(prevItems => prevItems.filter(i => i.id !== editingItemId));
       setEditingItemId(null);
     }
@@ -266,6 +446,25 @@ function App() {
     setRoomWidthCm(current => (current === nextWidthCm ? current : nextWidthCm));
     setRoomHeightCm(current => (current === nextHeightCm ? current : nextHeightCm));
   }, []);
+
+  const handleLayoutInteractionStart = useCallback(() => {
+    if (interactionStartSnapshotRef.current) return;
+    interactionStartSnapshotRef.current = captureSnapshot();
+  }, [captureSnapshot]);
+
+  const handleLayoutInteractionEnd = useCallback(() => {
+    const startSnapshot = interactionStartSnapshotRef.current;
+    interactionStartSnapshotRef.current = null;
+    if (!startSnapshot) return;
+
+    window.requestAnimationFrame(() => {
+      const endSnapshot = latestSnapshotRef.current;
+      if (!endSnapshot) return;
+      if (!layoutSnapshotEquals(startSnapshot, endSnapshot)) {
+        pushUndoSnapshot(startSnapshot);
+      }
+    });
+  }, [pushUndoSnapshot]);
 
   useEffect(() => {
     setItems(prevItems => {
@@ -315,6 +514,9 @@ function App() {
     setOnboardingStep('welcome');
     setOnboardingComplete(false);
     setPreferencesPanelOpen(false);
+    setHistoryPast([]);
+    setHistoryFuture([]);
+    interactionStartSnapshotRef.current = null;
   };
 
   const startOnboarding = () => {
@@ -576,7 +778,7 @@ function App() {
                     />
                   </div>
                   <div className="ui-field">
-                    <label className="ui-label">Depth</label>
+                    <label className="ui-label">Length</label>
                     <input
                       className="ui-input"
                       type="number"
@@ -691,6 +893,8 @@ function App() {
                     gridSize={preferences.gridSize}
                     gridColor={preferences.gridColor}
                     unit={activeUnit}
+                    onLayoutInteractionStart={handleLayoutInteractionStart}
+                    onLayoutInteractionEnd={handleLayoutInteractionEnd}
                   />
                 </div>
               </section>
@@ -740,6 +944,8 @@ function App() {
               gridSize={preferences.gridSize}
               gridColor={preferences.gridColor}
               unit={activeUnit}
+              onLayoutInteractionStart={handleLayoutInteractionStart}
+              onLayoutInteractionEnd={handleLayoutInteractionEnd}
             />
           </section>
           <section className="order-2 panel-shell min-w-0 xl:col-start-1 xl:row-start-1">
