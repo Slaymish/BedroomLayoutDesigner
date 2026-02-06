@@ -561,7 +561,7 @@ function App() {
                       Add Door
                     </button>
                     <button
-                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-sky-500 text-white hover:bg-sky-600"
+                      className="inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold bg-slate-200 text-slate-800 hover:bg-slate-300"
                       onClick={() => addOpening('Window')}
                     >
                       Add Window
