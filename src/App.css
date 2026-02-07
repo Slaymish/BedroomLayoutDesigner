@@ -247,6 +247,46 @@ details > summary {
   backdrop-filter: blur(1px);
 }
 
+.side-drawer-toggle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 36;
+  min-height: 2.5rem;
+  border: 1px solid var(--border-subtle);
+  background: rgb(255 255 255 / 0.96);
+  color: #334155;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  box-shadow: 0 12px 30px -20px rgb(15 23 42 / 0.45);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.side-drawer-toggle:hover {
+  background: #f8fafc;
+  border-color: var(--border-strong);
+}
+
+.side-drawer-toggle.open {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.side-drawer-toggle-left {
+  left: 0;
+  border-radius: 0 0.7rem 0.7rem 0;
+  border-left: 0;
+}
+
+.side-drawer-toggle-right {
+  right: 0;
+  border-radius: 0.7rem 0 0 0.7rem;
+  border-right: 0;
+}
+
 .side-drawer {
   position: fixed;
   top: 5.9rem;
@@ -299,6 +339,14 @@ details > summary {
 }
 
 @media (max-width: 767px) {
+  .side-drawer-toggle {
+    top: auto;
+    bottom: 0.8rem;
+    transform: none;
+    padding: 0.45rem 0.58rem;
+    font-size: 0.72rem;
+  }
+
   .side-drawer {
     top: 5.3rem;
     bottom: 0.6rem;

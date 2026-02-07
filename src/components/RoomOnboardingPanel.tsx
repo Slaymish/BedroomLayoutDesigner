@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { RoomDesign, RoomItem } from '../types';
 import { fromBaseCm, toBaseCm, type Unit } from '../utils/units';
 
@@ -25,7 +25,7 @@ const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
   return Number(converted.toFixed(decimals)).toString();
 };
 
-export default function RoomOnboardingPanel({
+function RoomOnboardingPanel({
   room,
   unit,
   selectedItem,
@@ -266,3 +266,14 @@ export default function RoomOnboardingPanel({
     </section>
   );
 }
+
+const onboardingPanelPropsEqual = (
+  prev: RoomOnboardingPanelProps,
+  next: RoomOnboardingPanelProps
+): boolean => (
+  prev.room === next.room &&
+  prev.unit === next.unit &&
+  prev.selectedItem === next.selectedItem
+);
+
+export default memo(RoomOnboardingPanel, onboardingPanelPropsEqual);

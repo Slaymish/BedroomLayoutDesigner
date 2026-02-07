@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { OpeningWall } from "../types";
 import { inferWallFromRotation, rotationForWall } from "../utils/openings";
 
@@ -18,7 +19,7 @@ interface RoomObjectProps {
     onMouseClick?: (e: React.MouseEvent) => void;
 }
 
-export default function RoomObject({ 
+function RoomObject({ 
     width = 100, 
     height = 100, 
     x = 0, 
@@ -184,3 +185,20 @@ export default function RoomObject({
         </div>
     );
 }
+
+const roomObjectPropsEqual = (prev: RoomObjectProps, next: RoomObjectProps): boolean => (
+    prev.width === next.width &&
+    prev.height === next.height &&
+    prev.x === next.x &&
+    prev.y === next.y &&
+    prev.rotate === next.rotate &&
+    prev.label === next.label &&
+    prev.type === next.type &&
+    prev.doorOpenDirection === next.doorOpenDirection &&
+    prev.doorOpenSide === next.doorOpenSide &&
+    prev.openingWall === next.openingWall &&
+    prev.isSelected === next.isSelected &&
+    prev.showLabel === next.showLabel
+);
+
+export default memo(RoomObject, roomObjectPropsEqual);

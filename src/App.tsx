@@ -62,6 +62,7 @@ function App() {
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const latestSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
+  const autosaveTimeoutRef = useRef<number | null>(null);
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
   const activeRoom = useMemo(
@@ -191,18 +192,48 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isHydrated) return;
+  const persistWorkspace = useCallback((state: WorkspaceState) => {
     const payload: WorkspaceState = {
-      ...workspace,
+      ...state,
       version: WORKSPACE_STORAGE_VERSION,
       preferences: {
         ...DEFAULT_PREFERENCES,
-        ...workspace.preferences,
+        ...state.preferences,
       },
     };
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-  }, [isHydrated, workspace]);
+  }, []);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    if (autosaveTimeoutRef.current !== null) {
+      window.clearTimeout(autosaveTimeoutRef.current);
+    }
+    autosaveTimeoutRef.current = window.setTimeout(() => {
+      persistWorkspace(workspaceRef.current);
+      autosaveTimeoutRef.current = null;
+    }, 220);
+    return () => {
+      if (autosaveTimeoutRef.current !== null) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, [isHydrated, workspace, persistWorkspace]);
+
+  useEffect(() => {
+    if (!isHydrated) return;
+    const flushAutosave = () => {
+      if (autosaveTimeoutRef.current !== null) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
+      }
+      persistWorkspace(workspaceRef.current);
+    };
+    window.addEventListener('beforeunload', flushAutosave);
+    return () => {
+      window.removeEventListener('beforeunload', flushAutosave);
+    };
+  }, [isHydrated, persistWorkspace]);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -845,20 +876,23 @@ function App() {
           >
             Redo
           </button>
-          <button
-            className={`ui-btn ${isAddPanelOpen ? 'ui-btn-secondary' : 'ui-btn-subtle'}`}
-            onClick={() => setIsAddPanelOpen((current) => !current)}
-          >
-            {isAddPanelOpen ? 'Hide Add Panel' : 'Show Add Panel'}
-          </button>
-          <button
-            className={`ui-btn ${isEditPanelOpen ? 'ui-btn-secondary' : 'ui-btn-subtle'}`}
-            onClick={() => setIsEditPanelOpen((current) => !current)}
-          >
-            {isEditPanelOpen ? 'Hide Edit Panel' : 'Show Edit Panel'}
-          </button>
           <span className="text-xs text-slate-600">Rooms: {workspace.rooms.length}</span>
         </div>
+
+        <button
+          className={`side-drawer-toggle side-drawer-toggle-left ${isAddPanelOpen ? 'open' : ''}`}
+          onClick={() => setIsAddPanelOpen((current) => !current)}
+          aria-label={isAddPanelOpen ? 'Hide add objects panel' : 'Show add objects panel'}
+        >
+          {isAddPanelOpen ? 'Hide Add' : 'Show Add'}
+        </button>
+        <button
+          className={`side-drawer-toggle side-drawer-toggle-right ${isEditPanelOpen ? 'open' : ''}`}
+          onClick={() => setIsEditPanelOpen((current) => !current)}
+          aria-label={isEditPanelOpen ? 'Hide edit object panel' : 'Show edit object panel'}
+        >
+          {isEditPanelOpen ? 'Hide Edit' : 'Show Edit'}
+        </button>
 
         <div className="mx-auto max-w-[1600px]">
           <section className="panel-shell min-w-0">
