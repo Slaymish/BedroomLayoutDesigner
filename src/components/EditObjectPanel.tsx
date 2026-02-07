@@ -138,6 +138,7 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
                     Close
                 </button>
             </div>
+            <p className="text-xs text-slate-600">Hold Alt and drag on a number field to scrub values.</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="ui-field">
                     <label className="ui-label">Width ({u})</label>

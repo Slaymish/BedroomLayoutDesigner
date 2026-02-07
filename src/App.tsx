@@ -495,11 +495,16 @@ function App() {
     });
   };
 
-  const handleRenameRoom = (roomId: string, name: string) => {
-    updateRoom(roomId, (room) => ({ ...room, name }));
-  };
+  const handleActivateRoom = useCallback((roomId: string) => {
+    setErrorMessage(null);
+    setActiveRoom(roomId);
+  }, [setActiveRoom]);
 
-  const handleDeleteRoom = (roomId: string) => {
+  const handleRenameRoom = useCallback((roomId: string, name: string) => {
+    updateRoom(roomId, (room) => ({ ...room, name }));
+  }, [updateRoom]);
+
+  const handleDeleteRoom = useCallback((roomId: string) => {
     if (workspace.rooms.length <= 1) {
       setErrorMessage('You must keep at least one room in the workspace.');
       return;
@@ -521,14 +526,14 @@ function App() {
         activeRoomId: nextActiveRoomId,
       };
     });
-  };
+  }, [updateWorkspace, workspace.rooms]);
 
-  const handleReorderRooms = (sourceRoomId: string, targetRoomId: string) => {
+  const handleReorderRooms = useCallback((sourceRoomId: string, targetRoomId: string) => {
     updateWorkspace((current) => ({
       ...current,
       rooms: reorderRooms(current.rooms, sourceRoomId, targetRoomId),
     }));
-  };
+  }, [updateWorkspace]);
 
   const handleResetWorkspace = () => {
     const confirmed = window.confirm(
@@ -559,7 +564,7 @@ function App() {
     }));
   };
 
-  const handleOnboardingStep = (roomId: string, step: RoomDesign['setup']['onboardingStep']) => {
+  const handleOnboardingStep = useCallback((roomId: string, step: RoomDesign['setup']['onboardingStep']) => {
     updateRoom(roomId, (room) => ({
       ...room,
       setup: {
@@ -568,9 +573,9 @@ function App() {
       },
       editingItemId: null,
     }));
-  };
+  }, [updateRoom]);
 
-  const handleOnboardingDimensions = (roomId: string, widthCm: number, heightCm: number) => {
+  const handleOnboardingDimensions = useCallback((roomId: string, widthCm: number, heightCm: number) => {
     updateRoom(roomId, (room) => ({
       ...room,
       roomWidthCm: widthCm,
@@ -580,9 +585,9 @@ function App() {
         .map((item) => normalizeOpeningForRoom(item, widthCm, heightCm)),
       editingItemId: null,
     }));
-  };
+  }, [updateRoom]);
 
-  const handleOnboardingAddOpening = (
+  const handleOnboardingAddOpening = useCallback((
     roomId: string,
     type: 'Door' | 'Window',
     windowWidthCm?: number
@@ -616,9 +621,9 @@ function App() {
         editingItemId: newId,
       };
     });
-  };
+  }, [updateRoom]);
 
-  const handleOnboardingDoorDefaults = (
+  const handleOnboardingDoorDefaults = useCallback((
     roomId: string,
     field: 'doorOpenDirection' | 'doorOpenSide',
     value: 'in' | 'out' | 'left' | 'right'
@@ -633,9 +638,9 @@ function App() {
         },
       },
     }));
-  };
+  }, [updateRoom]);
 
-  const handleOnboardingWindowDraft = (roomId: string, widthCm: number) => {
+  const handleOnboardingWindowDraft = useCallback((roomId: string, widthCm: number) => {
     updateRoom(
       roomId,
       (room) => ({
@@ -647,9 +652,9 @@ function App() {
       }),
       { recordHistory: false }
     );
-  };
+  }, [updateRoom]);
 
-  const handleOnboardingFinish = (roomId: string) => {
+  const handleOnboardingFinish = useCallback((roomId: string) => {
     updateRoom(roomId, (room) => ({
       ...room,
       editingItemId: null,
@@ -658,22 +663,124 @@ function App() {
         onboardingComplete: true,
       },
     }));
-  };
+  }, [updateRoom]);
 
-  const handleAddObjectToActiveRoom = (widthCm: number, heightCm: number, type: string) => {
+  const handleAddObjectToActiveRoom = useCallback((widthCm: number, heightCm: number, type: string) => {
     if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
     addItemToRoom(activeRoom.id, widthCm, heightCm, type);
-  };
+  }, [activeRoom, addItemToRoom]);
 
-  const handleEditItemInActiveRoom = (item: RoomItem) => {
+  const handleEditItemInActiveRoom = useCallback((item: RoomItem) => {
     if (!activeRoom) return;
     updateRoomItem(activeRoom.id, item);
-  };
+  }, [activeRoom, updateRoomItem]);
 
-  const handleRemoveActiveSelection = () => {
+  const handleRemoveActiveSelection = useCallback(() => {
     if (!activeRoom) return;
     removeSelectedItem(activeRoom.id);
-  };
+  }, [activeRoom, removeSelectedItem]);
+
+  const renderRoomContent = useCallback((room: RoomDesign, isActive: boolean) => {
+    const editingItem = room.editingItemId !== null
+      ? room.items.find((item) => item.id === room.editingItemId) || null
+      : null;
+
+    if (!room.setup.onboardingComplete) {
+      return (
+        <div className="grid gap-3 lg:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
+          <RoomOnboardingPanel
+            key={`${room.id}-${activeUnit}-${room.setup.onboardingStep}-${room.roomWidthCm}-${room.roomHeightCm}-${room.setup.windowDraftWidthCm}`}
+            room={room}
+            unit={activeUnit}
+            selectedItem={editingItem}
+            onSetStep={(step) => {
+              setActiveRoom(room.id);
+              handleOnboardingStep(room.id, step);
+            }}
+            onApplyDimensions={(widthCm, heightCm) => {
+              setActiveRoom(room.id);
+              handleOnboardingDimensions(room.id, widthCm, heightCm);
+            }}
+            onAddOpening={(type, windowWidthCm) => {
+              setActiveRoom(room.id);
+              handleOnboardingAddOpening(room.id, type, windowWidthCm);
+            }}
+            onRemoveSelected={() => {
+              setActiveRoom(room.id);
+              removeSelectedItem(room.id);
+            }}
+            onUpdateItem={(item) => {
+              setActiveRoom(room.id);
+              updateRoomItem(room.id, item);
+            }}
+            onUpdateDoorDefaults={(field, value) => {
+              setActiveRoom(room.id);
+              handleOnboardingDoorDefaults(room.id, field, value);
+            }}
+            onUpdateWindowDraftWidthCm={(widthCm) => {
+              handleOnboardingWindowDraft(room.id, widthCm);
+            }}
+            onFinish={() => {
+              setActiveRoom(room.id);
+              handleOnboardingFinish(room.id);
+            }}
+          />
+          <RoomCanvas
+            items={room.items}
+            onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+            onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
+            selectedItemId={room.editingItemId}
+            roomWidthCm={room.roomWidthCm}
+            roomHeightCm={room.roomHeightCm}
+            allowResize={false}
+            gridSize={workspace.preferences.gridSize}
+            gridColor={workspace.preferences.gridColor}
+            unit={activeUnit}
+            onLayoutInteractionStart={handleLayoutInteractionStart}
+            onLayoutInteractionEnd={handleLayoutInteractionEnd}
+            exportRoomId={room.id}
+          />
+        </div>
+      );
+    }
+
+    return (
+      <RoomCanvas
+        items={room.items}
+        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
+        selectedItemId={room.editingItemId}
+        roomWidthCm={room.roomWidthCm}
+        roomHeightCm={room.roomHeightCm}
+        onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
+        gridSize={workspace.preferences.gridSize}
+        gridColor={workspace.preferences.gridColor}
+        unit={activeUnit}
+        onLayoutInteractionStart={handleLayoutInteractionStart}
+        onLayoutInteractionEnd={handleLayoutInteractionEnd}
+        exportRoomId={room.id}
+        allowResize={isActive}
+      />
+    );
+  }, [
+    activeUnit,
+    handleLayoutInteractionEnd,
+    handleLayoutInteractionStart,
+    handleOnboardingAddOpening,
+    handleOnboardingDimensions,
+    handleOnboardingDoorDefaults,
+    handleOnboardingFinish,
+    handleOnboardingStep,
+    handleOnboardingWindowDraft,
+    handleRoomItemSelection,
+    handleRoomItemsChange,
+    handleRoomSizeChange,
+    removeSelectedItem,
+    setActiveRoom,
+    updateRoomItem,
+    workspace.preferences.gridColor,
+    workspace.preferences.gridSize,
+  ]);
 
   const handleExportRoomPdf = useCallback(
     async (roomsToExport: RoomDesign[], includeRoomName: boolean) => {
@@ -900,96 +1007,11 @@ function App() {
               rooms={workspace.rooms}
               activeRoomId={workspace.activeRoomId}
               unit={activeUnit}
-              onActivateRoom={(roomId) => {
-                setErrorMessage(null);
-                setActiveRoom(roomId);
-              }}
+              onActivateRoom={handleActivateRoom}
               onRenameRoom={handleRenameRoom}
               onDeleteRoom={handleDeleteRoom}
               onReorderRooms={handleReorderRooms}
-              renderRoomContent={(room, isActive) => {
-                const editingItem = room.editingItemId !== null
-                  ? room.items.find((item) => item.id === room.editingItemId) || null
-                  : null;
-
-                if (!room.setup.onboardingComplete) {
-                  return (
-                    <div className="grid gap-3 lg:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
-                      <RoomOnboardingPanel
-                        key={`${room.id}-${activeUnit}-${room.setup.onboardingStep}-${room.roomWidthCm}-${room.roomHeightCm}-${room.setup.windowDraftWidthCm}`}
-                        room={room}
-                        unit={activeUnit}
-                        selectedItem={editingItem}
-                        onSetStep={(step) => {
-                          setActiveRoom(room.id);
-                          handleOnboardingStep(room.id, step);
-                        }}
-                        onApplyDimensions={(widthCm, heightCm) => {
-                          setActiveRoom(room.id);
-                          handleOnboardingDimensions(room.id, widthCm, heightCm);
-                        }}
-                        onAddOpening={(type, windowWidthCm) => {
-                          setActiveRoom(room.id);
-                          handleOnboardingAddOpening(room.id, type, windowWidthCm);
-                        }}
-                        onRemoveSelected={() => {
-                          setActiveRoom(room.id);
-                          removeSelectedItem(room.id);
-                        }}
-                        onUpdateItem={(item) => {
-                          setActiveRoom(room.id);
-                          updateRoomItem(room.id, item);
-                        }}
-                        onUpdateDoorDefaults={(field, value) => {
-                          setActiveRoom(room.id);
-                          handleOnboardingDoorDefaults(room.id, field, value);
-                        }}
-                        onUpdateWindowDraftWidthCm={(widthCm) => {
-                          handleOnboardingWindowDraft(room.id, widthCm);
-                        }}
-                        onFinish={() => {
-                          setActiveRoom(room.id);
-                          handleOnboardingFinish(room.id);
-                        }}
-                      />
-                      <RoomCanvas
-                        items={room.items}
-                        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-                        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
-                        selectedItemId={room.editingItemId}
-                        roomWidthCm={room.roomWidthCm}
-                        roomHeightCm={room.roomHeightCm}
-                        allowResize={false}
-                        gridSize={workspace.preferences.gridSize}
-                        gridColor={workspace.preferences.gridColor}
-                        unit={activeUnit}
-                        onLayoutInteractionStart={handleLayoutInteractionStart}
-                        onLayoutInteractionEnd={handleLayoutInteractionEnd}
-                        exportRoomId={room.id}
-                      />
-                    </div>
-                  );
-                }
-
-                return (
-                  <RoomCanvas
-                    items={room.items}
-                    onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-                    onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
-                    selectedItemId={room.editingItemId}
-                    roomWidthCm={room.roomWidthCm}
-                    roomHeightCm={room.roomHeightCm}
-                    onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
-                    gridSize={workspace.preferences.gridSize}
-                    gridColor={workspace.preferences.gridColor}
-                    unit={activeUnit}
-                    onLayoutInteractionStart={handleLayoutInteractionStart}
-                    onLayoutInteractionEnd={handleLayoutInteractionEnd}
-                    exportRoomId={room.id}
-                    allowResize={isActive}
-                  />
-                );
-              }}
+              renderRoomContent={renderRoomContent}
             />
           </section>
         </div>

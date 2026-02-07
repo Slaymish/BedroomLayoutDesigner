@@ -243,8 +243,7 @@ details > summary {
   inset: 0;
   z-index: 34;
   border: 0;
-  background: rgb(15 23 42 / 0.12);
-  backdrop-filter: blur(1px);
+  background: rgb(15 23 42 / 0.1);
 }
 
 .side-drawer-toggle {
@@ -294,22 +293,26 @@ details > summary {
   width: min(26rem, calc(100vw - 1.6rem));
   z-index: 35;
   pointer-events: none;
-  transition: transform 0.24s ease;
+  opacity: 0;
+  will-change: transform, opacity;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.16s linear;
+  contain: layout paint;
 }
 
 .side-drawer-left {
   left: 0.8rem;
-  transform: translateX(calc(-100% - 0.8rem));
+  transform: translate3d(calc(-100% - 0.8rem), 0, 0);
 }
 
 .side-drawer-right {
   right: 0.8rem;
-  transform: translateX(calc(100% + 0.8rem));
+  transform: translate3d(calc(100% + 0.8rem), 0, 0);
 }
 
 .side-drawer.open {
   pointer-events: auto;
-  transform: translateX(0);
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
 }
 
 .side-drawer-content {
@@ -324,6 +327,8 @@ details > summary {
   padding: 0.75rem;
   overflow-y: auto;
   overflow-x: hidden;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .side-drawer-header {

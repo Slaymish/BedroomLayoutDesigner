@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import type { RoomDesign } from '../types';
 import type { Unit } from '../utils/units';
 import RoomCard from './RoomCard';
@@ -14,7 +14,7 @@ interface RoomWorkspaceProps {
   renderRoomContent: (room: RoomDesign, isActive: boolean) => ReactNode;
 }
 
-export default function RoomWorkspace({
+function RoomWorkspace({
   rooms,
   activeRoomId,
   unit,
@@ -60,3 +60,5 @@ export default function RoomWorkspace({
     </section>
   );
 }
+
+export default memo(RoomWorkspace);

@@ -52,8 +52,6 @@ export default function RoomCard({
     <article
       className={`surface-card room-card ${isActive ? 'room-card-active' : ''}`}
       onMouseDown={onActivate}
-      draggable={!isRenaming}
-      onDragStart={() => onDragStart(room.id)}
       onDragOver={(event) => {
         event.preventDefault();
         onDragOver(room.id);
@@ -97,6 +95,21 @@ export default function RoomCard({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs cursor-grab active:cursor-grabbing"
+            draggable={!isRenaming}
+            onDragStart={(event) => {
+              event.stopPropagation();
+              onDragStart(room.id);
+            }}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            aria-label={`Drag to reorder ${room.name}`}
+            title="Drag to reorder room"
+          >
+            Reorder
+          </button>
           {!isRenaming && (
             <button
               className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
