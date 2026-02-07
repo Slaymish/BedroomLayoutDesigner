@@ -40,11 +40,32 @@ interface AddItemOptions {
   doorOpenSide?: 'left' | 'right';
 }
 
+interface ScrollTelemetrySummary {
+  sampleCount: number;
+  avgFrameMs: number;
+  maxFrameMs: number;
+  slowFrameRate: number;
+  scrollEvents: number;
+  isActive: boolean;
+}
+
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
 };
+
+const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
+  sampleCount: 0,
+  avgFrameMs: 0,
+  maxFrameMs: 0,
+  slowFrameRate: 0,
+  scrollEvents: 0,
+  isActive: false,
+};
+
+const SCROLL_SLOW_FRAME_MS = 24;
+const SCROLL_ACTIVE_WINDOW_MS = 140;
 
 function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
@@ -58,12 +79,22 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [layoutTelemetry, setLayoutTelemetry] = useState<LayoutInteractionTelemetry[]>([]);
+  const [scrollTelemetry, setScrollTelemetry] = useState<ScrollTelemetrySummary>(DEFAULT_SCROLL_TELEMETRY);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const exportDepsPromiseRef = useRef<Promise<[typeof import('html-to-image'), typeof import('jspdf')]> | null>(null);
+  const scrollTelemetryRef = useRef({
+    lastFrameAt: 0,
+    lastScrollAt: 0,
+    frameCount: 0,
+    frameMsTotal: 0,
+    maxFrameMs: 0,
+    slowFrameCount: 0,
+    scrollEvents: 0,
+  });
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
   const activeRoom = useMemo(
@@ -299,6 +330,61 @@ function App() {
   }, [workspace]);
 
   useEffect(() => {
+    const metrics = scrollTelemetryRef.current;
+    metrics.lastFrameAt = 0;
+    metrics.lastScrollAt = 0;
+    metrics.frameCount = 0;
+    metrics.frameMsTotal = 0;
+    metrics.maxFrameMs = 0;
+    metrics.slowFrameCount = 0;
+    metrics.scrollEvents = 0;
+
+    const onScroll = () => {
+      metrics.lastScrollAt = performance.now();
+      metrics.scrollEvents += 1;
+    };
+
+    const sample = () => {
+      const isActive = performance.now() - metrics.lastScrollAt < SCROLL_ACTIVE_WINDOW_MS;
+      const avgFrameMs = metrics.frameCount > 0 ? metrics.frameMsTotal / metrics.frameCount : 0;
+      const slowFrameRate = metrics.frameCount > 0 ? (metrics.slowFrameCount / metrics.frameCount) * 100 : 0;
+      setScrollTelemetry({
+        sampleCount: metrics.frameCount,
+        avgFrameMs,
+        maxFrameMs: metrics.maxFrameMs,
+        slowFrameRate,
+        scrollEvents: metrics.scrollEvents,
+        isActive,
+      });
+    };
+
+    let rafId = 0;
+    const tick = (now: number) => {
+      if (metrics.lastFrameAt > 0 && now - metrics.lastScrollAt < SCROLL_ACTIVE_WINDOW_MS) {
+        const delta = now - metrics.lastFrameAt;
+        metrics.frameCount += 1;
+        metrics.frameMsTotal += delta;
+        metrics.maxFrameMs = Math.max(metrics.maxFrameMs, delta);
+        if (delta >= SCROLL_SLOW_FRAME_MS) {
+          metrics.slowFrameCount += 1;
+        }
+      }
+      metrics.lastFrameAt = now;
+      rafId = window.requestAnimationFrame(tick);
+    };
+
+    const sampleIntervalId = window.setInterval(sample, 800);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    rafId = window.requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.cancelAnimationFrame(rafId);
+      window.clearInterval(sampleIntervalId);
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setIsAddPanelOpen(false);
@@ -393,8 +479,17 @@ function App() {
     });
   }, []);
 
-  const handleClearTelemetry = useCallback(() => {
+  const handleClearPerformanceTelemetry = useCallback(() => {
     setLayoutTelemetry([]);
+    setScrollTelemetry(DEFAULT_SCROLL_TELEMETRY);
+    const metrics = scrollTelemetryRef.current;
+    metrics.lastFrameAt = 0;
+    metrics.lastScrollAt = 0;
+    metrics.frameCount = 0;
+    metrics.frameMsTotal = 0;
+    metrics.maxFrameMs = 0;
+    metrics.slowFrameCount = 0;
+    metrics.scrollEvents = 0;
   }, []);
 
   const handleRoomItemsChange = useCallback(
@@ -1007,9 +1102,8 @@ function App() {
         <div className="mx-auto max-w-[1600px] space-y-4">
           <div className="app-header-top">
             <div className="app-brand-block">
-              <p className="app-kicker">Interior Planning Studio</p>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
-              <p className="app-subtitle">Plan rooms precisely, validate clearances, and keep every concept in one workspace.</p>
+              <p className="app-subtitle">Plan room size, openings, and furniture.</p>
             </div>
             <div className="app-header-actions">
               <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
@@ -1064,14 +1158,14 @@ function App() {
               <span className="workspace-kpi-value">{workspaceInsights.totalOpenings}</span>
             </div>
             <div className="workspace-kpi">
-              <span className="workspace-kpi-label">Setup Pending</span>
+              <span className="workspace-kpi-label">Pending</span>
               <span className="workspace-kpi-value">{workspaceInsights.roomsInSetup}</span>
             </div>
             <div className="workspace-kpi workspace-kpi-wide">
               <span className="workspace-kpi-label">Active Room</span>
               <span className="workspace-kpi-value">{activeRoom?.name ?? 'None selected'}</span>
               <span className="workspace-kpi-meta">
-                {workspaceInsights.activeRoomItems} objects, {workspaceInsights.activeRoomOpenings} openings, {workspaceInsights.activeRoomArea}{activeUnit}²
+                {workspaceInsights.activeRoomItems} items · {workspaceInsights.activeRoomOpenings} openings · {workspaceInsights.activeRoomArea}{activeUnit}²
               </span>
             </div>
           </div>
@@ -1102,32 +1196,34 @@ function App() {
             </button>
           </div>
           <div className="command-toolbar-meta">
-            <span>Undo stack: {historyPast.length}</span>
-            <span>Redo stack: {historyFuture.length}</span>
-            <span>Autosave: local browser storage</span>
-            <span>Interactions tracked: {telemetryInsights.sampleCount}</span>
-            <span>
-              Avg latency: {Math.round(telemetryInsights.avgDurationMs)}ms
-            </span>
-            <span>
-              Avg frame: {telemetryInsights.avgFrameMs > 0 ? telemetryInsights.avgFrameMs.toFixed(1) : '--'}ms
-            </span>
-            <span>
-              Peak frame: {telemetryInsights.maxFrameMs > 0 ? telemetryInsights.maxFrameMs.toFixed(1) : '--'}ms
-            </span>
-            <span>
-              Slow frames: {telemetryInsights.slowFrameRate.toFixed(1)}%
-            </span>
-            <span>
-              Last action: {telemetryInsights.latest ? `${telemetryInsights.latest.interaction}${telemetryInsights.latest.changed ? '' : ' (no change)'}` : 'none'}
-            </span>
-            <button
-              className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1 text-[11px]"
-              onClick={handleClearTelemetry}
-              disabled={telemetryInsights.sampleCount === 0}
-            >
-              Clear Metrics
-            </button>
+            <span>Undo {historyPast.length}</span>
+            <span>Redo {historyFuture.length}</span>
+            <span>Scroll {scrollTelemetry.avgFrameMs > 0 ? `${scrollTelemetry.avgFrameMs.toFixed(1)}ms` : '--'}</span>
+            <span>Drag {telemetryInsights.avgFrameMs > 0 ? `${telemetryInsights.avgFrameMs.toFixed(1)}ms` : '--'}</span>
+            <details className="perf-details">
+              <summary className="perf-summary">Performance</summary>
+              <div className="perf-popover">
+                <p className="perf-title">Layout</p>
+                <p className="perf-row">Samples: {telemetryInsights.sampleCount}</p>
+                <p className="perf-row">Avg action: {Math.round(telemetryInsights.avgDurationMs)}ms</p>
+                <p className="perf-row">Max frame: {telemetryInsights.maxFrameMs > 0 ? telemetryInsights.maxFrameMs.toFixed(1) : '--'}ms</p>
+                <p className="perf-row">Slow frames: {telemetryInsights.slowFrameRate.toFixed(1)}%</p>
+                <p className="perf-row">Last: {telemetryInsights.latest ? telemetryInsights.latest.interaction : 'none'}</p>
+                <p className="perf-title mt-2">Scroll</p>
+                <p className="perf-row">Events: {scrollTelemetry.scrollEvents}</p>
+                <p className="perf-row">Frames: {scrollTelemetry.sampleCount}</p>
+                <p className="perf-row">Avg frame: {scrollTelemetry.avgFrameMs > 0 ? scrollTelemetry.avgFrameMs.toFixed(1) : '--'}ms</p>
+                <p className="perf-row">Max frame: {scrollTelemetry.maxFrameMs > 0 ? scrollTelemetry.maxFrameMs.toFixed(1) : '--'}ms</p>
+                <p className="perf-row">Slow frames: {scrollTelemetry.slowFrameRate.toFixed(1)}%</p>
+                <button
+                  className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1 text-[11px] mt-1"
+                  onClick={handleClearPerformanceTelemetry}
+                  disabled={telemetryInsights.sampleCount === 0 && scrollTelemetry.sampleCount === 0}
+                >
+                  Clear
+                </button>
+              </div>
+            </details>
           </div>
         </div>
 

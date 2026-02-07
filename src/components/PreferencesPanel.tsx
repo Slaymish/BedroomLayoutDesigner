@@ -20,9 +20,6 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
     return (
         <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900">Preferences</h3>
-            <p className="text-xs text-slate-600">
-                Tune the drafting grid and measurement unit for your planning workflow.
-            </p>
             <div className="ui-field">
                 <label className="ui-label">Grid Size (px)</label>
                 <input

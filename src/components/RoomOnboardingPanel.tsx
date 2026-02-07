@@ -171,21 +171,21 @@ function RoomOnboardingPanel({
             <p className="badge-step">Step 1 of 3</p>
             <h3 className="mt-3 text-lg font-bold text-slate-900">Set up {room.name}</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Complete three quick setup steps, then move into furniture planning with cleaner defaults.
+              Quick setup before editing.
             </p>
           </div>
           <div className="onboarding-guidance-grid">
             <article className="onboarding-guidance-card">
-              <p className="onboarding-guidance-title">1. Confirm dimensions</p>
-              <p className="onboarding-guidance-copy">Set real room width and length to lock scaling.</p>
+              <p className="onboarding-guidance-title">1. Set dimensions</p>
+              <p className="onboarding-guidance-copy">Enter room width and length.</p>
             </article>
             <article className="onboarding-guidance-card">
-              <p className="onboarding-guidance-title">2. Place openings</p>
-              <p className="onboarding-guidance-copy">Add at least one door and your main windows.</p>
+              <p className="onboarding-guidance-title">2. Add openings</p>
+              <p className="onboarding-guidance-copy">Add at least one door.</p>
             </article>
             <article className="onboarding-guidance-card">
-              <p className="onboarding-guidance-title">3. Adjust swing defaults</p>
-              <p className="onboarding-guidance-copy">Set door direction once, then duplicate rooms faster.</p>
+              <p className="onboarding-guidance-title">3. Set door swing</p>
+              <p className="onboarding-guidance-copy">Choose default door behavior.</p>
             </article>
           </div>
           <button className="ui-btn ui-btn-primary" onClick={() => onSetStep('dimensions')}>
@@ -200,7 +200,7 @@ function RoomOnboardingPanel({
             <p className="badge-step">Step 2 of 3</p>
             <h3 className="mt-3 text-lg font-bold text-slate-900">Room dimensions</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Enter usable internal measurements. Minimum supported room size is 180cm x 180cm.
+              Minimum: 180cm x 180cm.
             </p>
           </div>
           <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -251,7 +251,7 @@ function RoomOnboardingPanel({
             <p className="badge-step">Step 3 of 3</p>
             <h3 className="mt-3 text-lg font-bold text-slate-900">Place doors and windows</h3>
             <p className="mt-1 text-sm text-slate-600">
-              Click openings in the canvas to edit swing behavior, then complete setup.
+              Add openings, then finish setup.
             </p>
           </div>
 
@@ -262,7 +262,7 @@ function RoomOnboardingPanel({
             </div>
             <div className={`onboarding-checklist-item ${windowCount > 0 ? 'done' : ''}`}>
               <span>{windowCount > 0 ? 'Done' : 'Recommended'}</span>
-              <span>Add one or more windows</span>
+              <span>Add a window</span>
             </div>
           </div>
 
@@ -284,13 +284,13 @@ function RoomOnboardingPanel({
 
           {doorCount === 0 && (
             <div className="onboarding-empty-state" role="status">
-              Add a door first so furniture can be planned around a realistic entry path.
+              Add at least one door to continue.
             </div>
           )}
 
           {windowCount === 0 && (
             <div className="onboarding-empty-state soft" role="status">
-              Tip: add at least one window to capture natural light and wall constraints.
+              Tip: add a window.
             </div>
           )}
 
@@ -322,7 +322,7 @@ function RoomOnboardingPanel({
             </p>
             {!selectedDoor && (
               <p className="text-xs text-slate-600">
-                Select a door in the canvas to override these defaults for that specific opening.
+                Select a door to override defaults.
               </p>
             )}
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
 	--font-ui: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", sans-serif;
-	--font-display: "Sora", "Avenir Next", sans-serif;
+	--font-display: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", sans-serif;
 	--surface-base: #eff5f3;
 	--surface-soft: #f6faf8;
 	--surface-card: #ffffff;
@@ -11,8 +11,8 @@
 	--text-muted: #3f5d61;
 	--border-subtle: #cddfdd;
 	--border-strong: #adc8c5;
-	--shadow-soft: 0 16px 38px -26px rgb(17 35 37 / 0.34);
-	--shadow-card: 0 1px 0 rgb(255 255 255 / 0.8), var(--shadow-soft);
+	--shadow-soft: 0 4px 14px -10px rgb(17 35 37 / 0.2);
+	--shadow-card: 0 1px 0 rgb(255 255 255 / 0.9), var(--shadow-soft);
 	--radius-card: 16px;
 	--accent-strong: #0e6a6f;
 	--accent-soft: #e4f6f4;
@@ -23,6 +23,7 @@
 html, body, #root {
 	height: 100%;
 	margin: 0;
+	scrollbar-gutter: stable both-edges;
 }
 
 *,
