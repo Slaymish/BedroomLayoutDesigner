@@ -12,12 +12,12 @@ const BED_SIZES = [
 ];
 
 const FURNITURE_PRESETS = [
-    { type: 'Wardrobe', widthCm: 150, heightCm: 60 },
-    { type: 'Desk', widthCm: 120, heightCm: 60 },
-    { type: 'Couch', widthCm: 200, heightCm: 90 },
-    { type: 'Bedside Table', widthCm: 45, heightCm: 45 },
-    { type: 'Door', widthCm: 80, heightCm: 10 },
-    { type: 'Window', widthCm: 100, heightCm: 10 },
+    { type: 'Wardrobe', widthCm: 150, heightCm: 60, hint: 'Storage wall run' },
+    { type: 'Desk', widthCm: 120, heightCm: 60, hint: 'Work + vanity zone' },
+    { type: 'Couch', widthCm: 200, heightCm: 90, hint: 'Reading / lounge' },
+    { type: 'Bedside Table', widthCm: 45, heightCm: 45, hint: 'Nightstand module' },
+    { type: 'Door', widthCm: 80, heightCm: 10, hint: 'Entrance opening' },
+    { type: 'Window', widthCm: 100, heightCm: 10, hint: 'Natural light opening' },
 ];
 
 interface AddObjectPanelProps {
@@ -41,8 +41,11 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
         <div className="surface-card panel-shell p-4 sm:p-5 space-y-4">
             <div className="flex items-center justify-between gap-2">
                 <h3 className="text-lg font-semibold text-slate-900">Add Objects</h3>
-                <span className="text-xs font-medium text-slate-500">Preset + custom</span>
+                <span className="text-xs font-medium text-slate-500">Preset library</span>
             </div>
+            <p className="text-xs text-slate-600">
+                Start with a standard bed footprint, then layer furniture and openings.
+            </p>
             <div className="space-y-2">
                 <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                     <select
@@ -66,14 +69,21 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                     </button>
                 </div>
             </div>
+            <div className="flex items-center justify-between pt-1">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Popular Objects</h4>
+                <span className="text-[11px] text-slate-500">Tap to place</span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {FURNITURE_PRESETS.map((preset) => (
                     <button
                         key={preset.type}
-                        className="ui-btn ui-btn-ghost w-full justify-between px-3 overflow-hidden"
+                        className="ui-btn ui-btn-ghost w-full justify-between px-3 overflow-hidden py-2.5"
                         onClick={() => onAddObject(toBaseCm(preset.widthCm, 'cm'), toBaseCm(preset.heightCm, 'cm'), preset.type)}
                     >
-                        <span className="min-w-0 truncate text-left">{preset.type}</span>
+                        <span className="min-w-0 text-left">
+                            <span className="block truncate">{preset.type}</span>
+                            <span className="block text-[11px] text-slate-500">{preset.hint}</span>
+                        </span>
                         <span className="shrink-0 text-[11px] text-slate-500 whitespace-nowrap">{preset.widthCm}x{preset.heightCm}cm</span>
                     </button>
                 ))}

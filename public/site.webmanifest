@@ -1,0 +1,15 @@
+{
+  "name": "Bedroom Layout Designer",
+  "short_name": "Bedroom Layout",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eff5f3",
+  "theme_color": "#0e6a6f",
+  "icons": [
+    {
+      "src": "/bed.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

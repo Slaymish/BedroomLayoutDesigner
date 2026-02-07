@@ -39,6 +39,7 @@ function RoomCard({
 }: RoomCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(room.name);
+  const openingCount = room.items.filter((item) => item.type === 'Door' || item.type === 'Window').length;
 
   const submitRename = () => {
     const nextName = nameDraft.trim();
@@ -95,6 +96,7 @@ function RoomCard({
           <p className="text-xs text-slate-600">
             {formatDimension(room.roomWidthCm, unit)} x {formatDimension(room.roomHeightCm, unit)}
           </p>
+          <p className="text-[11px] text-slate-500">{room.items.length} objects · {openingCount} openings</p>
         </div>
         <div className="flex items-center gap-2">
           <button

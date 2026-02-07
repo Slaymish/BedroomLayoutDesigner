@@ -6,7 +6,7 @@ import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
 import RoomOnboardingPanel from './components/RoomOnboardingPanel';
 import RoomWorkspace from './components/RoomWorkspace';
-import type { RoomDesign, RoomItem, WorkspaceState } from './types';
+import type { LayoutInteractionTelemetry, RoomDesign, RoomItem, WorkspaceState } from './types';
 import { fromBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
 import {
@@ -57,11 +57,13 @@ function App() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [layoutTelemetry, setLayoutTelemetry] = useState<LayoutInteractionTelemetry[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
+  const exportDepsPromiseRef = useRef<Promise<[typeof import('html-to-image'), typeof import('jspdf')]> | null>(null);
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
   const activeRoom = useMemo(
@@ -75,6 +77,64 @@ function App() {
         : null,
     [activeRoom]
   );
+  const workspaceInsights = useMemo(() => {
+    const roomCount = workspace.rooms.length;
+    const totalObjects = workspace.rooms.reduce((count, room) => count + room.items.length, 0);
+    const totalOpenings = workspace.rooms.reduce(
+      (count, room) => count + room.items.filter((item) => item.type === 'Door' || item.type === 'Window').length,
+      0
+    );
+    const roomsInSetup = workspace.rooms.filter((room) => !room.setup.onboardingComplete).length;
+    const activeRoomItems = activeRoom?.items.length ?? 0;
+    const activeRoomOpenings = activeRoom
+      ? activeRoom.items.filter((item) => item.type === 'Door' || item.type === 'Window').length
+      : 0;
+    const activeRoomArea = activeRoom
+      ? fromBaseCm(activeRoom.roomWidthCm, activeUnit) * fromBaseCm(activeRoom.roomHeightCm, activeUnit)
+      : 0;
+    const areaDecimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 0;
+
+    return {
+      roomCount,
+      totalObjects,
+      totalOpenings,
+      roomsInSetup,
+      activeRoomItems,
+      activeRoomOpenings,
+      activeRoomArea: Number(activeRoomArea.toFixed(areaDecimals)),
+    };
+  }, [activeRoom, activeUnit, workspace.rooms]);
+
+  const telemetryInsights = useMemo(() => {
+    if (layoutTelemetry.length === 0) {
+      return {
+        sampleCount: 0,
+        avgDurationMs: 0,
+        avgFrameMs: 0,
+        maxFrameMs: 0,
+        slowFrameRate: 0,
+        latest: null as LayoutInteractionTelemetry | null,
+      };
+    }
+
+    const durationTotal = layoutTelemetry.reduce((sum, sample) => sum + sample.durationMs, 0);
+    const totalFrameSamples = layoutTelemetry.reduce((sum, sample) => sum + sample.frameSamples, 0);
+    const frameMsTotal = layoutTelemetry.reduce(
+      (sum, sample) => sum + sample.avgFrameMs * sample.frameSamples,
+      0
+    );
+    const slowFrameTotal = layoutTelemetry.reduce((sum, sample) => sum + sample.slowFrameCount, 0);
+    const maxFrameMs = layoutTelemetry.reduce((max, sample) => Math.max(max, sample.maxFrameMs), 0);
+
+    return {
+      sampleCount: layoutTelemetry.length,
+      avgDurationMs: durationTotal / layoutTelemetry.length,
+      avgFrameMs: totalFrameSamples > 0 ? frameMsTotal / totalFrameSamples : 0,
+      maxFrameMs,
+      slowFrameRate: totalFrameSamples > 0 ? (slowFrameTotal / totalFrameSamples) * 100 : 0,
+      latest: layoutTelemetry[layoutTelemetry.length - 1],
+    };
+  }, [layoutTelemetry]);
 
   const pushUndoSnapshot = useCallback((snapshot: WorkspaceSnapshot) => {
     setHistoryPast((previous) => {
@@ -325,6 +385,17 @@ function App() {
       }
     });
   }, [pushUndoSnapshot]);
+
+  const handleLayoutTelemetry = useCallback((sample: LayoutInteractionTelemetry) => {
+    setLayoutTelemetry((previous) => {
+      const next = [...previous, sample];
+      return next.length > 90 ? next.slice(next.length - 90) : next;
+    });
+  }, []);
+
+  const handleClearTelemetry = useCallback(() => {
+    setLayoutTelemetry([]);
+  }, []);
 
   const handleRoomItemsChange = useCallback(
     (roomId: string, update: SetStateAction<RoomItem[]>) => {
@@ -662,6 +733,20 @@ function App() {
     }));
   }, [updateRoom]);
 
+  const loadExportDependencies = useCallback(() => {
+    if (!exportDepsPromiseRef.current) {
+      exportDepsPromiseRef.current = Promise.all([
+        import('html-to-image'),
+        import('jspdf'),
+      ]);
+    }
+    return exportDepsPromiseRef.current;
+  }, []);
+
+  const warmExportDependencies = useCallback(() => {
+    void loadExportDependencies();
+  }, [loadExportDependencies]);
+
   const handleAddObjectToActiveRoom = useCallback((widthCm: number, heightCm: number, type: string) => {
     if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
     addItemToRoom(activeRoom.id, widthCm, heightCm, type);
@@ -735,6 +820,7 @@ function App() {
             unit={activeUnit}
             onLayoutInteractionStart={handleLayoutInteractionStart}
             onLayoutInteractionEnd={handleLayoutInteractionEnd}
+            onLayoutTelemetry={handleLayoutTelemetry}
             exportRoomId={room.id}
           />
         </div>
@@ -755,6 +841,7 @@ function App() {
         unit={activeUnit}
         onLayoutInteractionStart={handleLayoutInteractionStart}
         onLayoutInteractionEnd={handleLayoutInteractionEnd}
+        onLayoutTelemetry={handleLayoutTelemetry}
         exportRoomId={room.id}
         allowResize={isActive}
       />
@@ -763,6 +850,7 @@ function App() {
     activeUnit,
     handleLayoutInteractionEnd,
     handleLayoutInteractionStart,
+    handleLayoutTelemetry,
     handleOnboardingAddOpening,
     handleOnboardingDimensions,
     handleOnboardingDoorDefaults,
@@ -786,10 +874,7 @@ function App() {
       setErrorMessage(null);
 
       try {
-        const [{ toPng }, { jsPDF }] = await Promise.all([
-          import('html-to-image'),
-          import('jspdf'),
-        ]);
+        const [{ toPng }, { jsPDF }] = await loadExportDependencies();
 
         const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
         for (let index = 0; index < roomsToExport.length; index += 1) {
@@ -859,7 +944,7 @@ function App() {
         setIsExportingPdf(false);
       }
     },
-    [activeUnit]
+    [activeUnit, loadExportDependencies]
   );
 
   const handleExportActiveRoomPdf = () => {
@@ -919,41 +1004,76 @@ function App() {
         onChange={handleLoadWorkspaceFile}
       />
       <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
-        <div className="mx-auto max-w-[1600px] flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
-            <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
-              Duplicate Active Room
-            </button>
-            <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceFile}>Save Workspace</button>
-            <button className="ui-btn ui-btn-ghost" onClick={() => fileInputRef.current?.click()}>
-              Load Workspace
-            </button>
-            <details className="relative">
-              <summary className="ui-btn ui-btn-ghost list-none cursor-pointer">
-                {isExportingPdf ? 'Exporting...' : 'Export PDF'}
-              </summary>
-              <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                <button
-                  className="ui-btn ui-btn-subtle w-full justify-start"
-                  onClick={handleExportActiveRoomPdf}
-                  disabled={!activeRoom || isExportingPdf}
-                >
-                  Export Active Room PDF
-                </button>
-                <button
-                  className="ui-btn ui-btn-subtle w-full justify-start mt-1"
-                  onClick={handleExportAllRoomsPdf}
-                  disabled={workspace.rooms.length === 0 || isExportingPdf}
-                >
-                  Export All Rooms PDF
-                </button>
-              </div>
-            </details>
-            <button className="ui-btn ui-btn-ghost" onClick={() => setPreferencesPanelOpen(true)}>
-              Preferences
-            </button>
+        <div className="mx-auto max-w-[1600px] space-y-4">
+          <div className="app-header-top">
+            <div className="app-brand-block">
+              <p className="app-kicker">Interior Planning Studio</p>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
+              <p className="app-subtitle">Plan rooms precisely, validate clearances, and keep every concept in one workspace.</p>
+            </div>
+            <div className="app-header-actions">
+              <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
+              <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
+                Duplicate Active Room
+              </button>
+              <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceFile}>Save Workspace</button>
+              <button className="ui-btn ui-btn-ghost" onClick={() => fileInputRef.current?.click()}>
+                Load Workspace
+              </button>
+              <details
+                className="relative app-export-menu"
+                onMouseEnter={warmExportDependencies}
+                onFocus={warmExportDependencies}
+              >
+                <summary className="ui-btn ui-btn-ghost list-none cursor-pointer">
+                  {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+                </summary>
+                <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                  <button
+                    className="ui-btn ui-btn-subtle w-full justify-start"
+                    onClick={handleExportActiveRoomPdf}
+                    disabled={!activeRoom || isExportingPdf}
+                  >
+                    Export Active Room PDF
+                  </button>
+                  <button
+                    className="ui-btn ui-btn-subtle w-full justify-start mt-1"
+                    onClick={handleExportAllRoomsPdf}
+                    disabled={workspace.rooms.length === 0 || isExportingPdf}
+                  >
+                    Export All Rooms PDF
+                  </button>
+                </div>
+              </details>
+              <button className="ui-btn ui-btn-ghost" onClick={() => setPreferencesPanelOpen(true)}>
+                Preferences
+              </button>
+            </div>
+          </div>
+          <div className="workspace-kpi-grid" aria-label="Workspace insights">
+            <div className="workspace-kpi">
+              <span className="workspace-kpi-label">Rooms</span>
+              <span className="workspace-kpi-value">{workspaceInsights.roomCount}</span>
+            </div>
+            <div className="workspace-kpi">
+              <span className="workspace-kpi-label">Objects</span>
+              <span className="workspace-kpi-value">{workspaceInsights.totalObjects}</span>
+            </div>
+            <div className="workspace-kpi">
+              <span className="workspace-kpi-label">Openings</span>
+              <span className="workspace-kpi-value">{workspaceInsights.totalOpenings}</span>
+            </div>
+            <div className="workspace-kpi">
+              <span className="workspace-kpi-label">Setup Pending</span>
+              <span className="workspace-kpi-value">{workspaceInsights.roomsInSetup}</span>
+            </div>
+            <div className="workspace-kpi workspace-kpi-wide">
+              <span className="workspace-kpi-label">Active Room</span>
+              <span className="workspace-kpi-value">{activeRoom?.name ?? 'None selected'}</span>
+              <span className="workspace-kpi-meta">
+                {workspaceInsights.activeRoomItems} objects, {workspaceInsights.activeRoomOpenings} openings, {workspaceInsights.activeRoomArea}{activeUnit}²
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -964,22 +1084,51 @@ function App() {
         {infoMessage && (
           <p className="mx-auto mb-3 max-w-[1600px] text-sm text-sky-700">{infoMessage}</p>
         )}
-        <div className="mx-auto mb-3 max-w-[1600px] flex flex-wrap items-center gap-2">
-          <button
-            className="ui-btn ui-btn-subtle disabled:opacity-50"
-            onClick={undo}
-            disabled={historyPast.length === 0}
-          >
-            Undo
-          </button>
-          <button
-            className="ui-btn ui-btn-subtle disabled:opacity-50"
-            onClick={redo}
-            disabled={historyFuture.length === 0}
-          >
-            Redo
-          </button>
-          <span className="text-xs text-slate-600">Rooms: {workspace.rooms.length}</span>
+        <div className="mx-auto mb-3 max-w-[1600px] command-toolbar">
+          <div className="command-toolbar-group">
+            <button
+              className="ui-btn ui-btn-subtle disabled:opacity-50"
+              onClick={undo}
+              disabled={historyPast.length === 0}
+            >
+              Undo
+            </button>
+            <button
+              className="ui-btn ui-btn-subtle disabled:opacity-50"
+              onClick={redo}
+              disabled={historyFuture.length === 0}
+            >
+              Redo
+            </button>
+          </div>
+          <div className="command-toolbar-meta">
+            <span>Undo stack: {historyPast.length}</span>
+            <span>Redo stack: {historyFuture.length}</span>
+            <span>Autosave: local browser storage</span>
+            <span>Interactions tracked: {telemetryInsights.sampleCount}</span>
+            <span>
+              Avg latency: {Math.round(telemetryInsights.avgDurationMs)}ms
+            </span>
+            <span>
+              Avg frame: {telemetryInsights.avgFrameMs > 0 ? telemetryInsights.avgFrameMs.toFixed(1) : '--'}ms
+            </span>
+            <span>
+              Peak frame: {telemetryInsights.maxFrameMs > 0 ? telemetryInsights.maxFrameMs.toFixed(1) : '--'}ms
+            </span>
+            <span>
+              Slow frames: {telemetryInsights.slowFrameRate.toFixed(1)}%
+            </span>
+            <span>
+              Last action: {telemetryInsights.latest ? `${telemetryInsights.latest.interaction}${telemetryInsights.latest.changed ? '' : ' (no change)'}` : 'none'}
+            </span>
+            <button
+              className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1 text-[11px]"
+              onClick={handleClearTelemetry}
+              disabled={telemetryInsights.sampleCount === 0}
+            >
+              Clear Metrics
+            </button>
+          </div>
         </div>
 
         <button

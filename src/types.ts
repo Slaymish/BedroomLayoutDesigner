@@ -55,3 +55,16 @@ export interface WorkspaceFile {
     exportedAtIso: string;
     workspace: WorkspaceState;
 }
+
+export interface LayoutInteractionTelemetry {
+    interaction: 'drag' | 'resize';
+    itemType?: string;
+    changed: boolean;
+    durationMs: number;
+    pointerEvents: number;
+    frameSamples: number;
+    avgFrameMs: number;
+    maxFrameMs: number;
+    slowFrameCount: number;
+    timestamp: number;
+}

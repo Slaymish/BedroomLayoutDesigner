@@ -20,6 +20,9 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
     return (
         <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900">Preferences</h3>
+            <p className="text-xs text-slate-600">
+                Tune the drafting grid and measurement unit for your planning workflow.
+            </p>
             <div className="ui-field">
                 <label className="ui-label">Grid Size (px)</label>
                 <input
@@ -33,13 +36,16 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
             </div>
             <div className="ui-field">
                 <label className="ui-label">Grid Color</label>
-                <input
-                    type="color"
-                    value={preferences.gridColor ?? "#94a3b8"}
-                    onChange={handleGridColorChange}
-                    className="h-10 w-14 p-1 border border-slate-300 rounded-lg bg-white"
-                    title="Pick grid line color"
-                />
+                <div className="flex items-center gap-2">
+                    <input
+                        type="color"
+                        value={preferences.gridColor ?? "#94a3b8"}
+                        onChange={handleGridColorChange}
+                        className="h-10 w-14 p-1 border border-slate-300 rounded-lg bg-white"
+                        title="Pick grid line color"
+                    />
+                    <span className="text-xs text-slate-500">{preferences.gridColor ?? "#94a3b8"}</span>
+                </div>
             </div>
             <div className="ui-field">
                 <label className="ui-label">Unit</label>

@@ -19,10 +19,18 @@ interface RoomOnboardingPanelProps {
   onFinish: () => void;
 }
 
+const ONBOARDING_STEPS: Array<RoomDesign['setup']['onboardingStep']> = ['welcome', 'dimensions', 'openings'];
+
 const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
   const converted = fromBaseCm(valueCm, unit);
   const decimals = unit === 'm' || unit === 'ft' ? 2 : 1;
   return Number(converted.toFixed(decimals)).toString();
+};
+
+const formatDimension = (valueCm: number, unit: Unit): string => {
+  const converted = fromBaseCm(valueCm, unit);
+  const decimals = unit === 'm' || unit === 'ft' ? 2 : 0;
+  return `${Number(converted.toFixed(decimals))}${unit}`;
 };
 
 function RoomOnboardingPanel({
@@ -55,9 +63,19 @@ function RoomOnboardingPanel({
     () => room.items.filter((item) => item.type === 'Window').length,
     [room.items]
   );
+
   const selectedDoor = selectedItem?.type === 'Door' ? selectedItem : null;
   const doorDirection = selectedDoor?.doorOpenDirection ?? room.setup.doorDefaults.doorOpenDirection;
   const doorSide = selectedDoor?.doorOpenSide ?? room.setup.doorDefaults.doorOpenSide;
+
+  const activeStepIndex = ONBOARDING_STEPS.indexOf(room.setup.onboardingStep);
+  const onboardingProgress = ((activeStepIndex + 1) / ONBOARDING_STEPS.length) * 100;
+
+  const roomAreaLabel = useMemo(() => {
+    const area = fromBaseCm(room.roomWidthCm, unit) * fromBaseCm(room.roomHeightCm, unit);
+    const decimals = unit === 'm' || unit === 'ft' ? 2 : 0;
+    return `${Number(area.toFixed(decimals))}${unit}^2`;
+  }, [room.roomHeightCm, room.roomWidthCm, unit]);
 
   const goToOpenings = () => {
     const widthValue = parseFloat(dimensionDraft.width);
@@ -123,146 +141,234 @@ function RoomOnboardingPanel({
     setError(null);
   };
 
-  if (room.setup.onboardingStep === 'welcome') {
-    return (
-      <section className="surface-card p-4 sm:p-5">
-        <p className="badge-step">Step 1 of 3</p>
-        <h3 className="mt-3 text-lg font-bold text-slate-900">Set up {room.name}</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          Add dimensions, doors, and windows before furniture editing.
-        </p>
-        <button className="ui-btn ui-btn-primary mt-4" onClick={() => onSetStep('dimensions')}>
-          Start Setup
-        </button>
-      </section>
-    );
-  }
-
-  if (room.setup.onboardingStep === 'dimensions') {
-    return (
-      <section className="surface-card p-4 sm:p-5">
-        <p className="badge-step">Step 2 of 3</p>
-        <h3 className="mt-3 text-lg font-bold text-slate-900">Room dimensions</h3>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="ui-field">
-            <label className="ui-label">Width ({unit})</label>
-            <input
-              className="ui-input"
-              type="number"
-              value={dimensionDraft.width}
-              min={0.1}
-              step={0.1}
-              onChange={(event) => setDimensionDraft((prev) => ({ ...prev, width: event.target.value }))}
-            />
-          </div>
-          <div className="ui-field">
-            <label className="ui-label">Length ({unit})</label>
-            <input
-              className="ui-input"
-              type="number"
-              value={dimensionDraft.height}
-              min={0.1}
-              step={0.1}
-              onChange={(event) => setDimensionDraft((prev) => ({ ...prev, height: event.target.value }))}
-            />
-          </div>
-        </div>
-        {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button className="ui-btn ui-btn-ghost" onClick={() => onSetStep('welcome')}>
-            Back
-          </button>
-          <button className="ui-btn ui-btn-primary" onClick={goToOpenings}>
-            Continue
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="surface-card p-4 sm:p-5 space-y-3">
-      <p className="badge-step">Step 3 of 3</p>
-      <h3 className="text-lg font-bold text-slate-900">Place doors and windows</h3>
-      <div className="flex flex-wrap gap-2">
-        <button className="ui-btn ui-btn-primary" onClick={() => addOpening('Door')}>
-          Add Door
-        </button>
-        <button className="ui-btn ui-btn-secondary" onClick={() => addOpening('Window')}>
-          Add Window
-        </button>
-        <button
-          className="ui-btn ui-btn-ghost disabled:opacity-40"
-          onClick={onRemoveSelected}
-          disabled={!selectedItem}
-        >
-          Remove
-        </button>
-      </div>
-      <div className="surface-card-muted p-3 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Window</p>
-        <div className="ui-field">
-          <label className="ui-label">Width ({unit})</label>
-          <input
-            className="ui-input"
-            type="number"
-            min={0.1}
-            step={0.1}
-            value={windowDraft.width}
-            onChange={(event) => setWindowDraft({ width: event.target.value })}
-            onBlur={() => {
-              const widthRaw = parseFloat(windowDraft.width);
-              const convertedWidth = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, unit) : NaN;
-              if (Number.isFinite(convertedWidth) && convertedWidth > 0) {
-                onUpdateWindowDraftWidthCm(Math.round(convertedWidth));
-              }
-            }}
-          />
+    <section className="surface-card onboarding-panel p-4 sm:p-5 space-y-4">
+      <header className="space-y-3">
+        <div className="onboarding-step-track" aria-hidden="true">
+          <div className="onboarding-step-track-bar" style={{ width: `${onboardingProgress}%` }} />
         </div>
-      </div>
-      <div className="surface-card-muted p-3 space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-          {selectedDoor ? 'Selected Door Swing' : 'Default Door Swing'}
-        </p>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div className="ui-field">
-            <label className="ui-label">Open Direction</label>
-            <select
-              className="ui-select"
-              value={doorDirection}
-              onChange={(event) => updateDoorSetting('doorOpenDirection', event.target.value as 'in' | 'out')}
-            >
-              <option value="in">In</option>
-              <option value="out">Out</option>
-            </select>
-          </div>
-          <div className="ui-field">
-            <label className="ui-label">Hinge Side</label>
-            <select
-              className="ui-select"
-              value={doorSide}
-              onChange={(event) => updateDoorSetting('doorOpenSide', event.target.value as 'left' | 'right')}
-            >
-              <option value="left">Left</option>
-              <option value="right">Right</option>
-            </select>
-          </div>
+        <div className="onboarding-step-rail">
+          {ONBOARDING_STEPS.map((step, index) => {
+            const isActive = step === room.setup.onboardingStep;
+            const isComplete = index < activeStepIndex;
+            const label = step === 'welcome' ? 'Start' : step === 'dimensions' ? 'Dimensions' : 'Openings';
+            return (
+              <div
+                key={step}
+                className={`onboarding-step-chip ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
+              >
+                <span>{index + 1}</span>
+                <span>{label}</span>
+              </div>
+            );
+          })}
         </div>
-      </div>
-      <p className="text-sm text-slate-600">
-        Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows:{' '}
-        <span className="font-semibold text-slate-800">{windowCount}</span> · Default window:{' '}
-        <span className="font-semibold text-slate-800">{Math.round(room.setup.windowDraftWidthCm)}cm</span>
-      </p>
-      {error && <p className="text-sm text-rose-600">{error}</p>}
-      <div className="flex flex-wrap gap-2">
-        <button className="ui-btn ui-btn-ghost" onClick={() => onSetStep('dimensions')}>
-          Back
-        </button>
-        <button className="ui-btn ui-btn-primary" onClick={finish}>
-          Start Designing
-        </button>
-      </div>
+      </header>
+
+      {room.setup.onboardingStep === 'welcome' && (
+        <>
+          <div>
+            <p className="badge-step">Step 1 of 3</p>
+            <h3 className="mt-3 text-lg font-bold text-slate-900">Set up {room.name}</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Complete three quick setup steps, then move into furniture planning with cleaner defaults.
+            </p>
+          </div>
+          <div className="onboarding-guidance-grid">
+            <article className="onboarding-guidance-card">
+              <p className="onboarding-guidance-title">1. Confirm dimensions</p>
+              <p className="onboarding-guidance-copy">Set real room width and length to lock scaling.</p>
+            </article>
+            <article className="onboarding-guidance-card">
+              <p className="onboarding-guidance-title">2. Place openings</p>
+              <p className="onboarding-guidance-copy">Add at least one door and your main windows.</p>
+            </article>
+            <article className="onboarding-guidance-card">
+              <p className="onboarding-guidance-title">3. Adjust swing defaults</p>
+              <p className="onboarding-guidance-copy">Set door direction once, then duplicate rooms faster.</p>
+            </article>
+          </div>
+          <button className="ui-btn ui-btn-primary" onClick={() => onSetStep('dimensions')}>
+            Start Setup
+          </button>
+        </>
+      )}
+
+      {room.setup.onboardingStep === 'dimensions' && (
+        <>
+          <div>
+            <p className="badge-step">Step 2 of 3</p>
+            <h3 className="mt-3 text-lg font-bold text-slate-900">Room dimensions</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Enter usable internal measurements. Minimum supported room size is 180cm x 180cm.
+            </p>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="ui-field">
+              <label className="ui-label">Width ({unit})</label>
+              <input
+                className="ui-input"
+                type="number"
+                value={dimensionDraft.width}
+                min={0.1}
+                step={0.1}
+                onChange={(event) => setDimensionDraft((prev) => ({ ...prev, width: event.target.value }))}
+              />
+            </div>
+            <div className="ui-field">
+              <label className="ui-label">Length ({unit})</label>
+              <input
+                className="ui-input"
+                type="number"
+                value={dimensionDraft.height}
+                min={0.1}
+                step={0.1}
+                onChange={(event) => setDimensionDraft((prev) => ({ ...prev, height: event.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="onboarding-micro-card">
+            <p className="onboarding-guidance-title">Current room footprint</p>
+            <p className="onboarding-guidance-copy">
+              {formatDimension(room.roomWidthCm, unit)} x {formatDimension(room.roomHeightCm, unit)} ({roomAreaLabel})
+            </p>
+          </div>
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <button className="ui-btn ui-btn-ghost" onClick={() => onSetStep('welcome')}>
+              Back
+            </button>
+            <button className="ui-btn ui-btn-primary" onClick={goToOpenings}>
+              Continue
+            </button>
+          </div>
+        </>
+      )}
+
+      {room.setup.onboardingStep === 'openings' && (
+        <>
+          <div>
+            <p className="badge-step">Step 3 of 3</p>
+            <h3 className="mt-3 text-lg font-bold text-slate-900">Place doors and windows</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              Click openings in the canvas to edit swing behavior, then complete setup.
+            </p>
+          </div>
+
+          <div className="onboarding-checklist">
+            <div className={`onboarding-checklist-item ${doorCount > 0 ? 'done' : ''}`}>
+              <span>{doorCount > 0 ? 'Done' : 'Pending'}</span>
+              <span>Add at least one door</span>
+            </div>
+            <div className={`onboarding-checklist-item ${windowCount > 0 ? 'done' : ''}`}>
+              <span>{windowCount > 0 ? 'Done' : 'Recommended'}</span>
+              <span>Add one or more windows</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button className="ui-btn ui-btn-primary" onClick={() => addOpening('Door')}>
+              Add Door
+            </button>
+            <button className="ui-btn ui-btn-secondary" onClick={() => addOpening('Window')}>
+              Add Window
+            </button>
+            <button
+              className="ui-btn ui-btn-ghost disabled:opacity-40"
+              onClick={onRemoveSelected}
+              disabled={!selectedItem}
+            >
+              Remove Selected
+            </button>
+          </div>
+
+          {doorCount === 0 && (
+            <div className="onboarding-empty-state" role="status">
+              Add a door first so furniture can be planned around a realistic entry path.
+            </div>
+          )}
+
+          {windowCount === 0 && (
+            <div className="onboarding-empty-state soft" role="status">
+              Tip: add at least one window to capture natural light and wall constraints.
+            </div>
+          )}
+
+          <div className="surface-card-muted p-3 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Window</p>
+            <div className="ui-field">
+              <label className="ui-label">Width ({unit})</label>
+              <input
+                className="ui-input"
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={windowDraft.width}
+                onChange={(event) => setWindowDraft({ width: event.target.value })}
+                onBlur={() => {
+                  const widthRaw = parseFloat(windowDraft.width);
+                  const convertedWidth = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, unit) : NaN;
+                  if (Number.isFinite(convertedWidth) && convertedWidth > 0) {
+                    onUpdateWindowDraftWidthCm(Math.round(convertedWidth));
+                  }
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="surface-card-muted p-3 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {selectedDoor ? 'Selected Door Swing' : 'Default Door Swing'}
+            </p>
+            {!selectedDoor && (
+              <p className="text-xs text-slate-600">
+                Select a door in the canvas to override these defaults for that specific opening.
+              </p>
+            )}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="ui-field">
+                <label className="ui-label">Open Direction</label>
+                <select
+                  className="ui-select"
+                  value={doorDirection}
+                  onChange={(event) => updateDoorSetting('doorOpenDirection', event.target.value as 'in' | 'out')}
+                >
+                  <option value="in">In</option>
+                  <option value="out">Out</option>
+                </select>
+              </div>
+              <div className="ui-field">
+                <label className="ui-label">Hinge Side</label>
+                <select
+                  className="ui-select"
+                  value={doorSide}
+                  onChange={(event) => updateDoorSetting('doorOpenSide', event.target.value as 'left' | 'right')}
+                >
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-sm text-slate-600">
+            Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows:{' '}
+            <span className="font-semibold text-slate-800">{windowCount}</span> · Default window:{' '}
+            <span className="font-semibold text-slate-800">{Math.round(room.setup.windowDraftWidthCm)}cm</span>
+          </p>
+
+          {error && <p className="text-sm text-rose-600">{error}</p>}
+
+          <div className="flex flex-wrap gap-2">
+            <button className="ui-btn ui-btn-ghost" onClick={() => onSetStep('dimensions')}>
+              Back
+            </button>
+            <button className="ui-btn ui-btn-primary" onClick={finish}>
+              Start Designing
+            </button>
+          </div>
+        </>
+      )}
     </section>
   );
 }

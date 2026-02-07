@@ -1,19 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-	--font-ui: "DM Sans", "Segoe UI", "Helvetica Neue", sans-serif;
-	--font-display: "Space Grotesk", "Avenir Next", sans-serif;
-	--surface-base: #f5f6f8;
-	--surface-soft: #f8fafc;
+	--font-ui: "Plus Jakarta Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+	--font-display: "Sora", "Avenir Next", sans-serif;
+	--surface-base: #eff5f3;
+	--surface-soft: #f6faf8;
 	--surface-card: #ffffff;
-	--text-strong: #0f172a;
-	--text-muted: #475569;
-	--border-subtle: #d9e1ea;
-	--border-strong: #c2cedb;
-	--shadow-soft: 0 10px 26px -20px rgb(15 23 42 / 0.3);
+	--text-strong: #112325;
+	--text-muted: #3f5d61;
+	--border-subtle: #cddfdd;
+	--border-strong: #adc8c5;
+	--shadow-soft: 0 16px 38px -26px rgb(17 35 37 / 0.34);
 	--shadow-card: 0 1px 0 rgb(255 255 255 / 0.8), var(--shadow-soft);
 	--radius-card: 16px;
+	--accent-strong: #0e6a6f;
+	--accent-soft: #e4f6f4;
+	--accent-ink: #0b4f53;
 }
 
 /* Minimal base resets; rely on Tailwind for component styling */
@@ -32,7 +35,9 @@ body {
 	font-family: var(--font-ui);
 	color: var(--text-strong);
 	background: var(--surface-base);
-	line-height: 1.35;
+	line-height: 1.4;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3, h4 {
