@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import type { RoomDesign } from '../types';
 import { fromBaseCm, type Unit } from '../utils/units';
 
@@ -7,13 +7,14 @@ interface RoomCardProps {
   unit: Unit;
   isActive: boolean;
   canDelete: boolean;
-  onActivate: () => void;
-  onRename: (name: string) => void;
-  onDelete: () => void;
+  onActivate: (roomId: string) => void;
+  onRename: (roomId: string, name: string) => void;
+  onDelete: (roomId: string) => void;
   onDragStart: (roomId: string) => void;
-  onDragOver: (roomId: string) => void;
+  onDragEnd: () => void;
+  onDragOver: () => void;
   onDrop: (roomId: string) => void;
-  children: ReactNode;
+  renderRoomContent: (room: RoomDesign, isActive: boolean) => ReactNode;
 }
 
 const formatDimension = (valueCm: number, unit: Unit): string => {
@@ -22,7 +23,7 @@ const formatDimension = (valueCm: number, unit: Unit): string => {
   return `${Number(converted.toFixed(decimals))}${unit}`;
 };
 
-export default function RoomCard({
+function RoomCard({
   room,
   unit,
   isActive,
@@ -31,9 +32,10 @@ export default function RoomCard({
   onRename,
   onDelete,
   onDragStart,
+  onDragEnd,
   onDragOver,
   onDrop,
-  children,
+  renderRoomContent,
 }: RoomCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(room.name);
@@ -41,7 +43,7 @@ export default function RoomCard({
   const submitRename = () => {
     const nextName = nameDraft.trim();
     if (nextName) {
-      onRename(nextName);
+      onRename(room.id, nextName);
     } else {
       setNameDraft(room.name);
     }
@@ -51,10 +53,10 @@ export default function RoomCard({
   return (
     <article
       className={`surface-card room-card ${isActive ? 'room-card-active' : ''}`}
-      onMouseDown={onActivate}
+      onMouseDown={() => onActivate(room.id)}
       onDragOver={(event) => {
         event.preventDefault();
-        onDragOver(room.id);
+        onDragOver();
       }}
       onDrop={(event) => {
         event.preventDefault();
@@ -102,6 +104,10 @@ export default function RoomCard({
               event.stopPropagation();
               onDragStart(room.id);
             }}
+            onDragEnd={(event) => {
+              event.stopPropagation();
+              onDragEnd();
+            }}
             onMouseDown={(event) => {
               event.stopPropagation();
             }}
@@ -127,7 +133,7 @@ export default function RoomCard({
             onClick={(event) => {
               event.stopPropagation();
               if (!canDelete) return;
-              onDelete();
+              onDelete(room.id);
             }}
             disabled={!canDelete}
           >
@@ -136,8 +142,25 @@ export default function RoomCard({
         </div>
       </header>
       <div className="room-card-body">
-        {children}
+        {renderRoomContent(room, isActive)}
       </div>
     </article>
   );
 }
+
+const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean => (
+  prev.room === next.room &&
+  prev.unit === next.unit &&
+  prev.isActive === next.isActive &&
+  prev.canDelete === next.canDelete &&
+  prev.onActivate === next.onActivate &&
+  prev.onRename === next.onRename &&
+  prev.onDelete === next.onDelete &&
+  prev.onDragStart === next.onDragStart &&
+  prev.onDragEnd === next.onDragEnd &&
+  prev.onDragOver === next.onDragOver &&
+  prev.onDrop === next.onDrop &&
+  prev.renderRoomContent === next.renderRoomContent
+);
+
+export default memo(RoomCard, roomCardPropsEqual);

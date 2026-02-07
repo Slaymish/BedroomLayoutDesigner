@@ -144,26 +144,24 @@ function RoomCanvasComponent({
         const currentDragOffset = dragOffsetRef.current;
 
         onItemsChange(prevItems => {
-            let changed = false;
-            const nextItems = prevItems.map(item => {
-                if (item.id !== activeDraggingId) {
-                    return item;
-                }
+            const targetIndex = prevItems.findIndex(item => item.id === activeDraggingId);
+            if (targetIndex < 0) return prevItems;
 
-                if (isOpening(item)) {
-                    const snapped = snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, currentWidth, currentHeight);
-                    if (
-                        snapped.x === item.x &&
-                        snapped.y === item.y &&
-                        snapped.rotate === item.rotate &&
-                        snapped.openingWall === item.openingWall
-                    ) {
-                        return item;
-                    }
-                    changed = true;
-                    return snapped;
-                }
+            const item = prevItems[targetIndex];
+            let nextItem = item;
 
+            if (isOpening(item)) {
+                const snapped = snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, currentWidth, currentHeight);
+                if (
+                    snapped.x === item.x &&
+                    snapped.y === item.y &&
+                    snapped.rotate === item.rotate &&
+                    snapped.openingWall === item.openingWall
+                ) {
+                    return prevItems;
+                }
+                nextItem = snapped;
+            } else {
                 const newX = mouseXInCanvas - currentDragOffset.x;
                 const newY = mouseYInCanvas - currentDragOffset.y;
                 const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
@@ -177,18 +175,19 @@ function RoomCanvasComponent({
                 const clampedY = Math.max(minY, Math.min(newY, maxY));
 
                 if (clampedX === item.x && clampedY === item.y) {
-                    return item;
+                    return prevItems;
                 }
 
-                changed = true;
-                return {
+                nextItem = {
                     ...item,
                     x: clampedX,
                     y: clampedY
                 };
-            });
+            }
 
-            return changed ? nextItems : prevItems;
+            const nextItems = [...prevItems];
+            nextItems[targetIndex] = nextItem;
+            return nextItems;
         });
     }, [allowResize, onItemsChange]);
 

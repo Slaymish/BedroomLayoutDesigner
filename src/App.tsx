@@ -60,7 +60,6 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
-  const latestSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
 
@@ -158,7 +157,7 @@ function App() {
     setHistoryPast((previous) => {
       if (previous.length === 0) return previous;
       const target = previous[previous.length - 1];
-      const current = latestSnapshotRef.current;
+      const current = captureWorkspaceSnapshot(workspaceRef.current);
       if (current) {
         setHistoryFuture((futurePrevious) => [...futurePrevious, current]);
       }
@@ -171,7 +170,7 @@ function App() {
     setHistoryFuture((previous) => {
       if (previous.length === 0) return previous;
       const target = previous[previous.length - 1];
-      const current = latestSnapshotRef.current;
+      const current = captureWorkspaceSnapshot(workspaceRef.current);
       if (current) {
         setHistoryPast((pastPrevious) => [...pastPrevious, current]);
       }
@@ -237,7 +236,6 @@ function App() {
 
   useEffect(() => {
     workspaceRef.current = workspace;
-    latestSnapshotRef.current = captureWorkspaceSnapshot(workspace);
   }, [workspace]);
 
   useEffect(() => {
@@ -320,7 +318,7 @@ function App() {
     if (!startSnapshot) return;
 
     window.requestAnimationFrame(() => {
-      const endSnapshot = latestSnapshotRef.current;
+      const endSnapshot = captureWorkspaceSnapshot(workspaceRef.current);
       if (!endSnapshot) return;
       if (!workspaceSnapshotEquals(startSnapshot, endSnapshot)) {
         pushUndoSnapshot(startSnapshot);
@@ -546,7 +544,6 @@ function App() {
     setHistoryPast([]);
     setHistoryFuture([]);
     interactionStartSnapshotRef.current = null;
-    latestSnapshotRef.current = null;
     setErrorMessage(null);
     setInfoMessage(null);
     setPreferencesPanelOpen(false);
@@ -894,7 +891,6 @@ function App() {
       setHistoryPast([]);
       setHistoryFuture([]);
       interactionStartSnapshotRef.current = null;
-      latestSnapshotRef.current = captureWorkspaceSnapshot(imported);
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
       setIsAddPanelOpen(false);

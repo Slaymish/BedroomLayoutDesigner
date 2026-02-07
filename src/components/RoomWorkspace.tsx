@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useRef, type ReactNode } from 'react';
 import type { RoomDesign } from '../types';
 import type { Unit } from '../utils/units';
 import RoomCard from './RoomCard';
@@ -24,7 +24,27 @@ function RoomWorkspace({
   onReorderRooms,
   renderRoomContent,
 }: RoomWorkspaceProps) {
-  const [draggingRoomId, setDraggingRoomId] = useState<string | null>(null);
+  const draggingRoomIdRef = useRef<string | null>(null);
+
+  const handleDragStart = useCallback((roomId: string) => {
+    draggingRoomIdRef.current = roomId;
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    draggingRoomIdRef.current = null;
+  }, []);
+
+  const handleDrop = useCallback((targetRoomId: string) => {
+    const sourceRoomId = draggingRoomIdRef.current;
+    if (sourceRoomId) {
+      onReorderRooms(sourceRoomId, targetRoomId);
+    }
+    draggingRoomIdRef.current = null;
+  }, [onReorderRooms]);
+
+  const handleDragOver = useCallback(() => {
+    // Keep HTML5 DnD target hot; reorder only on drop.
+  }, []);
 
   return (
     <section className="room-workspace-shell">
@@ -38,22 +58,15 @@ function RoomWorkspace({
               unit={unit}
               isActive={isActive}
               canDelete={rooms.length > 1}
-              onActivate={() => onActivateRoom(room.id)}
-              onRename={(name) => onRenameRoom(room.id, name)}
-              onDelete={() => onDeleteRoom(room.id)}
-              onDragStart={(roomId) => setDraggingRoomId(roomId)}
-              onDragOver={() => {
-                // Keep HTML5 DnD target hot; reorder only on drop.
-              }}
-              onDrop={(targetRoomId) => {
-                if (draggingRoomId) {
-                  onReorderRooms(draggingRoomId, targetRoomId);
-                }
-                setDraggingRoomId(null);
-              }}
-            >
-              {renderRoomContent(room, isActive)}
-            </RoomCard>
+              onActivate={onActivateRoom}
+              onRename={onRenameRoom}
+              onDelete={onDeleteRoom}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+              renderRoomContent={renderRoomContent}
+            />
           );
         })}
       </div>
