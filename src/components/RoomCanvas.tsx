@@ -18,6 +18,7 @@ interface RoomCanvasProps {
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
     onLayoutInteractionStart?: () => void;
     onLayoutInteractionEnd?: () => void;
+    exportRoomId?: string;
 }
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
@@ -45,7 +46,8 @@ export default function RoomCanvas({
     gridColor,
     unit = 'cm',
     onLayoutInteractionStart,
-    onLayoutInteractionEnd
+    onLayoutInteractionEnd,
+    exportRoomId
 }: RoomCanvasProps) {
     const [width, setWidth] = useState(roomWidthCm);
     const [height, setHeight] = useState(roomHeightCm);
@@ -219,7 +221,8 @@ export default function RoomCanvas({
                     <div
                         ref={canvasRef}
                         onClick={() => onEditItem(null)}
-                        data-floorplan-export="true"
+                        data-floorplan-export-room={exportRoomId}
+                        data-floorplan-export={exportRoomId ? 'true' : undefined}
                         className="relative bg-white bg-grid rounded-xl shadow-sm ring-1 ring-slate-300 overflow-hidden"
                         style={canvasStyle}
                     >

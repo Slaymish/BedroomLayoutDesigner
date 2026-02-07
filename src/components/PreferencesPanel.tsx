@@ -61,7 +61,7 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
                         className="ui-btn ui-btn-secondary w-full"
                         onClick={onResetSetup}
                     >
-                        Reset Setup
+                        Reset Workspace
                     </button>
                 </div>
             )}

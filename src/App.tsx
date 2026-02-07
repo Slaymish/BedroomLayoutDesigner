@@ -1,30 +1,37 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import './App.css'
-import AddObjectPanel from './components/AddObjectPanel'
-import RoomCanvas from './components/RoomCanvas'
-import EditObjectPanel from './components/EditObjectPanel'
-import PreferencesPanel from './components/PreferencesPanel'
-import type { OpeningWall, RoomItem, Preferences } from './types'
-import { fromBaseCm, toBaseCm, type Unit } from './utils/units'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react';
+import './App.css';
+import AddObjectPanel from './components/AddObjectPanel';
+import EditObjectPanel from './components/EditObjectPanel';
+import PreferencesPanel from './components/PreferencesPanel';
+import RoomCanvas from './components/RoomCanvas';
+import RoomOnboardingPanel from './components/RoomOnboardingPanel';
+import RoomWorkspace from './components/RoomWorkspace';
+import type { RoomDesign, RoomItem, WorkspaceState } from './types';
+import { fromBaseCm, type Unit } from './utils/units';
+import { isOpening } from './utils/openings';
 import {
-  inferNearestWall,
-  inferWallFromRotation,
-  isOpening,
-  normalizeOpeningOnWall,
-} from './utils/openings'
-
-type OnboardingStep = 'welcome' | 'dimensions' | 'openings'
-
-interface StoredLayoutState {
-  version: number;
-  onboardingComplete: boolean;
-  onboardingStep: OnboardingStep;
-  roomWidthCm: number;
-  roomHeightCm: number;
-  items: RoomItem[];
-  preferences: Preferences;
-  nextItemId: number;
-}
+  DEFAULT_PREFERENCES,
+  OPENING_PRESETS,
+  SOFT_ROOM_WARNING_COUNT,
+  STORAGE_KEY,
+  UNIT_OPTIONS,
+  WORKSPACE_STORAGE_VERSION,
+  captureWorkspaceSnapshot,
+  cloneRoomItem,
+  createBlankRoom,
+  createDefaultWorkspaceState,
+  createDuplicateRoom,
+  findRoom,
+  getNextRoomName,
+  normalizeOpeningForRoom,
+  parseStoredWorkspaceState,
+  reorderRooms,
+  sanitizeWorkspaceState,
+  workspaceSnapshotEquals,
+  workspaceStateEquals,
+  type WorkspaceSnapshot,
+} from './utils/workspaceState';
+import { downloadWorkspaceFile, parseWorkspaceFileContent } from './utils/workspaceFile';
 
 interface AddItemOptions {
   select?: boolean;
@@ -35,98 +42,6 @@ interface AddItemOptions {
   doorOpenSide?: 'left' | 'right';
 }
 
-interface LayoutSnapshot {
-  items: RoomItem[];
-  roomWidthCm: number;
-  roomHeightCm: number;
-  editingItemId: number | null;
-  nextItemId: number;
-}
-
-const STORAGE_KEY = 'bedroom-layout-designer:v1';
-const STORAGE_VERSION = 2;
-const DEFAULT_ROOM_WIDTH_CM = 360;
-const DEFAULT_ROOM_HEIGHT_CM = 320;
-
-const OPENING_PRESETS: Record<'Door' | 'Window', { widthCm: number; heightCm: number }> = {
-  Door: { widthCm: 80, heightCm: 10 },
-  Window: { widthCm: 100, heightCm: 10 },
-};
-
-const UNIT_OPTIONS: Unit[] = ['mm', 'cm', 'm', 'in', 'ft'];
-const DEFAULT_PREFERENCES: Preferences = {
-  gridSize: 30,
-  gridColor: '#c8d2dd',
-  unit: 'cm'
-};
-
-const toDimensionInputValue = (valueCm: number, unit: Unit): string => {
-  const converted = fromBaseCm(valueCm, unit);
-  const decimals = unit === 'm' || unit === 'ft' ? 2 : 1;
-  return Number(converted.toFixed(decimals)).toString();
-};
-
-const isValidUnit = (unit: string | undefined): unit is Unit =>
-  !!unit && UNIT_OPTIONS.includes(unit as Unit);
-
-const isValidOpeningWall = (wall: string | undefined): wall is OpeningWall =>
-  wall === 'top' || wall === 'right' || wall === 'bottom' || wall === 'left';
-
-const normalizeOpeningForRoom = (
-  item: RoomItem,
-  roomWidthCm: number,
-  roomHeightCm: number
-): RoomItem => {
-  const wall =
-    inferWallFromRotation(item.rotate) ||
-    (isValidOpeningWall(item.openingWall) ? item.openingWall : null) ||
-    inferNearestWall(item.x + item.width / 2, item.y + item.height / 2, roomWidthCm, roomHeightCm);
-  return normalizeOpeningOnWall(
-    {
-      ...item,
-      doorOpenDirection: item.type === 'Door' ? (item.doorOpenDirection || 'in') : item.doorOpenDirection,
-      doorOpenSide: item.type === 'Door' ? (item.doorOpenSide || 'left') : item.doorOpenSide,
-    },
-    wall,
-    roomWidthCm,
-    roomHeightCm
-  );
-};
-
-const cloneItem = (item: RoomItem): RoomItem => ({ ...item });
-
-const roomItemEquals = (left: RoomItem, right: RoomItem): boolean => (
-  left.id === right.id &&
-  left.width === right.width &&
-  left.height === right.height &&
-  left.x === right.x &&
-  left.y === right.y &&
-  left.rotate === right.rotate &&
-  left.type === right.type &&
-  left.doorOpenDirection === right.doorOpenDirection &&
-  left.doorOpenSide === right.doorOpenSide &&
-  left.openingWall === right.openingWall
-);
-
-const layoutSnapshotEquals = (left: LayoutSnapshot, right: LayoutSnapshot): boolean => {
-  if (
-    left.roomWidthCm !== right.roomWidthCm ||
-    left.roomHeightCm !== right.roomHeightCm ||
-    left.editingItemId !== right.editingItemId ||
-    left.nextItemId !== right.nextItemId ||
-    left.items.length !== right.items.length
-  ) {
-    return false;
-  }
-
-  for (let index = 0; index < left.items.length; index += 1) {
-    if (!roomItemEquals(left.items[index], right.items[index])) {
-      return false;
-    }
-  }
-  return true;
-};
-
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -134,172 +49,134 @@ const isEditableElement = (target: EventTarget | null): boolean => {
 };
 
 function App() {
-  const [items, setItems] = useState<RoomItem[]>([]);
-  const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const nextItemId = useRef(1);
-  const [roomWidthCm, setRoomWidthCm] = useState(DEFAULT_ROOM_WIDTH_CM);
-  const [roomHeightCm, setRoomHeightCm] = useState(DEFAULT_ROOM_HEIGHT_CM);
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
   const [isHydrated, setIsHydrated] = useState(false);
-
-  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
-  const activeUnit: Unit = preferences.unit || 'cm';
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
-  const [dimensionDraft, setDimensionDraft] = useState({
-    width: toDimensionInputValue(DEFAULT_ROOM_WIDTH_CM, activeUnit),
-    height: toDimensionInputValue(DEFAULT_ROOM_HEIGHT_CM, activeUnit),
-  });
-  const [onboardingWindowDraft, setOnboardingWindowDraft] = useState({
-    width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, activeUnit),
-  });
-  const [onboardingDoorDefaults, setOnboardingDoorDefaults] = useState<{
-    doorOpenDirection: 'in' | 'out';
-    doorOpenSide: 'left' | 'right';
-  }>({
-    doorOpenDirection: 'in',
-    doorOpenSide: 'left',
-  });
-  const [onboardingError, setOnboardingError] = useState<string | null>(null);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-
-  const handlePreferencesChange = (newPreferences: Preferences) => {
-    setPreferences(newPreferences);
-  };
-
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
-  const [historyPast, setHistoryPast] = useState<LayoutSnapshot[]>([]);
-  const [historyFuture, setHistoryFuture] = useState<LayoutSnapshot[]>([]);
-  const interactionStartSnapshotRef = useRef<LayoutSnapshot | null>(null);
-  const latestSnapshotRef = useRef<LayoutSnapshot | null>(null);
+  const [historyPast, setHistoryPast] = useState<WorkspaceSnapshot[]>([]);
+  const [historyFuture, setHistoryFuture] = useState<WorkspaceSnapshot[]>([]);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  const captureSnapshot = useCallback(
-    (): LayoutSnapshot => ({
-      items: items.map(cloneItem),
-      roomWidthCm,
-      roomHeightCm,
-      editingItemId,
-      nextItemId: nextItemId.current,
-    }),
-    [items, roomWidthCm, roomHeightCm, editingItemId]
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
+  const latestSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
+
+  const activeUnit: Unit = workspace.preferences.unit || 'cm';
+  const activeRoom = useMemo(
+    () => findRoom(workspace, workspace.activeRoomId),
+    [workspace]
+  );
+  const activeEditingItem = useMemo(
+    () =>
+      activeRoom && activeRoom.editingItemId !== null
+        ? activeRoom.items.find((item) => item.id === activeRoom.editingItemId) || null
+        : null,
+    [activeRoom]
   );
 
-  const restoreSnapshot = useCallback((snapshot: LayoutSnapshot) => {
-    setItems(snapshot.items.map(cloneItem));
-    setRoomWidthCm(snapshot.roomWidthCm);
-    setRoomHeightCm(snapshot.roomHeightCm);
-    setEditingItemId(snapshot.editingItemId);
-    nextItemId.current = snapshot.nextItemId;
-  }, []);
-
-  const pushUndoSnapshot = useCallback((snapshot: LayoutSnapshot) => {
-    setHistoryPast(prev => {
-      const nextSnapshot = {
+  const pushUndoSnapshot = useCallback((snapshot: WorkspaceSnapshot) => {
+    setHistoryPast((previous) => {
+      const normalized = {
         ...snapshot,
-        items: snapshot.items.map(cloneItem),
+        rooms: snapshot.rooms.map((room) => ({
+          ...room,
+          items: room.items.map(cloneRoomItem),
+          setup: {
+            ...room.setup,
+            doorDefaults: { ...room.setup.doorDefaults },
+          },
+        })),
       };
-      const last = prev[prev.length - 1];
-      if (last && layoutSnapshotEquals(last, nextSnapshot)) {
-        return prev;
+      const last = previous[previous.length - 1];
+      if (last && workspaceSnapshotEquals(last, normalized)) {
+        return previous;
       }
-      return [...prev, nextSnapshot];
+      return [...previous, normalized];
     });
     setHistoryFuture([]);
   }, []);
 
+  const restoreSnapshot = useCallback((snapshot: WorkspaceSnapshot) => {
+    setWorkspace((previous) =>
+      sanitizeWorkspaceState({
+        ...previous,
+        version: WORKSPACE_STORAGE_VERSION,
+        rooms: snapshot.rooms,
+        activeRoomId: snapshot.activeRoomId,
+      })
+    );
+  }, []);
+
+  const updateWorkspace = useCallback(
+    (
+      updater: (current: WorkspaceState) => WorkspaceState,
+      options?: { recordHistory?: boolean }
+    ) => {
+      setWorkspace((previous) => {
+        const next = sanitizeWorkspaceState(updater(previous));
+        if (workspaceStateEquals(previous, next)) {
+          return previous;
+        }
+        if (options?.recordHistory ?? true) {
+          pushUndoSnapshot(captureWorkspaceSnapshot(previous));
+        }
+        return next;
+      });
+    },
+    [pushUndoSnapshot]
+  );
+
+  const updateRoom = useCallback(
+    (
+      roomId: string,
+      updater: (room: RoomDesign) => RoomDesign,
+      options?: { recordHistory?: boolean }
+    ) => {
+      updateWorkspace(
+        (current) => ({
+          ...current,
+          rooms: current.rooms.map((room) => (room.id === roomId ? updater(room) : room)),
+        }),
+        options
+      );
+    },
+    [updateWorkspace]
+  );
+
   const undo = useCallback(() => {
-    setHistoryPast(prev => {
-      if (prev.length === 0) return prev;
-      const previous = prev[prev.length - 1];
+    setHistoryPast((previous) => {
+      if (previous.length === 0) return previous;
+      const target = previous[previous.length - 1];
       const current = latestSnapshotRef.current;
       if (current) {
-        setHistoryFuture(futurePrev => [
-          ...futurePrev,
-          {
-            ...current,
-            items: current.items.map(cloneItem),
-          },
-        ]);
+        setHistoryFuture((futurePrevious) => [...futurePrevious, current]);
       }
-      restoreSnapshot(previous);
-      return prev.slice(0, -1);
+      restoreSnapshot(target);
+      return previous.slice(0, -1);
     });
   }, [restoreSnapshot]);
 
   const redo = useCallback(() => {
-    setHistoryFuture(prev => {
-      if (prev.length === 0) return prev;
-      const next = prev[prev.length - 1];
+    setHistoryFuture((previous) => {
+      if (previous.length === 0) return previous;
+      const target = previous[previous.length - 1];
       const current = latestSnapshotRef.current;
       if (current) {
-        setHistoryPast(pastPrev => [
-          ...pastPrev,
-          {
-            ...current,
-            items: current.items.map(cloneItem),
-          },
-        ]);
+        setHistoryPast((pastPrevious) => [...pastPrevious, current]);
       }
-      restoreSnapshot(next);
-      return prev.slice(0, -1);
+      restoreSnapshot(target);
+      return previous.slice(0, -1);
     });
   }, [restoreSnapshot]);
 
   useEffect(() => {
     try {
-      const rawState = window.localStorage.getItem(STORAGE_KEY);
-      if (!rawState) {
-        setIsHydrated(true);
-        return;
+      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const parsed = parseStoredWorkspaceState(stored);
+      if (parsed) {
+        setWorkspace(parsed);
       }
-
-      const parsed = JSON.parse(rawState) as Partial<StoredLayoutState>;
-      if (parsed.version !== 1 && parsed.version !== STORAGE_VERSION) {
-        setIsHydrated(true);
-        return;
-      }
-
-      const loadedUnit = isValidUnit(parsed.preferences?.unit) ? parsed.preferences?.unit : 'cm';
-      const loadedRoomWidth = typeof parsed.roomWidthCm === 'number' && parsed.roomWidthCm > 100 ? parsed.roomWidthCm : DEFAULT_ROOM_WIDTH_CM;
-      const loadedRoomHeight = typeof parsed.roomHeightCm === 'number' && parsed.roomHeightCm > 100 ? parsed.roomHeightCm : DEFAULT_ROOM_HEIGHT_CM;
-
-      setRoomWidthCm(loadedRoomWidth);
-      setRoomHeightCm(loadedRoomHeight);
-      setPreferences({
-        gridSize: typeof parsed.preferences?.gridSize === 'number' ? Math.max(2, parsed.preferences.gridSize) : DEFAULT_PREFERENCES.gridSize,
-        gridColor: parsed.preferences?.gridColor || DEFAULT_PREFERENCES.gridColor,
-        unit: loadedUnit,
-      });
-
-      if (Array.isArray(parsed.items)) {
-        const migratedItems = parsed.items.map(item => {
-          if (!isOpening(item)) return item;
-          return normalizeOpeningForRoom(item, loadedRoomWidth, loadedRoomHeight);
-        });
-        setItems(migratedItems);
-        const highestId = migratedItems.reduce((max, item) => Math.max(max, item.id), 0);
-        nextItemId.current = Math.max(highestId + 1, parsed.nextItemId || 1);
-      } else if (typeof parsed.nextItemId === 'number' && parsed.nextItemId > 0) {
-        nextItemId.current = parsed.nextItemId;
-      }
-
-      const complete = typeof parsed.onboardingComplete === 'boolean'
-        ? parsed.onboardingComplete
-        : Array.isArray(parsed.items) && parsed.items.length > 0;
-      setOnboardingComplete(complete);
-
-      if (!complete && parsed.onboardingStep) {
-        setOnboardingStep(parsed.onboardingStep);
-      }
-      setDimensionDraft({
-        width: toDimensionInputValue(loadedRoomWidth, loadedUnit),
-        height: toDimensionInputValue(loadedRoomHeight, loadedUnit),
-      });
-      setOnboardingWindowDraft({
-        width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, loadedUnit),
-      });
-    } catch {
-      // If local storage is malformed, fall back to defaults.
     } finally {
       setIsHydrated(true);
     }
@@ -307,22 +184,20 @@ function App() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    const snapshot: StoredLayoutState = {
-      version: STORAGE_VERSION,
-      onboardingComplete,
-      onboardingStep,
-      roomWidthCm,
-      roomHeightCm,
-      items,
-      preferences,
-      nextItemId: Math.max(nextItemId.current, ...items.map(item => item.id + 1), 1),
+    const payload: WorkspaceState = {
+      ...workspace,
+      version: WORKSPACE_STORAGE_VERSION,
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        ...workspace.preferences,
+      },
     };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
-  }, [isHydrated, onboardingComplete, onboardingStep, roomWidthCm, roomHeightCm, items, preferences]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  }, [isHydrated, workspace]);
 
   useEffect(() => {
-    latestSnapshotRef.current = captureSnapshot();
-  }, [captureSnapshot]);
+    latestSnapshotRef.current = captureWorkspaceSnapshot(workspace);
+  }, [workspace]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -353,104 +228,37 @@ function App() {
     };
   }, [historyPast.length, historyFuture.length, redo, undo]);
 
-  const handleAddItem = (width: number, height: number, type: string, options?: AddItemOptions) => {
-    const snapshotBefore = captureSnapshot();
-    const newId = nextItemId.current++;
-    const newItem: RoomItem = {
-      id: newId,
-      width,
-      height,
-      x: 0,
-      y: 0,
-      type,
-      rotate: options?.rotate ?? 0,
-      ...(type === 'Door'
-        ? {
-            doorOpenDirection: options?.doorOpenDirection ?? 'in',
-            doorOpenSide: options?.doorOpenSide ?? 'left',
-          }
-        : {})
-    };
+  const setActiveRoom = useCallback(
+    (roomId: string) => {
+      updateWorkspace(
+        (current) => ({
+          ...current,
+          activeRoomId: current.rooms.some((room) => room.id === roomId) ? roomId : current.activeRoomId,
+        }),
+        { recordHistory: false }
+      );
+    },
+    [updateWorkspace]
+  );
 
-    setItems(prevItems => {
-      const offset = 36 + (prevItems.length % 8) * 22;
-      const requestedX = options?.x ?? offset;
-      const requestedY = options?.y ?? offset;
-      const draftItem = { ...newItem, x: requestedX, y: requestedY };
-
-      if (isOpening(draftItem)) {
-        const inferredWall =
-          (typeof options?.rotate === 'number' ? inferWallFromRotation(options.rotate) : null) ||
-          inferNearestWall(
-            requestedX + draftItem.width / 2,
-            requestedY + draftItem.height / 2,
-            roomWidthCm,
-            roomHeightCm
-          );
-        return [...prevItems, normalizeOpeningOnWall(draftItem, inferredWall, roomWidthCm, roomHeightCm)];
-      }
-
-      const safeX = Math.max(0, Math.min(requestedX, roomWidthCm - width));
-      const safeY = Math.max(0, Math.min(requestedY, roomHeightCm - height));
-      return [...prevItems, { ...draftItem, x: safeX, y: safeY }];
-    });
-
-    if (options?.select ?? true) {
-      setEditingItemId(newId);
-    }
-    pushUndoSnapshot(snapshotBefore);
-  };
-
-  const handleEditItem = (id: number | null) => {
-    setEditingItemId(id);
-  };
-
-  const handleUpdateItem = (updatedItem: RoomItem) => {
-    const existing = items.find(item => item.id === updatedItem.id);
-    if (!existing) return;
-
-    let nextItem = { ...updatedItem };
-    const windowResized = existing.type === 'Window' && (
-      existing.width !== updatedItem.width ||
-      existing.height !== updatedItem.height
-    );
-
-    if (windowResized) {
-      const centerX = existing.x + existing.width / 2;
-      const centerY = existing.y + existing.height / 2;
-      nextItem = {
-        ...nextItem,
-        x: centerX - updatedItem.width / 2,
-        y: centerY - updatedItem.height / 2,
-      };
-    }
-
-    if (isOpening(nextItem)) {
-      nextItem = normalizeOpeningForRoom(nextItem, roomWidthCm, roomHeightCm);
-    }
-    if (roomItemEquals(existing, nextItem)) return;
-
-    pushUndoSnapshot(captureSnapshot());
-    setItems(prevItems => prevItems.map(item => (item.id === nextItem.id ? nextItem : item)));
-  };
-
-  const handleRemoveItem = () => {
-    if (editingItemId !== null) {
-      pushUndoSnapshot(captureSnapshot());
-      setItems(prevItems => prevItems.filter(i => i.id !== editingItemId));
-      setEditingItemId(null);
-    }
-  };
-
-  const handleRoomSizeChange = useCallback((nextWidthCm: number, nextHeightCm: number) => {
-    setRoomWidthCm(current => (current === nextWidthCm ? current : nextWidthCm));
-    setRoomHeightCm(current => (current === nextHeightCm ? current : nextHeightCm));
-  }, []);
+  const setRoomEditingItem = useCallback(
+    (roomId: string, itemId: number | null) => {
+      updateRoom(
+        roomId,
+        (room) => ({
+          ...room,
+          editingItemId: itemId,
+        }),
+        { recordHistory: false }
+      );
+    },
+    [updateRoom]
+  );
 
   const handleLayoutInteractionStart = useCallback(() => {
     if (interactionStartSnapshotRef.current) return;
-    interactionStartSnapshotRef.current = captureSnapshot();
-  }, [captureSnapshot]);
+    interactionStartSnapshotRef.current = captureWorkspaceSnapshot(workspace);
+  }, [workspace]);
 
   const handleLayoutInteractionEnd = useCallback(() => {
     const startSnapshot = interactionStartSnapshotRef.current;
@@ -460,519 +268,710 @@ function App() {
     window.requestAnimationFrame(() => {
       const endSnapshot = latestSnapshotRef.current;
       if (!endSnapshot) return;
-      if (!layoutSnapshotEquals(startSnapshot, endSnapshot)) {
+      if (!workspaceSnapshotEquals(startSnapshot, endSnapshot)) {
         pushUndoSnapshot(startSnapshot);
       }
     });
   }, [pushUndoSnapshot]);
 
-  useEffect(() => {
-    setItems(prevItems => {
-      let changed = false;
-      const normalizedItems = prevItems.map(item => {
-        if (!isOpening(item)) return item;
-        const normalized = normalizeOpeningForRoom(item, roomWidthCm, roomHeightCm);
-        if (
-          normalized.x !== item.x ||
-          normalized.y !== item.y ||
-          normalized.width !== item.width ||
-          normalized.height !== item.height ||
-          normalized.rotate !== item.rotate ||
-          normalized.openingWall !== item.openingWall
-        ) {
-          changed = true;
-        }
-        return normalized;
-      });
-      return changed ? normalizedItems : prevItems;
-    });
-  }, [roomWidthCm, roomHeightCm]);
+  const handleRoomItemsChange = useCallback(
+    (roomId: string, update: SetStateAction<RoomItem[]>) => {
+      updateRoom(
+        roomId,
+        (room) => {
+          const nextItems = typeof update === 'function' ? update(room.items.map(cloneRoomItem)) : update;
+          return {
+            ...room,
+            items: nextItems,
+          };
+        },
+        { recordHistory: false }
+      );
+    },
+    [updateRoom]
+  );
 
-  const handleResetSetup = () => {
-    const confirmed = window.confirm('Reset room setup and start onboarding again? This removes your current layout from this browser.');
+  const addItemToRoom = useCallback(
+    (roomId: string, width: number, height: number, type: string, options?: AddItemOptions) => {
+      updateRoom(roomId, (room) => {
+        const newId = room.nextItemId;
+        const newItem: RoomItem = {
+          id: newId,
+          width,
+          height,
+          x: 0,
+          y: 0,
+          type,
+          rotate: options?.rotate ?? 0,
+          ...(type === 'Door'
+            ? {
+                doorOpenDirection: options?.doorOpenDirection ?? 'in',
+                doorOpenSide: options?.doorOpenSide ?? 'left',
+              }
+            : {}),
+        };
+
+        const offset = 36 + (room.items.length % 8) * 22;
+        const requestedX = options?.x ?? offset;
+        const requestedY = options?.y ?? offset;
+        const draftItem = { ...newItem, x: requestedX, y: requestedY };
+
+        let nextItem = draftItem;
+        if (isOpening(draftItem)) {
+          nextItem = normalizeOpeningForRoom(draftItem, room.roomWidthCm, room.roomHeightCm);
+        } else {
+          const safeX = Math.max(0, Math.min(requestedX, room.roomWidthCm - width));
+          const safeY = Math.max(0, Math.min(requestedY, room.roomHeightCm - height));
+          nextItem = { ...draftItem, x: safeX, y: safeY };
+        }
+
+        return {
+          ...room,
+          items: [...room.items, nextItem],
+          nextItemId: newId + 1,
+          editingItemId: options?.select ?? true ? newId : room.editingItemId,
+        };
+      });
+    },
+    [updateRoom]
+  );
+
+  const updateRoomItem = useCallback(
+    (roomId: string, updatedItem: RoomItem) => {
+      updateRoom(roomId, (room) => {
+        const existing = room.items.find((item) => item.id === updatedItem.id);
+        if (!existing) return room;
+
+        let nextItem = { ...updatedItem };
+        const windowResized = existing.type === 'Window' && (
+          existing.width !== updatedItem.width ||
+          existing.height !== updatedItem.height
+        );
+
+        if (windowResized) {
+          const centerX = existing.x + existing.width / 2;
+          const centerY = existing.y + existing.height / 2;
+          nextItem = {
+            ...nextItem,
+            x: centerX - updatedItem.width / 2,
+            y: centerY - updatedItem.height / 2,
+          };
+        }
+
+        if (isOpening(nextItem)) {
+          nextItem = normalizeOpeningForRoom(nextItem, room.roomWidthCm, room.roomHeightCm);
+        }
+
+        return {
+          ...room,
+          items: room.items.map((item) => (item.id === nextItem.id ? nextItem : item)),
+        };
+      });
+    },
+    [updateRoom]
+  );
+
+  const removeSelectedItem = useCallback(
+    (roomId: string) => {
+      updateRoom(roomId, (room) => {
+        if (room.editingItemId === null) return room;
+        return {
+          ...room,
+          items: room.items.filter((item) => item.id !== room.editingItemId),
+          editingItemId: null,
+        };
+      });
+    },
+    [updateRoom]
+  );
+
+  const handleRoomSizeChange = useCallback(
+    (roomId: string, widthCm: number, heightCm: number) => {
+      updateRoom(
+        roomId,
+        (room) => {
+          if (room.roomWidthCm === widthCm && room.roomHeightCm === heightCm) return room;
+          const normalizedItems = room.items.map((item) => {
+            if (!isOpening(item)) return item;
+            return normalizeOpeningForRoom(item, widthCm, heightCm);
+          });
+          return {
+            ...room,
+            roomWidthCm: widthCm,
+            roomHeightCm: heightCm,
+            items: normalizedItems,
+          };
+        },
+        { recordHistory: false }
+      );
+    },
+    [updateRoom]
+  );
+
+  const handleAddRoom = () => {
+    updateWorkspace((current) => {
+      const room = createBlankRoom(getNextRoomName(current.rooms));
+      return {
+        ...current,
+        rooms: [...current.rooms, room],
+        activeRoomId: room.id,
+      };
+    });
+
+    const roomCountAfterAdd = workspace.rooms.length + 1;
+    if (roomCountAfterAdd >= SOFT_ROOM_WARNING_COUNT) {
+      setInfoMessage(`Workspace now has ${roomCountAfterAdd} rooms. Large workspaces may feel slower.`);
+    } else {
+      setInfoMessage(null);
+    }
+  };
+
+  const handleDuplicateActiveRoom = () => {
+    if (!activeRoom) return;
+    updateWorkspace((current) => {
+      const source = current.rooms.find((room) => room.id === current.activeRoomId);
+      if (!source) return current;
+      const duplicate = createDuplicateRoom(source, getNextRoomName(current.rooms));
+      return {
+        ...current,
+        rooms: [...current.rooms, duplicate],
+        activeRoomId: duplicate.id,
+      };
+    });
+  };
+
+  const handleRenameRoom = (roomId: string, name: string) => {
+    updateRoom(roomId, (room) => ({ ...room, name }));
+  };
+
+  const handleDeleteRoom = (roomId: string) => {
+    if (workspace.rooms.length <= 1) {
+      setErrorMessage('You must keep at least one room in the workspace.');
+      return;
+    }
+
+    const targetRoom = workspace.rooms.find((room) => room.id === roomId);
+    const confirmed = window.confirm(`Delete ${targetRoom?.name || 'this room'}?`);
+    if (!confirmed) return;
+
+    updateWorkspace((current) => {
+      if (current.rooms.length <= 1) return current;
+      const nextRooms = current.rooms.filter((room) => room.id !== roomId);
+      const nextActiveRoomId = current.activeRoomId === roomId
+        ? nextRooms[Math.max(0, current.rooms.findIndex((room) => room.id === roomId) - 1)]?.id || nextRooms[0].id
+        : current.activeRoomId;
+      return {
+        ...current,
+        rooms: nextRooms,
+        activeRoomId: nextActiveRoomId,
+      };
+    });
+  };
+
+  const handleReorderRooms = (sourceRoomId: string, targetRoomId: string) => {
+    updateWorkspace((current) => ({
+      ...current,
+      rooms: reorderRooms(current.rooms, sourceRoomId, targetRoomId),
+    }));
+  };
+
+  const handleResetWorkspace = () => {
+    const confirmed = window.confirm(
+      'Reset the entire workspace and start over? This removes all room layouts stored in this browser.'
+    );
     if (!confirmed) return;
 
     window.localStorage.removeItem(STORAGE_KEY);
-    nextItemId.current = 1;
-    setItems([]);
-    setEditingItemId(null);
-    setRoomWidthCm(DEFAULT_ROOM_WIDTH_CM);
-    setRoomHeightCm(DEFAULT_ROOM_HEIGHT_CM);
-    setPreferences(DEFAULT_PREFERENCES);
-    setDimensionDraft({
-      width: toDimensionInputValue(DEFAULT_ROOM_WIDTH_CM, 'cm'),
-      height: toDimensionInputValue(DEFAULT_ROOM_HEIGHT_CM, 'cm'),
-    });
-    setOnboardingWindowDraft({
-      width: toDimensionInputValue(OPENING_PRESETS.Window.widthCm, 'cm'),
-    });
-    setOnboardingDoorDefaults({
-      doorOpenDirection: 'in',
-      doorOpenSide: 'left',
-    });
-    setOnboardingError(null);
-    setOnboardingStep('welcome');
-    setOnboardingComplete(false);
-    setPreferencesPanelOpen(false);
+    setWorkspace(createDefaultWorkspaceState());
     setHistoryPast([]);
     setHistoryFuture([]);
     interactionStartSnapshotRef.current = null;
+    latestSnapshotRef.current = null;
+    setErrorMessage(null);
+    setInfoMessage(null);
+    setPreferencesPanelOpen(false);
   };
 
-  const startOnboarding = () => {
-    setOnboardingError(null);
-    setDimensionDraft({
-      width: toDimensionInputValue(roomWidthCm, activeUnit),
-      height: toDimensionInputValue(roomHeightCm, activeUnit),
+  const handlePreferencesChange = (preferences: WorkspaceState['preferences']) => {
+    setWorkspace((current) => ({
+      ...current,
+      preferences: {
+        ...current.preferences,
+        ...preferences,
+      },
+    }));
+  };
+
+  const handleOnboardingStep = (roomId: string, step: RoomDesign['setup']['onboardingStep']) => {
+    updateRoom(roomId, (room) => ({
+      ...room,
+      setup: {
+        ...room.setup,
+        onboardingStep: step,
+      },
+      editingItemId: null,
+    }));
+  };
+
+  const handleOnboardingDimensions = (roomId: string, widthCm: number, heightCm: number) => {
+    updateRoom(roomId, (room) => ({
+      ...room,
+      roomWidthCm: widthCm,
+      roomHeightCm: heightCm,
+      items: room.items
+        .filter((item) => item.type === 'Door' || item.type === 'Window')
+        .map((item) => normalizeOpeningForRoom(item, widthCm, heightCm)),
+      editingItemId: null,
+    }));
+  };
+
+  const handleOnboardingAddOpening = (
+    roomId: string,
+    type: 'Door' | 'Window',
+    windowWidthCm?: number
+  ) => {
+    updateRoom(roomId, (room) => {
+      const openingWidthCm = type === 'Window'
+        ? Math.max(1, Math.round(windowWidthCm ?? room.setup.windowDraftWidthCm))
+        : OPENING_PRESETS.Door.widthCm;
+      const openingHeightCm = type === 'Window' ? OPENING_PRESETS.Window.heightCm : OPENING_PRESETS.Door.heightCm;
+      const spawnX = Math.max(0, room.roomWidthCm / 2 - openingWidthCm / 2);
+      const spawnY = type === 'Door'
+        ? Math.max(0, room.roomHeightCm - openingHeightCm / 2)
+        : Math.max(0, openingHeightCm);
+
+      const newId = room.nextItemId;
+      const draftItem: RoomItem = {
+        id: newId,
+        width: openingWidthCm,
+        height: openingHeightCm,
+        x: spawnX,
+        y: spawnY,
+        type,
+        doorOpenDirection: type === 'Door' ? room.setup.doorDefaults.doorOpenDirection : undefined,
+        doorOpenSide: type === 'Door' ? room.setup.doorDefaults.doorOpenSide : undefined,
+      };
+
+      return {
+        ...room,
+        items: [...room.items, normalizeOpeningForRoom(draftItem, room.roomWidthCm, room.roomHeightCm)],
+        nextItemId: newId + 1,
+        editingItemId: newId,
+      };
     });
-    setOnboardingStep('dimensions');
   };
 
-  const handleDimensionUnitChange = (newUnit: Unit) => {
-    const widthRaw = parseFloat(dimensionDraft.width);
-    const heightRaw = parseFloat(dimensionDraft.height);
-    const windowWidthRaw = parseFloat(onboardingWindowDraft.width);
-    const widthCm = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : roomWidthCm;
-    const heightCm = Number.isFinite(heightRaw) ? toBaseCm(heightRaw, activeUnit) : roomHeightCm;
-    const windowWidthCm = Number.isFinite(windowWidthRaw) ? toBaseCm(windowWidthRaw, activeUnit) : OPENING_PRESETS.Window.widthCm;
-
-    setPreferences(prev => ({ ...prev, unit: newUnit }));
-    setDimensionDraft({
-      width: toDimensionInputValue(widthCm, newUnit),
-      height: toDimensionInputValue(heightCm, newUnit),
-    });
-    setOnboardingWindowDraft({
-      width: toDimensionInputValue(windowWidthCm, newUnit),
-    });
-  };
-
-  const goToOpeningPlacement = () => {
-    const widthValue = parseFloat(dimensionDraft.width);
-    const heightValue = parseFloat(dimensionDraft.height);
-
-    if (!Number.isFinite(widthValue) || !Number.isFinite(heightValue) || widthValue <= 0 || heightValue <= 0) {
-      setOnboardingError('Please enter valid room dimensions.');
-      return;
-    }
-
-    const widthCm = Math.round(toBaseCm(widthValue, activeUnit));
-    const heightCm = Math.round(toBaseCm(heightValue, activeUnit));
-    if (widthCm < 180 || heightCm < 180) {
-      setOnboardingError(`Room dimensions are too small. Use at least 180cm x 180cm.`);
-      return;
-    }
-
-    setRoomWidthCm(widthCm);
-    setRoomHeightCm(heightCm);
-    setItems(prevItems =>
-      prevItems
-        .filter(item => item.type === 'Door' || item.type === 'Window')
-        .map(item => normalizeOpeningForRoom(item, widthCm, heightCm))
-    );
-    setEditingItemId(null);
-    setOnboardingError(null);
-    setOnboardingStep('openings');
-  };
-
-  const addOpening = (type: 'Door' | 'Window') => {
-    let openingWidthCm = OPENING_PRESETS[type].widthCm;
-    let openingHeightCm = OPENING_PRESETS[type].heightCm;
-
-    if (type === 'Window') {
-      const widthRaw = parseFloat(onboardingWindowDraft.width);
-      const convertedWidth = Number.isFinite(widthRaw) ? toBaseCm(widthRaw, activeUnit) : NaN;
-
-      if (!Number.isFinite(convertedWidth) || convertedWidth <= 0) {
-        setOnboardingError('Enter a valid window size before adding a window.');
-        return;
-      }
-
-      openingWidthCm = Math.round(convertedWidth);
-      openingHeightCm = OPENING_PRESETS.Window.heightCm;
-    }
-
-    const spawnX = Math.max(0, roomWidthCm / 2 - openingWidthCm / 2);
-    const spawnY = type === 'Door'
-      ? Math.max(0, roomHeightCm - openingHeightCm / 2)
-      : Math.max(0, openingHeightCm);
-
-    handleAddItem(openingWidthCm, openingHeightCm, type, {
-      x: spawnX,
-      y: spawnY,
-      doorOpenDirection: type === 'Door' ? onboardingDoorDefaults.doorOpenDirection : undefined,
-      doorOpenSide: type === 'Door' ? onboardingDoorDefaults.doorOpenSide : undefined,
-    });
-    setOnboardingError(null);
-  };
-
-  const handleOnboardingDoorSettingChange = (
+  const handleOnboardingDoorDefaults = (
+    roomId: string,
     field: 'doorOpenDirection' | 'doorOpenSide',
     value: 'in' | 'out' | 'left' | 'right'
   ) => {
-    const selectedDoor = editingItem?.type === 'Door' ? editingItem : null;
-    if (selectedDoor) {
-      if (field === 'doorOpenDirection') {
-        handleUpdateItem({
-          ...selectedDoor,
-          doorOpenDirection: value as 'in' | 'out',
-        });
-      } else {
-        handleUpdateItem({
-          ...selectedDoor,
-          doorOpenSide: value as 'left' | 'right',
-        });
+    updateRoom(roomId, (room) => ({
+      ...room,
+      setup: {
+        ...room.setup,
+        doorDefaults: {
+          ...room.setup.doorDefaults,
+          [field]: value,
+        },
+      },
+    }));
+  };
+
+  const handleOnboardingWindowDraft = (roomId: string, widthCm: number) => {
+    updateRoom(
+      roomId,
+      (room) => ({
+        ...room,
+        setup: {
+          ...room.setup,
+          windowDraftWidthCm: Math.max(1, widthCm),
+        },
+      }),
+      { recordHistory: false }
+    );
+  };
+
+  const handleOnboardingFinish = (roomId: string) => {
+    updateRoom(roomId, (room) => ({
+      ...room,
+      editingItemId: null,
+      setup: {
+        ...room.setup,
+        onboardingComplete: true,
+      },
+    }));
+  };
+
+  const handleAddObjectToActiveRoom = (widthCm: number, heightCm: number, type: string) => {
+    if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
+    addItemToRoom(activeRoom.id, widthCm, heightCm, type);
+  };
+
+  const handleEditItemInActiveRoom = (item: RoomItem) => {
+    if (!activeRoom) return;
+    updateRoomItem(activeRoom.id, item);
+  };
+
+  const handleRemoveActiveSelection = () => {
+    if (!activeRoom) return;
+    removeSelectedItem(activeRoom.id);
+  };
+
+  const handleExportRoomPdf = useCallback(
+    async (roomsToExport: RoomDesign[], includeRoomName: boolean) => {
+      if (roomsToExport.length === 0) return;
+      setIsExportingPdf(true);
+      setErrorMessage(null);
+
+      try {
+        const [{ toPng }, { jsPDF }] = await Promise.all([
+          import('html-to-image'),
+          import('jspdf'),
+        ]);
+
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+        for (let index = 0; index < roomsToExport.length; index += 1) {
+          const room = roomsToExport[index];
+          const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-floorplan-export-room]'));
+          const exportTarget = nodes.find((node) => node.dataset.floorplanExportRoom === room.id);
+          if (!exportTarget) {
+            throw new Error(`Could not find canvas for ${room.name}.`);
+          }
+
+          const imageData = await toPng(exportTarget, {
+            pixelRatio: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
+            backgroundColor: '#ffffff',
+            cacheBust: true,
+            skipFonts: true,
+          });
+          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const value = new Image();
+            value.onload = () => resolve(value);
+            value.onerror = () => reject(new Error(`Failed to render ${room.name}.`));
+            value.src = imageData;
+          });
+
+          if (index > 0) {
+            pdf.addPage();
+          }
+
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const margin = 28;
+          const headerHeight = includeRoomName ? 72 : 58;
+          const availableWidth = pageWidth - margin * 2;
+          const availableHeight = pageHeight - margin * 2 - headerHeight;
+          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
+          const renderWidth = image.width * scale;
+          const renderHeight = image.height * scale;
+          const renderX = (pageWidth - renderWidth) / 2;
+          const renderY = margin + headerHeight + Math.max(0, (availableHeight - renderHeight) / 2);
+
+          const roomWidth = fromBaseCm(room.roomWidthCm, activeUnit);
+          const roomHeight = fromBaseCm(room.roomHeightCm, activeUnit);
+          const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+          const roomSizeLabel = `${roomWidth.toFixed(decimals)}${activeUnit} x ${roomHeight.toFixed(decimals)}${activeUnit}`;
+
+          pdf.setFontSize(14);
+          pdf.setTextColor(15, 23, 42);
+          pdf.text(includeRoomName ? room.name : 'Bedroom Layout Floorplan', margin, margin + 14);
+          pdf.setFontSize(10);
+          pdf.setTextColor(71, 85, 105);
+          pdf.text(`Room dimensions: ${roomSizeLabel}`, margin, margin + 32);
+          pdf.text(`Exported: ${new Date().toLocaleString()}`, margin, margin + 46);
+          if (includeRoomName) {
+            pdf.text(`Room ${index + 1} of ${roomsToExport.length}`, margin, margin + 60);
+          }
+          pdf.addImage(imageData, 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
+        }
+
+        const dateLabel = new Date().toISOString().slice(0, 10);
+        const fileName = roomsToExport.length === 1
+          ? `bedroom-floorplan-${dateLabel}.pdf`
+          : `bedroom-workspace-floorplans-${dateLabel}.pdf`;
+        pdf.save(fileName);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to export PDF.';
+        setErrorMessage(message);
+      } finally {
+        setIsExportingPdf(false);
       }
-      return;
-    }
-
-    if (field === 'doorOpenDirection') {
-      setOnboardingDoorDefaults(prev => ({
-        ...prev,
-        doorOpenDirection: value as 'in' | 'out',
-      }));
-    } else {
-      setOnboardingDoorDefaults(prev => ({
-        ...prev,
-        doorOpenSide: value as 'left' | 'right',
-      }));
-    }
-  };
-
-  const finishOnboarding = () => {
-    const doorCount = items.filter(item => item.type === 'Door').length;
-    if (doorCount < 1) {
-      setOnboardingError('Add at least one door before finishing setup.');
-      return;
-    }
-
-    setOnboardingError(null);
-    setEditingItemId(null);
-    setOnboardingComplete(true);
-  };
-
-  const handleExportPdf = async () => {
-    if (isExportingPdf) return;
-    setExportError(null);
-    setIsExportingPdf(true);
-
-    try {
-      const exportTarget = document.querySelector<HTMLElement>('[data-floorplan-export="true"]');
-      if (!exportTarget) {
-        throw new Error('Could not find the floorplan to export.');
-      }
-
-      const [{ toPng }, { jsPDF }] = await Promise.all([
-        import('html-to-image'),
-        import('jspdf'),
-      ]);
-
-      const imageData = await toPng(exportTarget, {
-        pixelRatio: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
-        backgroundColor: '#ffffff',
-        cacheBust: true,
-        skipFonts: true,
-      });
-      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Failed to render floorplan image.'));
-        img.src = imageData;
-      });
-
-      const roomWidth = fromBaseCm(roomWidthCm, activeUnit);
-      const roomHeight = fromBaseCm(roomHeightCm, activeUnit);
-      const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
-      const roomSizeLabel = `${roomWidth.toFixed(decimals)}${activeUnit} x ${roomHeight.toFixed(decimals)}${activeUnit}`;
-      const orientation = image.width >= image.height ? 'landscape' : 'portrait';
-      const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 28;
-      const headerHeight = 58;
-      const availableWidth = pageWidth - margin * 2;
-      const availableHeight = pageHeight - margin * 2 - headerHeight;
-      const renderScale = Math.min(availableWidth / image.width, availableHeight / image.height);
-      const renderWidth = image.width * renderScale;
-      const renderHeight = image.height * renderScale;
-      const renderX = (pageWidth - renderWidth) / 2;
-      const renderY = margin + headerHeight + Math.max(0, (availableHeight - renderHeight) / 2);
-
-      pdf.setFontSize(14);
-      pdf.setTextColor(15, 23, 42);
-      pdf.text('Bedroom Layout Floorplan', margin, margin + 14);
-      pdf.setFontSize(10);
-      pdf.setTextColor(71, 85, 105);
-      pdf.text(`Room dimensions: ${roomSizeLabel}`, margin, margin + 32);
-      pdf.text(`Exported: ${new Date().toLocaleString()}`, margin, margin + 46);
-      pdf.addImage(imageData, 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
-      pdf.save(`bedroom-floorplan-${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to export PDF.';
-      setExportError(message);
-    } finally {
-      setIsExportingPdf(false);
-    }
-  };
-
-  const editingItem = useMemo(
-    () => (editingItemId !== null ? items.find(i => i.id === editingItemId) || null : null),
-    [editingItemId, items]
+    },
+    [activeUnit]
   );
 
-  const doorCount = items.filter(item => item.type === 'Door').length;
-  const windowCount = items.filter(item => item.type === 'Window').length;
-  const selectedDoorInOnboarding = onboardingComplete ? null : (editingItem?.type === 'Door' ? editingItem : null);
-  const onboardingDoorDirection = selectedDoorInOnboarding?.doorOpenDirection ?? onboardingDoorDefaults.doorOpenDirection;
-  const onboardingDoorSide = selectedDoorInOnboarding?.doorOpenSide ?? onboardingDoorDefaults.doorOpenSide;
+  const handleExportActiveRoomPdf = () => {
+    if (!activeRoom) return;
+    handleExportRoomPdf([activeRoom], false);
+  };
+
+  const handleExportAllRoomsPdf = () => {
+    handleExportRoomPdf(workspace.rooms, true);
+  };
+
+  const handleSaveWorkspaceFile = () => {
+    downloadWorkspaceFile(workspace);
+    setInfoMessage('Workspace exported to JSON file.');
+  };
+
+  const handleLoadWorkspaceFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const imported = parseWorkspaceFileContent(text);
+      const confirmed = window.confirm('Replace your current workspace with this file?');
+      if (!confirmed) return;
+
+      setWorkspace(imported);
+      setHistoryPast([]);
+      setHistoryFuture([]);
+      interactionStartSnapshotRef.current = null;
+      latestSnapshotRef.current = captureWorkspaceSnapshot(imported);
+      setErrorMessage(null);
+      setInfoMessage('Workspace loaded successfully.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load workspace file.';
+      setErrorMessage(message);
+    }
+  };
 
   if (!isHydrated) {
     return (
       <div className="min-h-screen app-shell flex items-center justify-center px-6">
-        <div className="surface-card p-6 text-slate-700">
-          Loading your layout...
-        </div>
-      </div>
-    );
-  }
-
-  if (!onboardingComplete) {
-    return (
-      <div className="min-h-screen app-shell">
-      <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
-        <div className="mx-auto max-w-6xl">
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
-        </div>
-      </header>
-        <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7">
-          <div className="mx-auto max-w-6xl">
-            {onboardingStep === 'welcome' && (
-              <section className="surface-card p-5 sm:p-6 md:p-7">
-                <p className="badge-step">Step 1 of 3</p>
-                <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-slate-900">Welcome, ready to design your bedroom?</h2>
-                <p className="mt-2 text-sm text-slate-600 max-w-2xl">
-                  You will set room dimensions, place doors and windows, then start arranging furniture.
-                </p>
-                <button
-                  className="ui-btn ui-btn-primary mt-6"
-                  onClick={startOnboarding}
-                >
-                  Start Setup
-                </button>
-              </section>
-            )}
-
-            {onboardingStep === 'dimensions' && (
-              <section className="surface-card p-5 sm:p-6 md:p-7">
-                <p className="badge-step">Step 2 of 3</p>
-                <h2 className="mt-4 text-xl sm:text-2xl font-bold text-slate-900">What are your bedroom dimensions?</h2>
-                <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                  <div className="ui-field">
-                    <label className="ui-label">Width</label>
-                    <input
-                      className="ui-input"
-                      type="number"
-                      value={dimensionDraft.width}
-                      min={1}
-                      step={0.1}
-                      onChange={(e) => setDimensionDraft(prev => ({ ...prev, width: e.target.value }))}
-                    />
-                  </div>
-                  <div className="ui-field">
-                    <label className="ui-label">Length</label>
-                    <input
-                      className="ui-input"
-                      type="number"
-                      value={dimensionDraft.height}
-                      min={1}
-                      step={0.1}
-                      onChange={(e) => setDimensionDraft(prev => ({ ...prev, height: e.target.value }))}
-                    />
-                  </div>
-                  <div className="ui-field">
-                    <label className="ui-label">Unit</label>
-                    <select
-                      className="ui-select"
-                      value={activeUnit}
-                      onChange={(e) => handleDimensionUnitChange(e.target.value as Unit)}
-                    >
-                      {UNIT_OPTIONS.map((unit) => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {onboardingError && <p className="mt-3 text-sm text-rose-600">{onboardingError}</p>}
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <button
-                    className="ui-btn ui-btn-ghost"
-                    onClick={() => setOnboardingStep('welcome')}
-                  >
-                    Back
-                  </button>
-                  <button
-                    className="ui-btn ui-btn-primary"
-                    onClick={goToOpeningPlacement}
-                  >
-                    Continue
-                  </button>
-                </div>
-              </section>
-            )}
-
-            {onboardingStep === 'openings' && (
-              <section className="grid gap-4 xl:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
-                <div className="surface-card panel-shell p-4 sm:p-5 space-y-4">
-                  <p className="badge-step">Step 3 of 3</p>
-                  <h2 className="text-xl font-bold text-slate-900">Place doors and windows</h2>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button className="ui-btn ui-btn-primary" onClick={() => addOpening('Door')}>Add Door</button>
-                    <button className="ui-btn ui-btn-secondary" onClick={() => addOpening('Window')}>Add Window</button>
-                    <button className="ui-btn ui-btn-ghost disabled:opacity-40" onClick={handleRemoveItem} disabled={!editingItem}>Remove</button>
-                  </div>
-                  <div className="surface-card-muted p-3 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Window</p>
-                    <div className="ui-field">
-                      <label className="ui-label">Width ({activeUnit})</label>
-                      <input
-                        className="ui-input"
-                        type="number"
-                        min={0.1}
-                        step={0.1}
-                        value={onboardingWindowDraft.width}
-                        onChange={(e) => setOnboardingWindowDraft(prev => ({ ...prev, width: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="surface-card-muted p-3 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                      {selectedDoorInOnboarding ? 'Selected Door Swing' : 'Default Door Swing'}
-                    </p>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                      <div className="ui-field">
-                        <label className="ui-label">Open Direction</label>
-                        <select
-                          className="ui-select"
-                          value={onboardingDoorDirection}
-                          onChange={(e) => handleOnboardingDoorSettingChange('doorOpenDirection', e.target.value as 'in' | 'out')}
-                        >
-                          <option value="in">In</option>
-                          <option value="out">Out</option>
-                        </select>
-                      </div>
-                      <div className="ui-field">
-                        <label className="ui-label">Hinge Side</label>
-                        <select
-                          className="ui-select"
-                          value={onboardingDoorSide}
-                          onChange={(e) => handleOnboardingDoorSettingChange('doorOpenSide', e.target.value as 'left' | 'right')}
-                        >
-                          <option value="left">Left</option>
-                          <option value="right">Right</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    Doors: <span className="font-semibold text-slate-800">{doorCount}</span> · Windows: <span className="font-semibold text-slate-800">{windowCount}</span>
-                  </p>
-                  {onboardingError && <p className="text-sm text-rose-600">{onboardingError}</p>}
-                  <div className="flex flex-wrap gap-3">
-                    <button className="ui-btn ui-btn-ghost" onClick={() => setOnboardingStep('dimensions')}>Back</button>
-                    <button className="ui-btn ui-btn-primary" onClick={finishOnboarding}>Start Designing</button>
-                  </div>
-                </div>
-                <div className="panel-shell min-w-0">
-                  <RoomCanvas
-                    items={items}
-                    onItemsChange={setItems}
-                    onEditItem={setEditingItemId}
-                    selectedItemId={editingItem?.id ?? null}
-                    roomWidthCm={roomWidthCm}
-                    roomHeightCm={roomHeightCm}
-                    allowResize={false}
-                    gridSize={preferences.gridSize}
-                    gridColor={preferences.gridColor}
-                    unit={activeUnit}
-                    onLayoutInteractionStart={handleLayoutInteractionStart}
-                    onLayoutInteractionEnd={handleLayoutInteractionEnd}
-                  />
-                </div>
-              </section>
-            )}
-          </div>
-        </main>
+        <div className="surface-card p-6 text-slate-700">Loading your workspace...</div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen app-shell">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={handleLoadWorkspaceFile}
+      />
       <header className="app-header px-4 py-5 sm:px-6 md:px-8 md:py-6">
-        <div className="mx-auto max-w-[1440px] flex flex-wrap items-center justify-between gap-3">
+        <div className="mx-auto max-w-[1600px] flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              className="ui-btn ui-btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
-              onClick={handleExportPdf}
-              disabled={isExportingPdf}
-            >
-              {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+            <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
+            <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
+              Duplicate Active Room
             </button>
-            <button
-              className="ui-btn ui-btn-ghost"
-              onClick={() => setPreferencesPanelOpen(true)}
-            >
+            <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceFile}>Save Workspace</button>
+            <button className="ui-btn ui-btn-ghost" onClick={() => fileInputRef.current?.click()}>
+              Load Workspace
+            </button>
+            <details className="relative">
+              <summary className="ui-btn ui-btn-ghost list-none cursor-pointer">
+                {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+              </summary>
+              <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <button
+                  className="ui-btn ui-btn-subtle w-full justify-start"
+                  onClick={handleExportActiveRoomPdf}
+                  disabled={!activeRoom || isExportingPdf}
+                >
+                  Export Active Room PDF
+                </button>
+                <button
+                  className="ui-btn ui-btn-subtle w-full justify-start mt-1"
+                  onClick={handleExportAllRoomsPdf}
+                  disabled={workspace.rooms.length === 0 || isExportingPdf}
+                >
+                  Export All Rooms PDF
+                </button>
+              </div>
+            </details>
+            <button className="ui-btn ui-btn-ghost" onClick={() => setPreferencesPanelOpen(true)}>
               Preferences
             </button>
           </div>
         </div>
       </header>
       <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip">
-        {exportError && (
-          <p className="mx-auto mb-3 max-w-[1440px] text-sm text-rose-600">{exportError}</p>
+        {errorMessage && (
+          <p className="mx-auto mb-3 max-w-[1600px] text-sm text-rose-600">{errorMessage}</p>
         )}
-        <div className="mx-auto max-w-[1440px] grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5 xl:[grid-template-columns:17.5rem_minmax(0,1fr)_19.5rem] items-start">
-          <section className="order-1 md:col-span-2 xl:col-span-1 xl:col-start-2 panel-shell min-w-0">
-            <RoomCanvas
-              items={items}
-              onItemsChange={setItems}
-              onEditItem={handleEditItem}
-              selectedItemId={editingItem?.id ?? null}
-              roomWidthCm={roomWidthCm}
-              roomHeightCm={roomHeightCm}
-              onRoomSizeChange={handleRoomSizeChange}
-              gridSize={preferences.gridSize}
-              gridColor={preferences.gridColor}
+        {infoMessage && (
+          <p className="mx-auto mb-3 max-w-[1600px] text-sm text-sky-700">{infoMessage}</p>
+        )}
+        <div className="mx-auto mb-3 max-w-[1600px] flex flex-wrap items-center gap-2">
+          <button
+            className="ui-btn ui-btn-subtle disabled:opacity-50"
+            onClick={undo}
+            disabled={historyPast.length === 0}
+          >
+            Undo
+          </button>
+          <button
+            className="ui-btn ui-btn-subtle disabled:opacity-50"
+            onClick={redo}
+            disabled={historyFuture.length === 0}
+          >
+            Redo
+          </button>
+          <span className="text-xs text-slate-600">Rooms: {workspace.rooms.length}</span>
+        </div>
+
+        <div className="mx-auto max-w-[1600px] grid grid-cols-1 gap-4 xl:[grid-template-columns:17.5rem_minmax(0,1fr)_19.5rem] items-start">
+          <section className="order-1 xl:order-2 panel-shell min-w-0">
+            <RoomWorkspace
+              rooms={workspace.rooms}
+              activeRoomId={workspace.activeRoomId}
               unit={activeUnit}
-              onLayoutInteractionStart={handleLayoutInteractionStart}
-              onLayoutInteractionEnd={handleLayoutInteractionEnd}
+              onActivateRoom={(roomId) => {
+                setErrorMessage(null);
+                setActiveRoom(roomId);
+              }}
+              onRenameRoom={handleRenameRoom}
+              onDeleteRoom={handleDeleteRoom}
+              onReorderRooms={handleReorderRooms}
+              renderRoomContent={(room, isActive) => {
+                const editingItem = room.editingItemId !== null
+                  ? room.items.find((item) => item.id === room.editingItemId) || null
+                  : null;
+
+                if (!room.setup.onboardingComplete) {
+                  return (
+                    <div className="grid gap-3 lg:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
+                      <RoomOnboardingPanel
+                        key={`${room.id}-${activeUnit}-${room.setup.onboardingStep}-${room.roomWidthCm}-${room.roomHeightCm}-${room.setup.windowDraftWidthCm}`}
+                        room={room}
+                        unit={activeUnit}
+                        selectedItem={editingItem}
+                        onSetStep={(step) => {
+                          setActiveRoom(room.id);
+                          handleOnboardingStep(room.id, step);
+                        }}
+                        onApplyDimensions={(widthCm, heightCm) => {
+                          setActiveRoom(room.id);
+                          handleOnboardingDimensions(room.id, widthCm, heightCm);
+                        }}
+                        onAddOpening={(type, windowWidthCm) => {
+                          setActiveRoom(room.id);
+                          handleOnboardingAddOpening(room.id, type, windowWidthCm);
+                        }}
+                        onRemoveSelected={() => {
+                          setActiveRoom(room.id);
+                          removeSelectedItem(room.id);
+                        }}
+                        onUpdateItem={(item) => {
+                          setActiveRoom(room.id);
+                          updateRoomItem(room.id, item);
+                        }}
+                        onUpdateDoorDefaults={(field, value) => {
+                          setActiveRoom(room.id);
+                          handleOnboardingDoorDefaults(room.id, field, value);
+                        }}
+                        onUpdateWindowDraftWidthCm={(widthCm) => {
+                          handleOnboardingWindowDraft(room.id, widthCm);
+                        }}
+                        onFinish={() => {
+                          setActiveRoom(room.id);
+                          handleOnboardingFinish(room.id);
+                        }}
+                      />
+                      <RoomCanvas
+                        items={room.items}
+                        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+                        onEditItem={(itemId) => {
+                          setActiveRoom(room.id);
+                          setRoomEditingItem(room.id, itemId);
+                        }}
+                        selectedItemId={room.editingItemId}
+                        roomWidthCm={room.roomWidthCm}
+                        roomHeightCm={room.roomHeightCm}
+                        allowResize={false}
+                        gridSize={workspace.preferences.gridSize}
+                        gridColor={workspace.preferences.gridColor}
+                        unit={activeUnit}
+                        onLayoutInteractionStart={handleLayoutInteractionStart}
+                        onLayoutInteractionEnd={handleLayoutInteractionEnd}
+                        exportRoomId={room.id}
+                      />
+                    </div>
+                  );
+                }
+
+                return (
+                  <RoomCanvas
+                    items={room.items}
+                    onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+                    onEditItem={(itemId) => {
+                      setActiveRoom(room.id);
+                      setRoomEditingItem(room.id, itemId);
+                    }}
+                    selectedItemId={room.editingItemId}
+                    roomWidthCm={room.roomWidthCm}
+                    roomHeightCm={room.roomHeightCm}
+                    onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
+                    gridSize={workspace.preferences.gridSize}
+                    gridColor={workspace.preferences.gridColor}
+                    unit={activeUnit}
+                    onLayoutInteractionStart={handleLayoutInteractionStart}
+                    onLayoutInteractionEnd={handleLayoutInteractionEnd}
+                    exportRoomId={room.id}
+                    allowResize={isActive}
+                  />
+                );
+              }}
             />
           </section>
-          <section className="order-2 panel-shell min-w-0 xl:col-start-1 xl:row-start-1">
-            <AddObjectPanel onAddObject={handleAddItem} unit={preferences.unit} />
+
+          <section className="order-2 xl:order-1 panel-shell min-w-0">
+            {activeRoom && activeRoom.setup.onboardingComplete ? (
+              <AddObjectPanel onAddObject={handleAddObjectToActiveRoom} unit={workspace.preferences.unit} />
+            ) : (
+              <div className="surface-card panel-shell p-4 sm:p-5">
+                <h3 className="text-lg font-semibold text-slate-900">Add Objects</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Complete onboarding for the active room before adding furniture.
+                </p>
+              </div>
+            )}
           </section>
-          <section className="order-3 panel-shell min-w-0 xl:col-start-3 xl:row-start-1">
-            {editingItem ? (
-              <EditObjectPanel
-                item={editingItem}
-                onClose={() => setEditingItemId(null)}
-                onChange={handleUpdateItem}
-                onRemove={handleRemoveItem}
-                unit={activeUnit}
-              />
+
+          <section className="order-3 panel-shell min-w-0">
+            {activeRoom && activeRoom.setup.onboardingComplete ? (
+              activeEditingItem ? (
+                <EditObjectPanel
+                  item={activeEditingItem}
+                  onClose={() => setRoomEditingItem(activeRoom.id, null)}
+                  onChange={handleEditItemInActiveRoom}
+                  onRemove={handleRemoveActiveSelection}
+                  unit={activeUnit}
+                />
+              ) : (
+                <div className="surface-card panel-shell p-4 sm:p-5">
+                  <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Select an object in the active room to edit size, position, or rotation.
+                  </p>
+                </div>
+              )
             ) : (
               <div className="surface-card panel-shell p-4 sm:p-5">
                 <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
-                <p className="mt-2 text-sm text-slate-600">Select any object on the canvas to edit size, position, or rotation.</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  Object editing is available after onboarding is complete for the active room.
+                </p>
               </div>
             )}
           </section>
         </div>
+
         {preferencesPanelOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-900/35 backdrop-blur-[1px]">
             <div className="modal-shell p-5 w-full max-w-md">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-slate-900">Layout Preferences</h2>
+                <h2 className="text-lg font-semibold text-slate-900">Workspace Preferences</h2>
                 <button
                   className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
                   onClick={() => setPreferencesPanelOpen(false)}
@@ -982,15 +981,18 @@ function App() {
               </div>
               <PreferencesPanel
                 onChange={handlePreferencesChange}
-                preferences={preferences}
-                onResetSetup={handleResetSetup}
+                preferences={workspace.preferences}
+                onResetSetup={handleResetWorkspace}
               />
+              <div className="mt-4 text-xs text-slate-500">
+                Supported units: {UNIT_OPTIONS.join(', ')}
+              </div>
             </div>
           </div>
         )}
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
