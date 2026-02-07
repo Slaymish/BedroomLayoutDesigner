@@ -26,9 +26,7 @@ import {
   normalizeOpeningForRoom,
   parseStoredWorkspaceState,
   reorderRooms,
-  sanitizeWorkspaceState,
   workspaceSnapshotEquals,
-  workspaceStateEquals,
   type WorkspaceSnapshot,
 } from './utils/workspaceState';
 import { downloadWorkspaceFile, parseWorkspaceFileContent } from './utils/workspaceFile';
@@ -52,6 +50,8 @@ function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
   const [isHydrated, setIsHydrated] = useState(false);
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
+  const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
+  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [historyPast, setHistoryPast] = useState<WorkspaceSnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<WorkspaceSnapshot[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -61,6 +61,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const latestSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
+  const workspaceRef = useRef(workspace);
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
   const activeRoom = useMemo(
@@ -98,14 +99,12 @@ function App() {
   }, []);
 
   const restoreSnapshot = useCallback((snapshot: WorkspaceSnapshot) => {
-    setWorkspace((previous) =>
-      sanitizeWorkspaceState({
-        ...previous,
-        version: WORKSPACE_STORAGE_VERSION,
-        rooms: snapshot.rooms,
-        activeRoomId: snapshot.activeRoomId,
-      })
-    );
+    setWorkspace((previous) => ({
+      ...previous,
+      version: WORKSPACE_STORAGE_VERSION,
+      rooms: snapshot.rooms,
+      activeRoomId: snapshot.activeRoomId,
+    }));
   }, []);
 
   const updateWorkspace = useCallback(
@@ -114,10 +113,8 @@ function App() {
       options?: { recordHistory?: boolean }
     ) => {
       setWorkspace((previous) => {
-        const next = sanitizeWorkspaceState(updater(previous));
-        if (workspaceStateEquals(previous, next)) {
-          return previous;
-        }
+        const next = updater(previous);
+        if (next === previous) return previous;
         if (options?.recordHistory ?? true) {
           pushUndoSnapshot(captureWorkspaceSnapshot(previous));
         }
@@ -134,10 +131,22 @@ function App() {
       options?: { recordHistory?: boolean }
     ) => {
       updateWorkspace(
-        (current) => ({
-          ...current,
-          rooms: current.rooms.map((room) => (room.id === roomId ? updater(room) : room)),
-        }),
+        (current) => {
+          let didChange = false;
+          const nextRooms = current.rooms.map((room) => {
+            if (room.id !== roomId) return room;
+            const nextRoom = updater(room);
+            if (nextRoom !== room) {
+              didChange = true;
+            }
+            return nextRoom;
+          });
+          if (!didChange) return current;
+          return {
+            ...current,
+            rooms: nextRooms,
+          };
+        },
         options
       );
     },
@@ -196,11 +205,17 @@ function App() {
   }, [isHydrated, workspace]);
 
   useEffect(() => {
+    workspaceRef.current = workspace;
     latestSnapshotRef.current = captureWorkspaceSnapshot(workspace);
   }, [workspace]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsAddPanelOpen(false);
+        setIsEditPanelOpen(false);
+      }
+
       const hasModifier = event.metaKey || event.ctrlKey;
       if (!hasModifier || event.altKey) return;
       if (isEditableElement(event.target)) return;
@@ -255,10 +270,18 @@ function App() {
     [updateRoom]
   );
 
+  const handleRoomItemSelection = useCallback((roomId: string, itemId: number | null) => {
+    setActiveRoom(roomId);
+    setRoomEditingItem(roomId, itemId);
+    if (itemId !== null) {
+      setIsEditPanelOpen(true);
+    }
+  }, [setActiveRoom, setRoomEditingItem]);
+
   const handleLayoutInteractionStart = useCallback(() => {
     if (interactionStartSnapshotRef.current) return;
-    interactionStartSnapshotRef.current = captureWorkspaceSnapshot(workspace);
-  }, [workspace]);
+    interactionStartSnapshotRef.current = captureWorkspaceSnapshot(workspaceRef.current);
+  }, []);
 
   const handleLayoutInteractionEnd = useCallback(() => {
     const startSnapshot = interactionStartSnapshotRef.current;
@@ -279,7 +302,8 @@ function App() {
       updateRoom(
         roomId,
         (room) => {
-          const nextItems = typeof update === 'function' ? update(room.items.map(cloneRoomItem)) : update;
+          const nextItems = typeof update === 'function' ? update(room.items) : update;
+          if (nextItems === room.items) return room;
           return {
             ...room,
             items: nextItems,
@@ -490,6 +514,8 @@ function App() {
     setErrorMessage(null);
     setInfoMessage(null);
     setPreferencesPanelOpen(false);
+    setIsAddPanelOpen(false);
+    setIsEditPanelOpen(false);
   };
 
   const handlePreferencesChange = (preferences: WorkspaceState['preferences']) => {
@@ -733,6 +759,8 @@ function App() {
       latestSnapshotRef.current = captureWorkspaceSnapshot(imported);
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
+      setIsAddPanelOpen(false);
+      setIsEditPanelOpen(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load workspace file.';
       setErrorMessage(message);
@@ -817,11 +845,23 @@ function App() {
           >
             Redo
           </button>
+          <button
+            className={`ui-btn ${isAddPanelOpen ? 'ui-btn-secondary' : 'ui-btn-subtle'}`}
+            onClick={() => setIsAddPanelOpen((current) => !current)}
+          >
+            {isAddPanelOpen ? 'Hide Add Panel' : 'Show Add Panel'}
+          </button>
+          <button
+            className={`ui-btn ${isEditPanelOpen ? 'ui-btn-secondary' : 'ui-btn-subtle'}`}
+            onClick={() => setIsEditPanelOpen((current) => !current)}
+          >
+            {isEditPanelOpen ? 'Hide Edit Panel' : 'Show Edit Panel'}
+          </button>
           <span className="text-xs text-slate-600">Rooms: {workspace.rooms.length}</span>
         </div>
 
-        <div className="mx-auto max-w-[1600px] grid grid-cols-1 gap-4 xl:[grid-template-columns:17.5rem_minmax(0,1fr)_19.5rem] items-start">
-          <section className="order-1 xl:order-2 panel-shell min-w-0">
+        <div className="mx-auto max-w-[1600px]">
+          <section className="panel-shell min-w-0">
             <RoomWorkspace
               rooms={workspace.rooms}
               activeRoomId={workspace.activeRoomId}
@@ -881,10 +921,7 @@ function App() {
                       <RoomCanvas
                         items={room.items}
                         onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-                        onEditItem={(itemId) => {
-                          setActiveRoom(room.id);
-                          setRoomEditingItem(room.id, itemId);
-                        }}
+                        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
                         selectedItemId={room.editingItemId}
                         roomWidthCm={room.roomWidthCm}
                         roomHeightCm={room.roomHeightCm}
@@ -904,10 +941,7 @@ function App() {
                   <RoomCanvas
                     items={room.items}
                     onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-                    onEditItem={(itemId) => {
-                      setActiveRoom(room.id);
-                      setRoomEditingItem(room.id, itemId);
-                    }}
+                    onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
                     selectedItemId={room.editingItemId}
                     roomWidthCm={room.roomWidthCm}
                     roomHeightCm={room.roomHeightCm}
@@ -924,48 +958,78 @@ function App() {
               }}
             />
           </section>
+        </div>
 
-          <section className="order-2 xl:order-1 panel-shell min-w-0">
+        {(isAddPanelOpen || isEditPanelOpen) && (
+          <button
+            className="drawer-backdrop"
+            aria-label="Close side panels"
+            onClick={() => {
+              setIsAddPanelOpen(false);
+              setIsEditPanelOpen(false);
+            }}
+          />
+        )}
+
+        <aside className={`side-drawer side-drawer-left ${isAddPanelOpen ? 'open' : ''}`}>
+          <div className="side-drawer-content">
+            <div className="side-drawer-header">
+              <h3 className="text-lg font-semibold text-slate-900">Add Objects</h3>
+              <button
+                className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
+                onClick={() => setIsAddPanelOpen(false)}
+              >
+                Close
+              </button>
+            </div>
             {activeRoom && activeRoom.setup.onboardingComplete ? (
               <AddObjectPanel onAddObject={handleAddObjectToActiveRoom} unit={workspace.preferences.unit} />
             ) : (
               <div className="surface-card panel-shell p-4 sm:p-5">
-                <h3 className="text-lg font-semibold text-slate-900">Add Objects</h3>
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="text-sm text-slate-600">
                   Complete onboarding for the active room before adding furniture.
                 </p>
               </div>
             )}
-          </section>
+          </div>
+        </aside>
 
-          <section className="order-3 panel-shell min-w-0">
+        <aside className={`side-drawer side-drawer-right ${isEditPanelOpen ? 'open' : ''}`}>
+          <div className="side-drawer-content">
+            <div className="side-drawer-header">
+              <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
+              <button
+                className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
+                onClick={() => setIsEditPanelOpen(false)}
+              >
+                Close
+              </button>
+            </div>
             {activeRoom && activeRoom.setup.onboardingComplete ? (
               activeEditingItem ? (
                 <EditObjectPanel
                   item={activeEditingItem}
-                  onClose={() => setRoomEditingItem(activeRoom.id, null)}
+                  onClose={() => setIsEditPanelOpen(false)}
                   onChange={handleEditItemInActiveRoom}
                   onRemove={handleRemoveActiveSelection}
                   unit={activeUnit}
                 />
               ) : (
                 <div className="surface-card panel-shell p-4 sm:p-5">
-                  <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
-                  <p className="mt-2 text-sm text-slate-600">
+                  <p className="text-sm text-slate-600">
                     Select an object in the active room to edit size, position, or rotation.
                   </p>
                 </div>
               )
             ) : (
               <div className="surface-card panel-shell p-4 sm:p-5">
-                <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="text-sm text-slate-600">
                   Object editing is available after onboarding is complete for the active room.
                 </p>
               </div>
             )}
-          </section>
-        </div>
+          </div>
+        </aside>
 
         {preferencesPanelOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-900/35 backdrop-blur-[1px]">

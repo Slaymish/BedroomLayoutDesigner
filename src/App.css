@@ -161,16 +161,23 @@
   min-width: fit-content;
 }
 
-.workspace-rail {
+.room-workspace-shell {
+  border: 1px solid var(--border-subtle);
+  border-radius: calc(var(--radius-card) + 2px);
+  background: rgb(255 255 255 / 0.82);
+  box-shadow: var(--shadow-card);
+  padding: 0.75rem;
+}
+
+.room-workspace-list {
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: 0.9rem;
-  min-width: fit-content;
 }
 
 .room-card {
-  min-width: min(96vw, 980px);
-  width: min(96vw, 980px);
+  width: 100%;
+  min-width: 0;
   border-color: #d4dde8;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
   padding: 0.85rem;
@@ -229,4 +236,82 @@ details > summary {
   border-radius: calc(var(--radius-card) + 2px);
   background: #fff;
   box-shadow: 0 30px 80px -45px rgb(15 23 42 / 0.65);
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 34;
+  border: 0;
+  background: rgb(15 23 42 / 0.12);
+  backdrop-filter: blur(1px);
+}
+
+.side-drawer {
+  position: fixed;
+  top: 5.9rem;
+  bottom: 0.8rem;
+  width: min(26rem, calc(100vw - 1.6rem));
+  z-index: 35;
+  pointer-events: none;
+  transition: transform 0.24s ease;
+}
+
+.side-drawer-left {
+  left: 0.8rem;
+  transform: translateX(calc(-100% - 0.8rem));
+}
+
+.side-drawer-right {
+  right: 0.8rem;
+  transform: translateX(calc(100% + 0.8rem));
+}
+
+.side-drawer.open {
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.side-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  height: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: calc(var(--radius-card) + 2px);
+  background: rgb(255 255 255 / 0.97);
+  box-shadow: 0 25px 65px -42px rgb(15 23 42 / 0.7);
+  padding: 0.75rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.side-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgb(255 255 255 / 0.95);
+  padding-bottom: 0.5rem;
+}
+
+@media (max-width: 767px) {
+  .side-drawer {
+    top: 5.3rem;
+    bottom: 0.6rem;
+    width: calc(100vw - 1.2rem);
+  }
+
+  .side-drawer-left {
+    left: 0.6rem;
+    transform: translateX(calc(-100% - 0.6rem));
+  }
+
+  .side-drawer-right {
+    right: 0.6rem;
+    transform: translateX(calc(100% + 0.6rem));
+  }
 }

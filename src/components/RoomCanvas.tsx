@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import RoomObject from "./RoomObject"
 import type { RoomItem } from "../types"
 import { fromBaseCm } from "../utils/units"
@@ -58,6 +58,12 @@ export default function RoomCanvas({
     const hasDragged = useRef(false);
 
     const canvasRef = useRef<HTMLDivElement>(null);
+    const itemsRef = useRef(items);
+    const widthRef = useRef(width);
+    const heightRef = useRef(height);
+    const dragOffsetRef = useRef(dragOffset);
+    const draggingIdRef = useRef<number | null>(draggingId);
+    const isResizingRef = useRef<null | 'right' | 'bottom' | 'corner'>(isResizing);
 
     useEffect(() => {
         setWidth(roomWidthCm);
@@ -71,6 +77,30 @@ export default function RoomCanvas({
         onRoomSizeChange?.(width, height);
     }, [width, height, onRoomSizeChange]);
 
+    useEffect(() => {
+        itemsRef.current = items;
+    }, [items]);
+
+    useEffect(() => {
+        widthRef.current = width;
+    }, [width]);
+
+    useEffect(() => {
+        heightRef.current = height;
+    }, [height]);
+
+    useEffect(() => {
+        dragOffsetRef.current = dragOffset;
+    }, [dragOffset]);
+
+    useEffect(() => {
+        draggingIdRef.current = draggingId;
+    }, [draggingId]);
+
+    useEffect(() => {
+        isResizingRef.current = isResizing;
+    }, [isResizing]);
+
     const handleObjectMouseDown = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
         hasDragged.current = false;
@@ -78,6 +108,7 @@ export default function RoomCanvas({
         if (item && canvasRef.current) {
             onLayoutInteractionStart?.();
             const rect = canvasRef.current.getBoundingClientRect();
+            draggingIdRef.current = id;
             setDraggingId(id);
             const mouseXInCanvas = e.clientX - rect.left;
             const mouseYInCanvas = e.clientY - rect.top;
@@ -88,6 +119,10 @@ export default function RoomCanvas({
                     x: item.width / 2,
                     y: item.height / 2
                 });
+                dragOffsetRef.current = {
+                    x: item.width / 2,
+                    y: item.height / 2
+                };
                 return;
             }
 
@@ -95,6 +130,10 @@ export default function RoomCanvas({
                 x: mouseXInCanvas - item.x,
                 y: mouseYInCanvas - item.y
             });
+            dragOffsetRef.current = {
+                x: mouseXInCanvas - item.x,
+                y: mouseYInCanvas - item.y
+            };
         }
     };
 
@@ -107,70 +146,99 @@ export default function RoomCanvas({
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
-            if (allowResize && isResizing && canvasRef.current) {
+            const activeResize = isResizingRef.current;
+            const activeDraggingId = draggingIdRef.current;
+
+            if (allowResize && activeResize && canvasRef.current) {
                 const rect = canvasRef.current.getBoundingClientRect();
+                const currentItems = itemsRef.current;
                 
                 // Calculate minimum dimensions based on objects
-                const minWidth = Math.max(100, ...items.map(i => {
+                const minWidth = Math.max(100, ...currentItems.map(i => {
                     const { width: bboxW } = getBoundingBox(i.width, i.height, i.rotate);
                     return i.x + i.width / 2 + bboxW / 2;
                 }));
-                const minHeight = Math.max(100, ...items.map(i => {
+                const minHeight = Math.max(100, ...currentItems.map(i => {
                     const { height: bboxH } = getBoundingBox(i.width, i.height, i.rotate);
                     return i.y + i.height / 2 + bboxH / 2;
                 }));
 
-                if (isResizing === 'right' || isResizing === 'corner') {
-                    setWidth(Math.max(minWidth, e.clientX - rect.left));
+                if (activeResize === 'right' || activeResize === 'corner') {
+                    const nextWidth = Math.max(minWidth, e.clientX - rect.left);
+                    setWidth(prev => (prev === nextWidth ? prev : nextWidth));
                 }
-                if (isResizing === 'bottom' || isResizing === 'corner') {
-                    setHeight(Math.max(minHeight, e.clientY - rect.top));
+                if (activeResize === 'bottom' || activeResize === 'corner') {
+                    const nextHeight = Math.max(minHeight, e.clientY - rect.top);
+                    setHeight(prev => (prev === nextHeight ? prev : nextHeight));
                 }
-            } else if (draggingId !== null && canvasRef.current) {
+            } else if (activeDraggingId !== null && canvasRef.current) {
                 hasDragged.current = true;
                 const rect = canvasRef.current.getBoundingClientRect();
                 const mouseXInCanvas = e.clientX - rect.left;
                 const mouseYInCanvas = e.clientY - rect.top;
+                const currentWidth = widthRef.current;
+                const currentHeight = heightRef.current;
+                const currentDragOffset = dragOffsetRef.current;
 
-                onItemsChange(prevItems => prevItems.map(item => {
-                    if (item.id === draggingId) {
-                        if (isOpening(item)) {
-                            return snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, width, height);
+                onItemsChange(prevItems => {
+                    let changed = false;
+                    const nextItems = prevItems.map(item => {
+                        if (item.id === activeDraggingId) {
+                            if (isOpening(item)) {
+                                const snapped = snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, currentWidth, currentHeight);
+                                if (
+                                    snapped.x === item.x &&
+                                    snapped.y === item.y &&
+                                    snapped.rotate === item.rotate &&
+                                    snapped.openingWall === item.openingWall
+                                ) {
+                                    return item;
+                                }
+                                changed = true;
+                                return snapped;
+                            }
+
+                            const newX = mouseXInCanvas - currentDragOffset.x;
+                            const newY = mouseYInCanvas - currentDragOffset.y;
+
+                            const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
+
+                            // Calculate valid range for x and y
+                            // The bounding box extends from x + width/2 - bboxW/2 to x + width/2 + bboxW/2
+                            // We want x + width/2 - bboxW/2 >= 0  => x >= (bboxW - width) / 2
+                            // We want x + width/2 + bboxW/2 <= roomWidth => x <= roomWidth - (width + bboxW) / 2
+
+                            const minX = (bboxW - item.width) / 2;
+                            const maxX = currentWidth - (item.width + bboxW) / 2;
+                            
+                            const minY = (bboxH - item.height) / 2;
+                            const maxY = currentHeight - (item.height + bboxH) / 2;
+
+                            // Clamp position within room bounds
+                            const clampedX = Math.max(minX, Math.min(newX, maxX));
+                            const clampedY = Math.max(minY, Math.min(newY, maxY));
+
+                            if (clampedX === item.x && clampedY === item.y) {
+                                return item;
+                            }
+                            changed = true;
+                            return {
+                                ...item,
+                                x: clampedX,
+                                y: clampedY
+                            };
                         }
-
-                        const newX = mouseXInCanvas - dragOffset.x;
-                        const newY = mouseYInCanvas - dragOffset.y;
-
-                        const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
-
-                        // Calculate valid range for x and y
-                        // The bounding box extends from x + width/2 - bboxW/2 to x + width/2 + bboxW/2
-                        // We want x + width/2 - bboxW/2 >= 0  => x >= (bboxW - width) / 2
-                        // We want x + width/2 + bboxW/2 <= roomWidth => x <= roomWidth - (width + bboxW) / 2
-
-                        const minX = (bboxW - item.width) / 2;
-                        const maxX = width - (item.width + bboxW) / 2;
-                        
-                        const minY = (bboxH - item.height) / 2;
-                        const maxY = height - (item.height + bboxH) / 2;
-
-                        // Clamp position within room bounds
-                        const clampedX = Math.max(minX, Math.min(newX, maxX));
-                        const clampedY = Math.max(minY, Math.min(newY, maxY));
-
-                        return {
-                            ...item,
-                            x: clampedX,
-                            y: clampedY
-                        };
-                    }
-                    return item;
-                }));
+                        return item;
+                    });
+                    return changed ? nextItems : prevItems;
+                });
             }
         };
 
         const handleMouseUp = () => {
-            const hadInteraction = (allowResize && isResizing !== null) || draggingId !== null;
+            const hadInteraction = (allowResize && isResizingRef.current !== null) || draggingIdRef.current !== null;
+            isResizingRef.current = null;
+            draggingIdRef.current = null;
             setIsResizing(null);
             setDraggingId(null);
             if (hadInteraction) {
@@ -187,26 +255,29 @@ export default function RoomCanvas({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [allowResize, isResizing, draggingId, dragOffset, onItemsChange, items, width, height, onLayoutInteractionEnd]);
+    }, [allowResize, isResizing, draggingId, onItemsChange, onLayoutInteractionEnd]);
 
     const displayWidth = fromBaseCm(width, unit);
     const displayHeight = fromBaseCm(height, unit);
-    const openingLabels = items
-        .filter(item => item.type === 'Door' || item.type === 'Window')
-        .map(item => {
-            const rawX = item.x + item.width / 2;
-            const rawY = item.y + item.height / 2;
-            const labelX = clamp(rawX, 44, width - 44);
-            const labelY = clamp(rawY, 20, height - 20);
-            return {
-                id: item.id,
-                label: item.type || 'Opening',
-                x: labelX,
-                y: labelY,
-                selected: item.id === selectedItemId,
-                isDoor: item.type === 'Door',
-            };
-        });
+    const openingLabels = useMemo(
+        () => items
+            .filter(item => item.type === 'Door' || item.type === 'Window')
+            .map(item => {
+                const rawX = item.x + item.width / 2;
+                const rawY = item.y + item.height / 2;
+                const labelX = clamp(rawX, 44, width - 44);
+                const labelY = clamp(rawY, 20, height - 20);
+                return {
+                    id: item.id,
+                    label: item.type || 'Opening',
+                    x: labelX,
+                    y: labelY,
+                    selected: item.id === selectedItemId,
+                    isDoor: item.type === 'Door',
+                };
+            }),
+        [items, selectedItemId, width, height]
+    );
     const canvasStyle = {
         width,
         height,
@@ -270,6 +341,7 @@ export default function RoomCanvas({
                                 <div
                                     onMouseDown={() => {
                                         onLayoutInteractionStart?.();
+                                        isResizingRef.current = 'right';
                                         setIsResizing('right');
                                     }}
                                     className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-slate-500/15 transition-colors"
@@ -279,6 +351,7 @@ export default function RoomCanvas({
                                 <div
                                     onMouseDown={() => {
                                         onLayoutInteractionStart?.();
+                                        isResizingRef.current = 'bottom';
                                         setIsResizing('bottom');
                                     }}
                                     className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-slate-500/15 transition-colors"
@@ -288,6 +361,7 @@ export default function RoomCanvas({
                                 <div
                                     onMouseDown={() => {
                                         onLayoutInteractionStart?.();
+                                        isResizingRef.current = 'corner';
                                         setIsResizing('corner');
                                     }}
                                     className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-slate-400 z-20"
