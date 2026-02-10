@@ -26,6 +26,12 @@ const formatDimension = (valueCm: number, unit: Unit): string => {
   return `${Number(converted.toFixed(decimals))}${unit}`;
 };
 
+const isInteractiveTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return !!target.closest('input, textarea, select, button, a, summary, [role="button"], [data-room-interactive]');
+};
+
 function RoomCard({
   room,
   unit,
@@ -60,7 +66,10 @@ function RoomCard({
     <article
       className={`surface-card room-card ${isActive ? 'room-card-active' : ''}`}
       data-ui-state-token={uiStateToken}
-      onMouseDown={() => onActivate(room.id)}
+      onClick={(event) => {
+        if (isInteractiveTarget(event.target)) return;
+        onActivate(room.id);
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         onDragOver();
@@ -93,15 +102,15 @@ function RoomCard({
             />
           ) : (
             <div className="flex items-center gap-2">
-              <h3 className="truncate text-base font-semibold text-slate-900">{room.name}</h3>
+              <h3 className="truncate text-base font-semibold room-card-title">{room.name}</h3>
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            <p className="text-xs text-slate-600">
+            <p className="text-xs room-card-dimensions">
               {formatDimension(room.roomWidthCm, unit)} x {formatDimension(room.roomHeightCm, unit)}
             </p>
             <button
-              className="ui-btn ui-btn-subtle min-h-0 px-1 py-0.5"
+              className="ui-btn ui-btn-subtle room-dimension-edit-btn"
               onClick={(event) => {
                 event.stopPropagation();
                 onEditDimensions(room.id);
@@ -112,10 +121,10 @@ function RoomCard({
               title="Edit room dimensions"
               aria-label={`Edit dimensions for ${room.name}`}
             >
-              <Pencil className="h-3 w-3" />
+              <Pencil className="room-dimension-edit-btn-icon" />
             </button>
           </div>
-          <p className="text-[11px] text-slate-500">{room.items.length} objects · {openingCount} openings</p>
+          <p className="text-[11px] room-card-meta">{room.items.length} objects · {openingCount} openings</p>
         </div>
         <div className="flex items-center gap-2">
           <button

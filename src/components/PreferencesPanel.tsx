@@ -41,7 +41,7 @@ export default function PreferencesPanel({
 
     return (
         <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-900">Preferences</h3>
+            <h3 className="text-lg font-semibold theme-text-heading">Preferences</h3>
             <div className="ui-field">
                 <label className="ui-label">Grid Spacing ({activeUnit})</label>
                 <input
@@ -60,10 +60,10 @@ export default function PreferencesPanel({
                         type="color"
                         value={preferences.gridColor ?? "#94a3b8"}
                         onChange={handleGridColorChange}
-                        className="h-10 w-14 p-1 border border-slate-300 rounded-lg bg-white"
+                        className="h-10 w-14 p-1 border rounded-lg pref-color-input"
                         title="Pick grid line color"
                     />
-                    <span className="text-xs text-slate-500">{preferences.gridColor ?? "#94a3b8"}</span>
+                    <span className="text-xs theme-text-subtle">{preferences.gridColor ?? "#94a3b8"}</span>
                 </div>
             </div>
             <div className="ui-field">
@@ -93,7 +93,7 @@ export default function PreferencesPanel({
                 </select>
             </div>
             <div className="ui-field">
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <label className="inline-flex items-center gap-2 text-sm theme-text-soft">
                     <input
                         type="checkbox"
                         checked={preferences.showDebugTelemetry}
@@ -103,10 +103,10 @@ export default function PreferencesPanel({
                 </label>
             </div>
             {(onSaveWorkspace || onExportWorkspace || onLoadWorkspace) && (
-                <div className="pt-3 border-t border-slate-200 space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Workspace</p>
+                <div className="pt-3 border-t theme-divider-border space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Workspace</p>
                     {autosaveStatusLabel && (
-                        <p className="text-xs text-slate-500">{autosaveStatusLabel}</p>
+                        <p className="text-xs theme-text-subtle">{autosaveStatusLabel}</p>
                     )}
                     {onSaveWorkspace && (
                         <button
@@ -135,7 +135,7 @@ export default function PreferencesPanel({
                 </div>
             )}
             {onResetSetup && (
-                <div className="pt-3 border-t border-slate-200 space-y-2">
+                <div className="pt-3 border-t theme-divider-border space-y-2">
                     <button
                         className="ui-btn ui-btn-secondary w-full"
                         onClick={onResetSetup}

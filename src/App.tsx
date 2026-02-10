@@ -167,6 +167,7 @@ function App() {
   });
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
+  const dimensionDraftUnitRef = useRef<Unit>(activeUnit);
   const activeRoom = useMemo(
     () => findRoom(workspace, workspace.activeRoomId),
     [workspace]
@@ -388,6 +389,44 @@ function App() {
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    const previousUnit = dimensionDraftUnitRef.current;
+    if (previousUnit === activeUnit) return;
+
+    setDimensionDraftByRoom((previous) => {
+      const roomIds = Object.keys(previous);
+      if (roomIds.length === 0) {
+        return previous;
+      }
+
+      const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+      const convertValue = (rawValue: string): string => {
+        const normalized = rawValue.trim();
+        if (normalized === '' || normalized === '-' || normalized === '.' || normalized === '-.') {
+          return rawValue;
+        }
+
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed)) return rawValue;
+        const valueInCm = toBaseCm(parsed, previousUnit);
+        const converted = fromBaseCm(valueInCm, activeUnit);
+        return Number(converted.toFixed(decimals)).toString();
+      };
+
+      const nextDrafts: Record<string, { width: string; height: string }> = {};
+      roomIds.forEach((roomId) => {
+        const draft = previous[roomId];
+        nextDrafts[roomId] = {
+          width: convertValue(draft.width),
+          height: convertValue(draft.height),
+        };
+      });
+      return nextDrafts;
+    });
+
+    dimensionDraftUnitRef.current = activeUnit;
+  }, [activeUnit]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
@@ -832,6 +871,12 @@ function App() {
     });
   }, []);
 
+  const cancelRoomDimensionEditor = useCallback((roomId: string) => {
+    setErrorMessage(null);
+    clearDimensionDraft(roomId);
+    setDimensionEditorRoomId((current) => (current === roomId ? null : current));
+  }, [clearDimensionDraft]);
+
   const completeRoomDimensions = useCallback((roomId: string, widthInput: string, heightInput: string) => {
     const widthValue = parseFloat(widthInput);
     const heightValue = parseFloat(heightInput);
@@ -1249,16 +1294,26 @@ function App() {
         {isActive && roomNeedsDimensions && (
           <div
             className="dimensions-overlay"
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={(event) => event.stopPropagation()}
+            onPointerDownCapture={(event) => event.stopPropagation()}
+            onClickCapture={(event) => event.stopPropagation()}
           >
-            <div
+            <form
               className="dimensions-overlay-card"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
+              onPointerDownCapture={(event) => event.stopPropagation()}
+              onClickCapture={(event) => event.stopPropagation()}
+              onSubmit={(event) => {
+                event.preventDefault();
+                completeRoomDimensions(room.id, dimensionDraft.width, dimensionDraft.height);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelRoomDimensionEditor(room.id);
+                }
+              }}
             >
-              <h4 className="text-lg font-semibold text-slate-900">Set Room Dimensions</h4>
-              <p className="text-sm text-slate-600">
+              <h4 className="text-lg font-semibold theme-text-heading">Set Room Dimensions</h4>
+              <p className="text-sm theme-text-muted">
                 Enter width and length before adding objects to this room.
               </p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1285,13 +1340,21 @@ function App() {
                   />
                 </div>
               </div>
-              <button
-                className="ui-btn ui-btn-primary w-full"
-                onClick={() => completeRoomDimensions(room.id, dimensionDraft.width, dimensionDraft.height)}
-              >
-                Save Dimensions
-              </button>
-            </div>
+              <div className="flex gap-2">
+                <button className="ui-btn ui-btn-primary w-full" type="submit">
+                  Save Dimensions
+                </button>
+                {room.setup.onboardingComplete && isDimensionsEditorOpen && (
+                  <button
+                    className="ui-btn ui-btn-ghost"
+                    type="button"
+                    onClick={() => cancelRoomDimensionEditor(room.id)}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
           </div>
         )}
       </div>
@@ -1306,11 +1369,11 @@ function App() {
         <div className="room-designer-canvas">{canvas}</div>
         <aside className="surface-card room-edit-rail" onClick={(event) => event.stopPropagation()}>
           <div className="room-edit-rail-header">
-            <h3 className="text-base font-semibold text-slate-900">Edit</h3>
+            <h3 className="text-base font-semibold theme-text-heading">Edit</h3>
           </div>
           {measureMode && (
             <div className="surface-card-muted px-3 py-2 mb-2">
-              <p className="text-xs text-slate-700">
+              <p className="text-xs theme-text-soft">
                 Measure mode: drag on the canvas to draw a measure. Hold <strong>Shift</strong> to move freely.
               </p>
             </div>
@@ -1327,15 +1390,15 @@ function App() {
             />
           ) : selectedMeasure ? (
             <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3">
-              <p className="text-xs text-slate-600">
+              <p className="text-xs theme-text-muted">
                 Hold <strong>Shift</strong> while dragging nodes for free movement.
               </p>
               <div className="surface-card-muted p-3 space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Measurement</p>
-                <p className="text-sm text-slate-800">
+                <p className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Measurement</p>
+                <p className="text-sm theme-text-strong">
                   Length: <strong>{Number((measureLength ?? 0).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1))}{activeUnit}</strong>
                 </p>
-                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <label className="inline-flex items-center gap-2 text-sm theme-text-soft">
                   <input
                     type="checkbox"
                     checked={selectedMeasure.includeInPdf}
@@ -1358,12 +1421,12 @@ function App() {
           ) : (
             <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5">
               {measureMode ? (
-                <div className="space-y-2 text-sm text-slate-600">
+                <div className="space-y-2 text-sm theme-text-muted">
                   <p>Drag on the canvas to draw a measure.</p>
                   <p>Hold <strong>Shift</strong> while dragging to move freely without snap/axis lock.</p>
                 </div>
               ) : (
-                <p className="text-sm text-slate-600">
+                <p className="text-sm theme-text-muted">
                   Select an object to edit, or enable ruler mode to create/edit measurements.
                 </p>
               )}
@@ -1374,7 +1437,7 @@ function App() {
     );
   }, [
     activeUnit,
-    clearDimensionDraft,
+    cancelRoomDimensionEditor,
     dimensionEditorRoomId,
     gridSpacingCm,
     handleLayoutInteractionEnd,
@@ -1439,19 +1502,20 @@ function App() {
     selectedMeasureByRoom,
     workspace.activeRoomId,
     workspace.preferences.gridColor,
+    workspace.preferences.gridSpacing,
     workspace.rooms,
   ]);
 
   if (!isHydrated) {
     return (
       <div className="min-h-screen app-shell flex items-center justify-center px-6">
-        <div className="surface-card p-6 text-slate-700">Loading your workspace...</div>
+        <div className="surface-card p-6 theme-text-soft">Loading your workspace...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen app-shell">
+    <div className="min-h-screen app-shell flex flex-col">
       <input
         ref={fileInputRef}
         type="file"
@@ -1463,7 +1527,7 @@ function App() {
         <div className="mx-auto max-w-[1600px] space-y-4">
           <div className="app-header-top">
             <div className="app-brand-block">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold theme-text-heading">Bedroom Layout Designer</h1>
               <p className="app-subtitle">Plan room size, openings, furniture, and measurements.</p>
             </div>
             <div className="app-header-actions">
@@ -1475,7 +1539,7 @@ function App() {
                 <summary className="ui-btn ui-btn-ghost list-none cursor-pointer">
                   {isExportingPdf ? 'Exporting...' : 'Export PDF'}
                 </summary>
-                <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
+                <div className="absolute right-0 z-20 mt-2 w-56 p-2 surface-popover">
                   <button
                     className="ui-btn ui-btn-subtle w-full justify-start"
                     onClick={handleExportActiveRoomPdf}
@@ -1499,12 +1563,12 @@ function App() {
           </div>
         </div>
       </header>
-      <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip">
+      <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip flex-1">
         {errorMessage && (
-          <p className="mx-auto mb-3 max-w-[1600px] text-sm text-rose-600">{errorMessage}</p>
+          <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-error">{errorMessage}</p>
         )}
         {infoMessage && (
-          <p className="mx-auto mb-3 max-w-[1600px] text-sm text-sky-700">{infoMessage}</p>
+          <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-info">{infoMessage}</p>
         )}
 
         <div className="mx-auto mb-3 max-w-[1600px] command-toolbar">
@@ -1694,10 +1758,10 @@ function App() {
         </div>
 
         {preferencesPanelOpen && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-900/35 backdrop-blur-[1px]">
+          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 modal-backdrop">
             <div className="modal-shell p-5 w-full max-w-md">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-slate-900">Workspace Preferences</h2>
+                <h2 className="text-lg font-semibold theme-text-heading">Workspace Preferences</h2>
                 <button
                   className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
                   onClick={() => setPreferencesPanelOpen(false)}
@@ -1714,13 +1778,52 @@ function App() {
                 onLoadWorkspace={() => fileInputRef.current?.click()}
                 autosaveStatusLabel={autosaveStatusLabel}
               />
-              <div className="mt-4 text-xs text-slate-500">
+              <div className="mt-4 text-xs theme-text-subtle">
                 Supported units: {UNIT_OPTIONS.join(', ')}
               </div>
             </div>
           </div>
         )}
+
       </main>
+      <footer className="mt-auto px-4 pb-2 sm:px-6 md:px-8">
+        <div className="mx-auto w-full max-w-[1600px] text-[11px] theme-text-subtle text-center">
+          <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <span>
+              Made by{' '}
+              <a
+                href="https://hamishburke.dev"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                Hamish
+              </a>
+            </span>
+            <span aria-hidden="true">•</span>
+            <span>
+              Open source on{' '}
+              <a
+                href="https://github.com/Slaymish/BedroomLayoutDesigner"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                GitHub
+              </a>
+            </span>
+            <span aria-hidden="true">•</span>
+            <a
+              href="https://buymeacoffee.com/hamishapps"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              Buy me a coffee
+            </a>
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }

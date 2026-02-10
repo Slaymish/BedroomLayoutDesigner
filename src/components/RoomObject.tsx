@@ -65,8 +65,8 @@ function RoomObject({
             <svg className="absolute overflow-visible pointer-events-none" style={{ left: 0, top: 0, width: '100%', height: '100%' }}>
                 <path 
                     d={`M ${hingeX} ${hingeY} L ${arcStartX} ${arcStartY} A ${width} ${width} 0 0 ${sweep} ${arcEndX} ${arcEndY} L ${hingeX} ${hingeY}`}
-                    fill="rgba(0,0,0,0.05)"
-                    stroke="black"
+                    fill="var(--door-swing-fill)"
+                    stroke="var(--door-swing-stroke)"
                     strokeWidth="1"
                     strokeDasharray="4 2"
                 />
@@ -76,7 +76,7 @@ function RoomObject({
                     y1={hingeY} 
                     x2={arcEndX} 
                     y2={arcEndY} 
-                    stroke="black" 
+                    stroke="var(--door-swing-stroke)" 
                     strokeWidth="2" 
                 />
             </svg>
@@ -89,10 +89,10 @@ function RoomObject({
         if (isBed) {
             return (
                 <div className="absolute inset-[8%] pointer-events-none">
-                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
-                    <div className="absolute left-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border border-slate-400/70 bg-slate-300/90" />
-                    <div className="absolute right-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border border-slate-400/70 bg-slate-300/90" />
-                    <div className="absolute left-[6%] right-[6%] top-[32%] bottom-[8%] rounded-sm border border-slate-300/80" />
+                    <div className="absolute inset-0 rounded-sm border room-object-detail-outline" />
+                    <div className="absolute left-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border room-object-detail-pillows" />
+                    <div className="absolute right-[6%] top-[6%] h-[20%] w-[38%] rounded-sm border room-object-detail-pillows" />
+                    <div className="absolute left-[6%] right-[6%] top-[32%] bottom-[8%] rounded-sm border room-object-detail-inner" />
                 </div>
             );
         }
@@ -100,11 +100,11 @@ function RoomObject({
         if (isCouch) {
             return (
                 <div className="absolute inset-[8%] pointer-events-none">
-                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
-                    <div className="absolute left-[6%] right-[6%] top-[6%] h-[16%] rounded-sm bg-slate-400/60" />
-                    <div className="absolute left-[10%] right-[10%] top-[30%] bottom-[8%] rounded-sm border border-slate-400/80" />
-                    <div className="absolute left-1/3 top-[30%] bottom-[8%] border-l border-slate-400/80" />
-                    <div className="absolute left-2/3 top-[30%] bottom-[8%] border-l border-slate-400/80" />
+                    <div className="absolute inset-0 rounded-sm border room-object-detail-outline" />
+                    <div className="absolute left-[6%] right-[6%] top-[6%] h-[16%] rounded-sm room-object-detail-fill-strong" />
+                    <div className="absolute left-[10%] right-[10%] top-[30%] bottom-[8%] rounded-sm border room-object-detail-inner" />
+                    <div className="absolute left-1/3 top-[30%] bottom-[8%] border-l room-object-detail-divider" />
+                    <div className="absolute left-2/3 top-[30%] bottom-[8%] border-l room-object-detail-divider" />
                 </div>
             );
         }
@@ -112,11 +112,11 @@ function RoomObject({
         if (isDesk) {
             return (
                 <div className="absolute inset-[8%] pointer-events-none">
-                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
-                    <div className="absolute left-[8%] right-[8%] top-[8%] h-[18%] rounded-sm bg-slate-300/90 border border-slate-400/80" />
-                    <div className="absolute left-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
-                    <div className="absolute right-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
-                    <div className="absolute right-[18%] top-[30%] h-[46%] w-[18%] rounded-sm border border-slate-400/80 bg-slate-200/80" />
+                    <div className="absolute inset-0 rounded-sm border room-object-detail-outline" />
+                    <div className="absolute left-[8%] right-[8%] top-[8%] h-[18%] rounded-sm border room-object-detail-tabletop" />
+                    <div className="absolute left-[10%] bottom-[8%] w-[10%] h-[24%] rounded-[2px] room-object-detail-leg" />
+                    <div className="absolute right-[10%] bottom-[8%] w-[10%] h-[24%] rounded-[2px] room-object-detail-leg" />
+                    <div className="absolute right-[18%] top-[30%] h-[46%] w-[18%] rounded-sm border room-object-detail-chair" />
                 </div>
             );
         }
@@ -124,10 +124,10 @@ function RoomObject({
         if (isBedsideTable) {
             return (
                 <div className="absolute inset-[10%] pointer-events-none">
-                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
-                    <div className="absolute left-[8%] right-[8%] top-[12%] h-[12%] rounded-sm bg-slate-300/90" />
-                    <div className="absolute left-[10%] right-[10%] top-[44%] border-t border-slate-400/80" />
-                    <div className="absolute left-[10%] right-[10%] top-[68%] border-t border-slate-400/80" />
+                    <div className="absolute inset-0 rounded-sm border room-object-detail-outline" />
+                    <div className="absolute left-[8%] right-[8%] top-[12%] h-[12%] rounded-sm room-object-detail-fill" />
+                    <div className="absolute left-[10%] right-[10%] top-[44%] border-t room-object-detail-divider" />
+                    <div className="absolute left-[10%] right-[10%] top-[68%] border-t room-object-detail-divider" />
                 </div>
             );
         }
@@ -139,9 +139,9 @@ function RoomObject({
         <div
             onMouseDown={onMouseDown}
             onClick={onMouseClick}
-            className={`absolute ring-1 rounded-sm cursor-move select-none flex items-center justify-center text-xs font-medium text-slate-800
-                ${isWindow ? 'bg-sky-100 ring-sky-400' : 'bg-slate-100 ring-slate-300'}
-                ${isSelected ? 'ring-2 ring-slate-500 shadow-md z-20' : ''}
+            className={`room-object absolute rounded-sm cursor-move select-none flex items-center justify-center text-xs font-medium
+                ${isDoor ? 'room-object-door' : isWindow ? 'room-object-window' : 'room-object-furniture'}
+                ${isSelected ? 'room-object-selected shadow-md z-20' : ''}
                 ${(isDoor || isWindow) ? 'overflow-visible' : 'overflow-hidden'}
             `}
             style={{
@@ -167,7 +167,7 @@ function RoomObject({
             )}
             {renderDoorSwing()}
             {isWindow && (
-                <div className="w-full h-1/3 bg-sky-300 absolute top-1/3 pointer-events-none" />
+                <div className="w-full h-1/3 absolute top-1/3 pointer-events-none room-object-window-pane" />
             )}
             {renderFurnitureDetail()}
             {showLabel && <span className="z-10 pointer-events-none">{label}</span>}

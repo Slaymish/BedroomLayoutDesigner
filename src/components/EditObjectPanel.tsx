@@ -147,7 +147,7 @@ export default function EditObjectPanel({
             onClick={(e) => e.stopPropagation()}
             className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3"
         >
-            <p className="text-xs text-slate-600">Hold Alt and drag on a number field to scrub values.</p>
+            <p className="text-xs theme-text-muted">Hold Alt and drag on a number field to scrub values.</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="ui-field">
                     <label className="ui-label">Width ({u})</label>
@@ -202,7 +202,7 @@ export default function EditObjectPanel({
             </div>
             {item.type === 'Door' && (
                 <div className="surface-card-muted p-3 space-y-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Door Swing</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Door Swing</h4>
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <div className="ui-field">
                             <label className="ui-label">Direction</label>

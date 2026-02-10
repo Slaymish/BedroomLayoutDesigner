@@ -40,22 +40,61 @@
   gap: 0.5rem;
 }
 
+.app-message-error {
+  color: var(--danger-text);
+}
+
+.app-message-info {
+  color: var(--info-text);
+}
+
 .surface-card {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
   background: var(--surface-card);
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05);
+  box-shadow: var(--shadow-soft);
 }
 
 .surface-card-muted {
   border: 1px solid var(--border-subtle);
   border-radius: calc(var(--radius-card) - 2px);
-  background: color-mix(in srgb, var(--surface-soft) 92%, white 8%);
+  background: var(--surface-muted);
+}
+
+.surface-popover {
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: var(--popover-bg);
+  box-shadow: var(--popover-shadow);
 }
 
 .panel-shell {
   width: 100%;
   min-width: 0;
+}
+
+.theme-text-heading {
+  color: var(--text-heading);
+}
+
+.theme-text-strong {
+  color: var(--text-strong);
+}
+
+.theme-text-soft {
+  color: var(--text-soft);
+}
+
+.theme-text-muted {
+  color: var(--text-muted);
+}
+
+.theme-text-subtle {
+  color: var(--text-subtle);
+}
+
+.theme-divider-border {
+  border-color: var(--border-divider);
 }
 
 .ui-field {
@@ -76,7 +115,7 @@
   min-height: 2.35rem;
   border-radius: 0.7rem;
   border: 1px solid var(--border-subtle);
-  background: #fff;
+  background: var(--input-bg);
   color: var(--text-strong);
   padding: 0.5rem 0.72rem;
   font-size: 0.9rem;
@@ -91,8 +130,8 @@
 .ui-input:focus,
 .ui-select:focus {
   outline: none;
-  border-color: #7aa9aa;
-  box-shadow: 0 0 0 3px rgb(122 169 170 / 0.2);
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .ui-btn {
@@ -112,54 +151,63 @@
 
 .ui-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgb(122 169 170 / 0.33);
+  box-shadow: 0 0 0 3px var(--focus-ring-strong);
+}
+
+.ui-btn:disabled {
+  cursor: not-allowed;
 }
 
 .ui-btn-primary {
-  border-color: #0d6368;
-  background: #0e6a6f;
-  color: #fff;
+  border-color: var(--btn-primary-border);
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
 }
 
 .ui-btn-primary:hover {
-  background: #0d6165;
+  background: var(--btn-primary-bg-hover);
 }
 
 .ui-btn-secondary {
-  background: #dcefeb;
-  color: #154447;
-  border-color: #b9d8d3;
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border-color: var(--btn-secondary-border);
 }
 
 .ui-btn-secondary:hover {
-  background: #cfe6e1;
+  background: var(--btn-secondary-bg-hover);
 }
 
 .ui-btn-ghost {
-  border-color: var(--border-subtle);
-  color: #2f5357;
-  background: #fff;
+  border-color: var(--btn-ghost-border);
+  color: var(--btn-ghost-text);
+  background: var(--btn-ghost-bg);
 }
 
 .ui-btn-ghost:hover {
-  background: #f3fbfa;
-  border-color: var(--border-strong);
+  background: var(--btn-ghost-bg-hover);
+  border-color: var(--btn-ghost-border-hover);
 }
 
 .ui-btn-subtle {
-  color: #3a5e62;
-  background: #f1f8f6;
-  border-color: var(--border-subtle);
+  color: var(--btn-subtle-text);
+  background: var(--btn-subtle-bg);
+  border-color: var(--btn-subtle-border);
 }
 
 .ui-btn-subtle:hover {
-  background: #e6f3f1;
+  background: var(--btn-subtle-bg-hover);
+}
+
+.pref-color-input {
+  border-color: var(--pref-color-input-border);
+  background: var(--pref-color-input-bg);
 }
 
 .workspace-card {
   border: 1px solid var(--border-subtle);
   border-radius: calc(var(--radius-card) + 2px);
-  background: rgb(255 255 255 / 0.82);
+  background: var(--workspace-card-bg);
   box-shadow: var(--shadow-card);
   padding: 0.75rem;
   contain: layout paint style;
@@ -179,7 +227,7 @@
 .room-workspace-shell {
   border: 1px solid var(--border-subtle);
   border-radius: calc(var(--radius-card) + 2px);
-  background: rgb(255 255 255 / 0.82);
+  background: var(--workspace-shell-bg);
   box-shadow: var(--shadow-card);
   padding: 0.75rem;
   contain: layout paint style;
@@ -194,18 +242,42 @@
 .room-card {
   width: 100%;
   min-width: 0;
-  border-color: #ccdcdb;
+  border-color: var(--room-card-border);
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
   padding: 0.85rem;
-  background: #fff;
+  background: var(--room-card-bg);
   content-visibility: auto;
   contain: layout paint style;
   contain-intrinsic-size: 780px;
 }
 
 .room-card-active {
-  border-color: #4f7d7f;
-  box-shadow: 0 0 0 1px rgb(79 125 127 / 0.3);
+  border-color: var(--room-card-active-border);
+  box-shadow: 0 0 0 1px var(--room-card-active-ring);
+}
+
+.room-card-title {
+  color: var(--text-heading);
+}
+
+.room-card-dimensions {
+  color: var(--text-muted);
+}
+
+.room-card-meta {
+  color: var(--text-subtle);
+}
+
+.room-dimension-edit-btn {
+  min-height: 1.55rem;
+  width: 1.55rem;
+  padding: 0;
+  border-radius: 0.5rem;
+}
+
+.room-dimension-edit-btn-icon {
+  width: 0.72rem;
+  height: 0.72rem;
 }
 
 .room-card-header {
@@ -260,15 +332,15 @@
 }
 
 .autosave-status-chip-pending {
-  color: #8a3e12;
-  border-color: rgb(217 119 6 / 0.45) !important;
-  background: #fff9ee !important;
+  color: var(--pending-text);
+  border-color: var(--pending-border) !important;
+  background: var(--pending-bg) !important;
 }
 
 .toolbar-divider {
   width: 1px;
   height: 1.8rem;
-  background: rgb(141 181 179 / 0.42);
+  background: var(--toolbar-divider);
   margin: 0 0.08rem;
 }
 
@@ -279,9 +351,9 @@
 }
 
 .toolbar-icon-btn-active {
-  background: #d9ecf2;
-  border-color: #86abc3;
-  color: #0a4368;
+  background: var(--btn-active-bg);
+  border-color: var(--btn-active-border);
+  color: var(--btn-active-text);
 }
 
 .toolbar-icon-svg {
@@ -314,8 +386,8 @@
   width: 16rem;
   border: 1px solid var(--border-subtle);
   border-radius: 0.7rem;
-  background: #fff;
-  box-shadow: 0 8px 24px -18px rgb(15 23 42 / 0.45);
+  background: var(--popover-bg);
+  box-shadow: var(--popover-shadow);
   padding: 0.6rem;
 }
 
@@ -324,10 +396,10 @@
 }
 
 .perf-summary {
-  border: 1px solid rgb(141 181 179 / 0.3);
+  border: 1px solid var(--command-chip-border);
   border-radius: 999px;
   padding: 0.18rem 0.5rem;
-  background: #fff;
+  background: var(--command-chip-bg);
   cursor: pointer;
   user-select: none;
 }
@@ -339,8 +411,8 @@
   width: 15.5rem;
   border: 1px solid var(--border-subtle);
   border-radius: 0.68rem;
-  background: #fff;
-  box-shadow: 0 8px 24px -18px rgb(15 23 42 / 0.45);
+  background: var(--popover-bg);
+  box-shadow: var(--popover-shadow);
   padding: 0.52rem 0.58rem;
   z-index: 18;
 }
@@ -349,13 +421,13 @@
   margin: 0;
   font-size: 0.71rem;
   font-weight: 700;
-  color: #385a5e;
+  color: var(--text-soft);
 }
 
 .perf-row {
   margin: 0.18rem 0 0;
   font-size: 0.72rem;
-  color: #4f6f72;
+  color: var(--text-muted);
 }
 
 .room-designer-layout {
@@ -383,8 +455,43 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.1rem 0.25rem 0.45rem;
-  border-bottom: 1px solid rgb(203 213 225 / 0.7);
+  border-bottom: 1px solid var(--border-divider);
   margin-bottom: 0.3rem;
+}
+
+.room-canvas-surface {
+  background: var(--canvas-bg);
+  border: 1px solid var(--canvas-ring);
+}
+
+.room-canvas-size-chip {
+  background: var(--canvas-size-chip-bg);
+  border-color: var(--canvas-size-chip-border);
+  color: var(--canvas-size-chip-text);
+}
+
+.room-opening-chip-door {
+  background: var(--opening-door-bg);
+  color: var(--opening-door-text);
+  border-color: var(--opening-door-border);
+}
+
+.room-opening-chip-window {
+  background: var(--opening-window-bg);
+  color: var(--opening-window-text);
+  border-color: var(--opening-window-border);
+}
+
+.room-opening-chip-selected {
+  box-shadow: 0 0 0 1px var(--opening-chip-selected-ring);
+}
+
+.room-canvas-resize-edge:hover {
+  background: var(--resize-handle-hover);
+}
+
+.room-canvas-resize-corner {
+  background: var(--resize-corner-bg);
 }
 
 .dimensions-overlay {
@@ -395,7 +502,7 @@
   align-items: center;
   justify-content: center;
   padding: 0.9rem;
-  background: rgb(15 23 42 / 0.36);
+  background: var(--overlay-bg);
   backdrop-filter: blur(2px);
 }
 
@@ -403,8 +510,8 @@
   width: min(28rem, calc(100% - 1rem));
   border: 1px solid var(--border-subtle);
   border-radius: 0.9rem;
-  background: #fff;
-  box-shadow: 0 16px 32px -22px rgb(15 23 42 / 0.55);
+  background: var(--surface-raised);
+  box-shadow: var(--popover-shadow);
   padding: 0.9rem;
   display: grid;
   gap: 0.7rem;
@@ -418,11 +525,84 @@ details > summary {
   list-style: none;
 }
 
+.modal-backdrop {
+  background: var(--modal-backdrop-bg);
+  backdrop-filter: blur(1px);
+}
+
 .modal-shell {
   border: 1px solid var(--border-subtle);
   border-radius: calc(var(--radius-card) + 2px);
-  background: #fff;
-  box-shadow: 0 12px 34px -20px rgb(15 23 42 / 0.3);
+  background: var(--modal-bg);
+  box-shadow: var(--modal-shadow);
+}
+
+.room-object {
+  color: var(--room-object-text);
+  border: 1px solid var(--room-object-border);
+}
+
+.room-object-furniture {
+  background: var(--room-object-bg);
+}
+
+.room-object-window {
+  background: var(--room-window-bg);
+  border-color: var(--room-window-border);
+}
+
+.room-object-door {
+  background: var(--room-door-bg);
+  border-color: var(--room-door-border);
+}
+
+.room-object-selected {
+  border-width: 2px;
+  border-color: var(--room-object-selected-border);
+  box-shadow: 0 0 0 1px var(--room-object-selected-ring);
+}
+
+.room-object-window-pane {
+  background: var(--room-window-pane);
+}
+
+.room-object-detail-outline {
+  border-color: var(--room-detail-border);
+}
+
+.room-object-detail-pillows {
+  border-color: var(--room-detail-inner-border);
+  background: var(--room-detail-fill);
+}
+
+.room-object-detail-inner {
+  border-color: var(--room-detail-inner-border);
+}
+
+.room-object-detail-fill {
+  background: var(--room-detail-fill);
+}
+
+.room-object-detail-fill-strong {
+  background: var(--room-detail-fill-strong);
+}
+
+.room-object-detail-divider {
+  border-color: var(--room-detail-inner-border);
+}
+
+.room-object-detail-tabletop {
+  background: var(--room-detail-fill);
+  border-color: var(--room-detail-inner-border);
+}
+
+.room-object-detail-leg {
+  background: var(--room-detail-fill-strong);
+}
+
+.room-object-detail-chair {
+  border-color: var(--room-detail-inner-border);
+  background: var(--room-detail-chair-bg);
 }
 
 @media (max-width: 1024px) {
@@ -463,5 +643,10 @@ details > summary {
     right: auto;
     left: 0;
     width: min(18rem, calc(100vw - 2rem));
+  }
+
+  .room-dimension-edit-btn {
+    min-height: 1.45rem;
+    width: 1.45rem;
   }
 }

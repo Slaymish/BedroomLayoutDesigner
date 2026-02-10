@@ -121,7 +121,7 @@ const applyMeasureConstraint = (
   roomWidthCm: number,
   roomHeightCm: number
 ): Point => {
-  let constrained: Point = {
+  const constrained: Point = {
     x: clamp(raw.x, 0, roomWidthCm),
     y: clamp(raw.y, 0, roomHeightCm),
   };
@@ -761,7 +761,7 @@ function RoomCanvasComponent({
       width,
       height,
       '--grid-size': `${Math.max(2, gridSpacingCm).toFixed(2)}px`,
-      '--grid-color': gridColor ?? 'rgb(148 163 184 / 0.32)',
+      '--grid-color': gridColor ?? 'var(--grid-line-color)',
     } as CSSProperties & Record<'--grid-size' | '--grid-color', string>),
     [gridColor, gridSpacingCm, height, width]
   );
@@ -783,13 +783,13 @@ function RoomCanvasComponent({
             }}
             data-floorplan-export-room={exportRoomId}
             data-floorplan-export={exportRoomId ? 'true' : undefined}
-            className="relative bg-white bg-grid rounded-xl shadow-sm ring-1 ring-slate-300 overflow-hidden"
+            className="room-canvas-surface relative bg-grid rounded-xl shadow-sm overflow-hidden"
             style={canvasStyle}
           >
-            <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 bg-white/86 rounded-md border border-slate-200 shadow-sm pointer-events-none select-none text-slate-600">
+            <div className="room-canvas-size-chip absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none">
               {Math.round(displayWidth * 100) / 100}{unit}
             </div>
-            <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 bg-white/86 rounded-md border border-slate-200 shadow-sm pointer-events-none select-none text-slate-600 origin-center -rotate-90">
+            <div className="room-canvas-size-chip absolute left-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none origin-center -rotate-90">
               {Math.round(displayHeight * 100) / 100}{unit}
             </div>
 
@@ -822,6 +822,9 @@ function RoomCanvasComponent({
                 const selected = selectedMeasureId === measure.id;
                 const midpointX = (measure.x1 + measure.x2) / 2;
                 const midpointY = (measure.y1 + measure.y2) / 2;
+                const defaultLineColor = isExportingPdf ? '#0f172a' : 'var(--measure-line)';
+                const selectedLineColor = isExportingPdf ? '#1d4ed8' : 'var(--measure-line-selected)';
+                const labelColor = isExportingPdf ? '#334155' : 'var(--measure-label)';
 
                 return (
                   <g key={`measure-${measure.id}`}>
@@ -830,7 +833,7 @@ function RoomCanvasComponent({
                       y1={measure.y1}
                       x2={measure.x2}
                       y2={measure.y2}
-                      stroke={selected ? '#1d4ed8' : '#0f172a'}
+                      stroke={selected ? selectedLineColor : defaultLineColor}
                       strokeWidth={selected ? 2.2 : 1.8}
                       strokeDasharray={measure.includeInPdf ? '0' : '5 3'}
                       className={isExportingPdf ? '' : 'cursor-pointer pointer-events-auto'}
@@ -861,7 +864,7 @@ function RoomCanvasComponent({
                       x={midpointX}
                       y={midpointY - 6}
                       fontSize="10"
-                      fill={selected ? '#1d4ed8' : '#334155'}
+                      fill={selected ? selectedLineColor : labelColor}
                       textAnchor="middle"
                       className="pointer-events-none select-none"
                     >
@@ -873,7 +876,7 @@ function RoomCanvasComponent({
                           cx={measure.x1}
                           cy={measure.y1}
                           r={4.5}
-                          fill={selected ? '#1d4ed8' : '#334155'}
+                          fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'start')}
                         />
@@ -881,7 +884,7 @@ function RoomCanvasComponent({
                           cx={measure.x2}
                           cy={measure.y2}
                           r={4.5}
-                          fill={selected ? '#1d4ed8' : '#334155'}
+                          fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'end')}
                         />
@@ -897,7 +900,7 @@ function RoomCanvasComponent({
                   y1={draftMeasure.y1}
                   x2={draftMeasure.x2}
                   y2={draftMeasure.y2}
-                  stroke="#2563eb"
+                  stroke="var(--measure-draft-line)"
                   strokeWidth={2}
                   strokeDasharray="4 3"
                 />
@@ -907,10 +910,9 @@ function RoomCanvasComponent({
             {openingLabels.map((label) => (
               <div
                 key={`opening-label-${label.id}`}
-                className={`absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border shadow-sm
-                ${label.isDoor ? 'bg-white text-slate-700 border-slate-300' : 'bg-sky-50 text-sky-800 border-sky-300'}
-                ${label.selected ? 'ring-1 ring-slate-500' : ''}
-              `}
+                className={`room-opening-chip absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border shadow-sm ${
+                  label.isDoor ? 'room-opening-chip-door' : 'room-opening-chip-window'
+                } ${label.selected ? 'room-opening-chip-selected' : ''}`}
                 style={{ left: label.x, top: label.y }}
               >
                 {label.label}
@@ -928,7 +930,7 @@ function RoomCanvasComponent({
                     isResizingRef.current = 'right';
                     setIsResizing('right');
                   }}
-                  className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 hover:bg-slate-500/15 transition-colors"
+                  className="room-canvas-resize-edge absolute right-0 top-0 bottom-0 w-2 cursor-col-resize z-10 transition-colors"
                 />
 
                 <div
@@ -940,7 +942,7 @@ function RoomCanvasComponent({
                     isResizingRef.current = 'bottom';
                     setIsResizing('bottom');
                   }}
-                  className="absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 hover:bg-slate-500/15 transition-colors"
+                  className="room-canvas-resize-edge absolute left-0 right-0 bottom-0 h-2 cursor-row-resize z-10 transition-colors"
                 />
 
                 <div
@@ -952,7 +954,7 @@ function RoomCanvasComponent({
                     isResizingRef.current = 'corner';
                     setIsResizing('corner');
                   }}
-                  className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize bg-slate-400 z-20"
+                  className="room-canvas-resize-corner absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize z-20"
                 />
               </>
             )}
