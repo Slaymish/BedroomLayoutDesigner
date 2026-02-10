@@ -817,7 +817,19 @@ function RoomCanvasComponent({
               />
             ))}
 
-            <svg className="absolute inset-0 h-full w-full pointer-events-none">
+            {openingLabels.map((label) => (
+              <div
+                key={`opening-label-${label.id}`}
+                className={`room-opening-chip absolute z-10 pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border shadow-sm ${
+                  label.isDoor ? 'room-opening-chip-door' : 'room-opening-chip-window'
+                } ${label.selected ? 'room-opening-chip-selected' : ''}`}
+                style={{ left: label.x, top: label.y }}
+              >
+                {label.label}
+              </div>
+            ))}
+
+            <svg className="absolute inset-0 z-20 h-full w-full pointer-events-none">
               {displayedMeasures.map((measure) => {
                 const dx = measure.x2 - measure.x1;
                 const dy = measure.y2 - measure.y1;
@@ -826,9 +838,12 @@ function RoomCanvasComponent({
                 const selected = selectedMeasureId === measure.id;
                 const midpointX = (measure.x1 + measure.x2) / 2;
                 const midpointY = (measure.y1 + measure.y2) / 2;
+                const labelX = clamp(midpointX, 22, width - 22);
+                const labelY = clamp(midpointY - 6, 12, height - 6);
                 const defaultLineColor = isExportingPdf ? '#0f172a' : 'var(--measure-line)';
                 const selectedLineColor = isExportingPdf ? '#1d4ed8' : 'var(--measure-line-selected)';
                 const labelColor = isExportingPdf ? '#334155' : 'var(--measure-label)';
+                const labelHalo = isExportingPdf ? '#ffffff' : 'var(--canvas-bg)';
 
                 return (
                   <g key={`measure-${measure.id}`}>
@@ -847,6 +862,10 @@ function RoomCanvasComponent({
                         onEditItem(null);
                         onSelectMeasure?.(measure.id);
                       }}
+                      onClick={(event) => {
+                        if (isExportingPdf) return;
+                        event.stopPropagation();
+                      }}
                     />
                     {!isExportingPdf && (
                       <line
@@ -862,13 +881,21 @@ function RoomCanvasComponent({
                           onEditItem(null);
                           onSelectMeasure?.(measure.id);
                         }}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                        }}
                       />
                     )}
                     <text
-                      x={midpointX}
-                      y={midpointY - 6}
+                      x={labelX}
+                      y={labelY}
                       fontSize="10"
                       fill={selected ? selectedLineColor : labelColor}
+                      stroke={labelHalo}
+                      strokeWidth="3"
+                      paintOrder="stroke fill"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       textAnchor="middle"
                       className="pointer-events-none select-none"
                     >
@@ -883,6 +910,9 @@ function RoomCanvasComponent({
                           fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'start')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
                         />
                         <circle
                           cx={measure.x2}
@@ -891,6 +921,9 @@ function RoomCanvasComponent({
                           fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'end')}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
                         />
                       </>
                     )}
@@ -910,18 +943,6 @@ function RoomCanvasComponent({
                 />
               )}
             </svg>
-
-            {openingLabels.map((label) => (
-              <div
-                key={`opening-label-${label.id}`}
-                className={`room-opening-chip absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 rounded-full px-2.5 py-0.5 text-[10px] font-semibold border shadow-sm ${
-                  label.isDoor ? 'room-opening-chip-door' : 'room-opening-chip-window'
-                } ${label.selected ? 'room-opening-chip-selected' : ''}`}
-                style={{ left: label.x, top: label.y }}
-              >
-                {label.label}
-              </div>
-            ))}
 
             {allowResize && !measureMode && (
               <>
