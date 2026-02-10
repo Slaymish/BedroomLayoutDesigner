@@ -5,17 +5,19 @@ import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
 import RoomWorkspace from './components/RoomWorkspace';
 import {
-  AppWindow,
   Archive,
   BedDouble,
+  Grid2X2,
+  CopyPlus,
   DoorOpen,
+  HousePlus,
   LampDesk,
+  Monitor,
   Plus,
   Redo2,
   Ruler,
   Sofa,
   Square,
-  Table2,
   Undo2,
 } from 'lucide-react';
 import type { LayoutInteractionTelemetry, MeasureLine, RoomDesign, RoomItem, WorkspaceState } from './types';
@@ -116,11 +118,11 @@ const renderPresetIcon = (type: string) => {
   const normalized = type.trim().toLowerCase();
   if (normalized === 'bed') return <BedDouble className={iconClassName} />;
   if (normalized === 'wardrobe') return <Archive className={iconClassName} />;
-  if (normalized === 'desk') return <Table2 className={iconClassName} />;
+  if (normalized === 'desk') return <Monitor className={iconClassName} />;
   if (normalized === 'couch') return <Sofa className={iconClassName} />;
   if (normalized === 'bedside table') return <LampDesk className={iconClassName} />;
   if (normalized === 'door') return <DoorOpen className={iconClassName} />;
-  if (normalized === 'window') return <AppWindow className={iconClassName} />;
+  if (normalized === 'window') return <Grid2X2 className={iconClassName} />;
   return <Square className={iconClassName} />;
 };
 
@@ -141,6 +143,7 @@ function App() {
   const [measureMode, setMeasureMode] = useState(false);
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
   const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
+  const [dimensionEditorRoomId, setDimensionEditorRoomId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bedPopoverRef = useRef<HTMLDetailsElement>(null);
@@ -164,8 +167,11 @@ function App() {
     () => findRoom(workspace, workspace.activeRoomId),
     [workspace]
   );
-  const canEditActiveRoom = !!activeRoom?.setup.onboardingComplete;
-  const canAddObjectsToActiveRoom = !!activeRoom && canEditActiveRoom;
+  const activeRoomNeedsDimensions = !!activeRoom && (
+    !activeRoom.setup.onboardingComplete || dimensionEditorRoomId === activeRoom.id
+  );
+  const canEditActiveRoom = !!activeRoom && !activeRoomNeedsDimensions;
+  const canAddObjectsToActiveRoom = canEditActiveRoom;
 
   const gridSpacingCm = useMemo(
     () => toBaseCm(workspace.preferences.gridSpacing, activeUnit),
@@ -831,7 +837,28 @@ function App() {
 
     setErrorMessage(null);
     clearDimensionDraft(roomId);
+    setDimensionEditorRoomId((current) => (current === roomId ? null : current));
   }, [activeUnit, clearDimensionDraft, updateRoom]);
+
+  const openRoomDimensionEditor = useCallback((roomId: string) => {
+    const room = workspaceRef.current.rooms.find((candidate) => candidate.id === roomId);
+    if (!room) return;
+
+    const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+    const width = Number(fromBaseCm(room.roomWidthCm, activeUnit).toFixed(decimals)).toString();
+    const height = Number(fromBaseCm(room.roomHeightCm, activeUnit).toFixed(decimals)).toString();
+
+    setDimensionDraftByRoom((previous) => ({
+      ...previous,
+      [roomId]: { width, height },
+    }));
+    setErrorMessage(null);
+    setMeasureMode(false);
+    setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
+    setRoomEditingItem(roomId, null);
+    setActiveRoom(roomId);
+    setDimensionEditorRoomId(roomId);
+  }, [activeUnit, setActiveRoom, setRoomEditingItem]);
 
   const handleAddRoom = () => {
     updateWorkspace((current) => {
@@ -867,6 +894,7 @@ function App() {
 
   const handleActivateRoom = useCallback((roomId: string) => {
     setErrorMessage(null);
+    setDimensionEditorRoomId((current) => (current === roomId ? current : null));
     setActiveRoom(roomId);
   }, [setActiveRoom]);
 
@@ -903,6 +931,7 @@ function App() {
       return next;
     });
     clearDimensionDraft(roomId);
+    setDimensionEditorRoomId((current) => (current === roomId ? null : current));
   }, [clearDimensionDraft, updateWorkspace, workspace.rooms]);
 
   const handleReorderRooms = useCallback((sourceRoomId: string, targetRoomId: string) => {
@@ -924,6 +953,7 @@ function App() {
     setHistoryFuture([]);
     setSelectedMeasureByRoom({});
     setDimensionDraftByRoom({});
+    setDimensionEditorRoomId(null);
     interactionStartSnapshotRef.current = null;
     setErrorMessage(null);
     setInfoMessage(null);
@@ -956,9 +986,9 @@ function App() {
   }, [loadExportDependencies]);
 
   const handleAddObjectToActiveRoom = useCallback((widthCm: number, heightCm: number, type: string) => {
-    if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
+    if (!activeRoom || !activeRoom.setup.onboardingComplete || dimensionEditorRoomId === activeRoom.id) return;
     addItemToRoom(activeRoom.id, widthCm, heightCm, type);
-  }, [activeRoom, addItemToRoom]);
+  }, [activeRoom, addItemToRoom, dimensionEditorRoomId]);
 
   const handleQuickAddPreset = useCallback((preset: ObjectPreset) => {
     handleAddObjectToActiveRoom(preset.widthCm, preset.heightCm, preset.type);
@@ -1109,6 +1139,7 @@ function App() {
       setHistoryFuture([]);
       setSelectedMeasureByRoom({});
       setDimensionDraftByRoom({});
+      setDimensionEditorRoomId(null);
       interactionStartSnapshotRef.current = null;
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
@@ -1148,7 +1179,8 @@ function App() {
           activeUnit
         )
       : null;
-    const roomNeedsDimensions = !room.setup.onboardingComplete;
+    const isDimensionsEditorOpen = dimensionEditorRoomId === room.id;
+    const roomNeedsDimensions = !room.setup.onboardingComplete || isDimensionsEditorOpen;
     const defaultWidth = Number(fromBaseCm(room.roomWidthCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
     const defaultHeight = Number(fromBaseCm(room.roomHeightCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
     const dimensionDraft = dimensionDraftByRoom[room.id] ?? { width: defaultWidth, height: defaultHeight };
@@ -1170,7 +1202,7 @@ function App() {
           onLayoutInteractionEnd={handleLayoutInteractionEnd}
           onLayoutTelemetry={handleLayoutTelemetry}
           exportRoomId={room.id}
-          allowResize={isActive && !measureMode && !roomNeedsDimensions}
+          allowResize={false}
           measures={room.measures}
           onMeasuresChange={(update) => handleRoomMeasuresChange(room.id, update)}
           measureMode={measureMode && isActive && !roomNeedsDimensions}
@@ -1179,8 +1211,16 @@ function App() {
           isExportingPdf={isExportingPdf}
         />
         {isActive && roomNeedsDimensions && (
-          <div className="dimensions-overlay" onClick={(event) => event.stopPropagation()}>
-            <div className="dimensions-overlay-card">
+          <div
+            className="dimensions-overlay"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div
+              className="dimensions-overlay-card"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
+            >
               <h4 className="text-lg font-semibold text-slate-900">Set Room Dimensions</h4>
               <p className="text-sm text-slate-600">
                 Enter width and length before adding objects to this room.
@@ -1215,6 +1255,27 @@ function App() {
               >
                 Save Dimensions
               </button>
+              {room.setup.onboardingComplete && isDimensionsEditorOpen && (
+                <button
+                  type="button"
+                  className="ui-btn ui-btn-secondary w-full"
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    clearDimensionDraft(room.id);
+                    setErrorMessage(null);
+                    setDimensionEditorRoomId(null);
+                  }}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    clearDimensionDraft(room.id);
+                    setErrorMessage(null);
+                    setDimensionEditorRoomId(null);
+                  }}
+                >
+                  Cancel
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1232,6 +1293,13 @@ function App() {
           <div className="room-edit-rail-header">
             <h3 className="text-base font-semibold text-slate-900">Edit</h3>
           </div>
+          {measureMode && (
+            <div className="surface-card-muted px-3 py-2 mb-2">
+              <p className="text-xs text-slate-700">
+                Measure mode: drag on the canvas to draw a measure. Hold <strong>Shift</strong> to move freely.
+              </p>
+            </div>
+          )}
           {editingItem ? (
             <EditObjectPanel
               item={editingItem}
@@ -1274,9 +1342,16 @@ function App() {
             </div>
           ) : (
             <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5">
-              <p className="text-sm text-slate-600">
-                Select an object to edit, or enable ruler mode to create/edit measurements.
-              </p>
+              {measureMode ? (
+                <div className="space-y-2 text-sm text-slate-600">
+                  <p>Drag on the canvas to draw a measure.</p>
+                  <p>Hold <strong>Shift</strong> while dragging to move freely without snap/axis lock.</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600">
+                  Select an object to edit, or enable ruler mode to create/edit measurements.
+                </p>
+              )}
             </div>
           )}
         </aside>
@@ -1284,6 +1359,7 @@ function App() {
     );
   }, [
     activeUnit,
+    dimensionEditorRoomId,
     gridSpacingCm,
     handleLayoutInteractionEnd,
     handleLayoutInteractionStart,
@@ -1307,9 +1383,7 @@ function App() {
   ]);
 
   const renderRoomContentRef = useRef(renderRoomContent);
-  useEffect(() => {
-    renderRoomContentRef.current = renderRoomContent;
-  }, [renderRoomContent]);
+  renderRoomContentRef.current = renderRoomContent;
 
   const renderRoomContentStable = useCallback((room: RoomDesign, isActive: boolean) => {
     return renderRoomContentRef.current(room, isActive);
@@ -1319,7 +1393,8 @@ function App() {
     const globalVisualToken = [
       activeUnit,
       workspace.preferences.gridColor || '',
-      gridSpacingCm.toFixed(3),
+      String(workspace.preferences.gridSpacing),
+      String(gridSpacingCm),
       isExportingPdf ? '1' : '0',
     ].join('|');
 
@@ -1333,12 +1408,14 @@ function App() {
         isActive ? (measureMode ? 'measure-on' : 'measure-off') : 'na',
         isActive ? String(selectedMeasureByRoom[room.id] ?? 'none') : 'na',
         room.setup.onboardingComplete ? 'ready' : 'needs-dimensions',
+        dimensionEditorRoomId === room.id ? 'dimension-editor-open' : 'dimension-editor-closed',
         roomDraft ? `${roomDraft.width}:${roomDraft.height}` : 'no-draft',
       ].join('|');
     });
     return tokens;
   }, [
     activeUnit,
+    dimensionEditorRoomId,
     dimensionDraftByRoom,
     gridSpacingCm,
     isExportingPdf,
@@ -1374,10 +1451,6 @@ function App() {
               <p className="app-subtitle">Plan room size, openings, furniture, and measurements.</p>
             </div>
             <div className="app-header-actions">
-              <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
-              <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
-                Duplicate Active Room
-              </button>
               <details
                 className="relative app-export-menu"
                 onMouseEnter={warmExportDependencies}
@@ -1420,6 +1493,26 @@ function App() {
 
         <div className="mx-auto mb-3 max-w-[1600px] command-toolbar">
           <div className="command-toolbar-group">
+            <button
+              className="ui-btn ui-btn-subtle toolbar-icon-btn"
+              onClick={handleAddRoom}
+              aria-label="Add room"
+              title="Add room"
+            >
+              <HousePlus className={iconClassName} />
+            </button>
+            <button
+              className="ui-btn ui-btn-subtle toolbar-icon-btn"
+              onClick={handleDuplicateActiveRoom}
+              disabled={!activeRoom}
+              aria-label="Duplicate active room"
+              title="Duplicate active room"
+            >
+              <CopyPlus className={iconClassName} />
+            </button>
+
+            <div className="toolbar-divider" />
+
             <button
               className="ui-btn ui-btn-subtle toolbar-icon-btn disabled:opacity-50"
               onClick={undo}
@@ -1534,7 +1627,6 @@ function App() {
             <span className={`autosave-status-chip ${isAutosavePending ? 'autosave-status-chip-pending' : ''}`}>
               {autosaveStatusLabel}
             </span>
-            <span>{measureMode ? 'Measure mode on' : 'Measure mode off'}</span>
             {workspace.preferences.showDebugTelemetry && (
               <>
                 <span>Scroll {scrollTelemetry.avgFrameMs > 0 ? `${scrollTelemetry.avgFrameMs.toFixed(1)}ms` : '--'}</span>
@@ -1576,6 +1668,7 @@ function App() {
               unit={activeUnit}
               roomUiStateTokens={roomUiStateTokens}
               onActivateRoom={handleActivateRoom}
+              onEditRoomDimensions={openRoomDimensionEditor}
               onRenameRoom={handleRenameRoom}
               onDeleteRoom={handleDeleteRoom}
               onReorderRooms={handleReorderRooms}

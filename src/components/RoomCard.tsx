@@ -1,4 +1,5 @@
 import { memo, useState, type ReactNode } from 'react';
+import { Pencil } from 'lucide-react';
 import type { RoomDesign } from '../types';
 import { fromBaseCm, type Unit } from '../utils/units';
 
@@ -9,6 +10,7 @@ interface RoomCardProps {
   uiStateToken: string;
   canDelete: boolean;
   onActivate: (roomId: string) => void;
+  onEditDimensions: (roomId: string) => void;
   onRename: (roomId: string, name: string) => void;
   onDelete: (roomId: string) => void;
   onDragStart: (roomId: string) => void;
@@ -31,6 +33,7 @@ function RoomCard({
   uiStateToken,
   canDelete,
   onActivate,
+  onEditDimensions,
   onRename,
   onDelete,
   onDragStart,
@@ -93,9 +96,25 @@ function RoomCard({
               <h3 className="truncate text-base font-semibold text-slate-900">{room.name}</h3>
             </div>
           )}
-          <p className="text-xs text-slate-600">
-            {formatDimension(room.roomWidthCm, unit)} x {formatDimension(room.roomHeightCm, unit)}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs text-slate-600">
+              {formatDimension(room.roomWidthCm, unit)} x {formatDimension(room.roomHeightCm, unit)}
+            </p>
+            <button
+              className="ui-btn ui-btn-subtle min-h-0 px-1 py-0.5"
+              onClick={(event) => {
+                event.stopPropagation();
+                onEditDimensions(room.id);
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              title="Edit room dimensions"
+              aria-label={`Edit dimensions for ${room.name}`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          </div>
           <p className="text-[11px] text-slate-500">{room.items.length} objects · {openingCount} openings</p>
         </div>
         <div className="flex items-center gap-2">
@@ -157,6 +176,7 @@ const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean =
   prev.uiStateToken === next.uiStateToken &&
   prev.canDelete === next.canDelete &&
   prev.onActivate === next.onActivate &&
+  prev.onEditDimensions === next.onEditDimensions &&
   prev.onRename === next.onRename &&
   prev.onDelete === next.onDelete &&
   prev.onDragStart === next.onDragStart &&
