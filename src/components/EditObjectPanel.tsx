@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { RotateCw } from "lucide-react";
 import type { RoomItem } from "../types";
 import type { Preferences } from "../types";
 import { fromBaseCm, toBaseCm } from "../utils/units";
 
 type EditableNumericField = "width" | "height" | "x" | "y" | "rotate";
+type UpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic';
 
 const formatDraftNumber = (value: number): string => {
     if (!Number.isFinite(value)) return "";
@@ -25,14 +27,31 @@ const createDraftValues = (item: RoomItem, unit: Preferences["unit"]) => ({
     rotate: formatDraftNumber(toDisplayValue(item, "rotate", unit)),
 });
 
-export default function EditObjectPanel({item, onChange, onRemove, unit}: {item: RoomItem; onChange: (updatedItem: RoomItem) => void; onRemove: () => void; unit: Preferences['unit']}) {
+export default function EditObjectPanel({
+    item,
+    onChange,
+    onRemove,
+    unit
+}: {
+    item: RoomItem;
+    onChange: (updatedItem: RoomItem, intent?: UpdateIntent) => void;
+    onRemove: () => void;
+    unit: Preferences['unit']
+}) {
     const u = unit || 'cm';
     const [draftValues, setDraftValues] = useState(() => createDraftValues(item, u));
 
     const handleChangeBase = (field: keyof RoomItem, baseValue: number) => {
         if (!Number.isFinite(baseValue)) return;
         const updatedItem = { ...item, [field]: baseValue };
-        onChange(updatedItem);
+        const intent: UpdateIntent = field === 'width' || field === 'height'
+            ? 'dimensions'
+            : field === 'rotate'
+                ? 'rotation'
+                : field === 'x' || field === 'y'
+                    ? 'position'
+                    : 'generic';
+        onChange(updatedItem, intent);
     };
 
     const dragRef = useRef<{ field: EditableNumericField | null; startX: number; startDisplayVal: number; dragging: boolean }>({
@@ -192,7 +211,7 @@ export default function EditObjectPanel({item, onChange, onRemove, unit}: {item:
                                 value={item.doorOpenDirection || 'in'}
                                 onChange={(e) => {
                                     const updatedItem = { ...item, doorOpenDirection: e.target.value as 'in' | 'out' };
-                                    onChange(updatedItem);
+                                    onChange(updatedItem, 'generic');
                                 }}
                             >
                                 <option value="in">In</option>
@@ -206,7 +225,7 @@ export default function EditObjectPanel({item, onChange, onRemove, unit}: {item:
                                 value={item.doorOpenSide || 'left'}
                                 onChange={(e) => {
                                     const updatedItem = { ...item, doorOpenSide: e.target.value as 'left' | 'right' };
-                                    onChange(updatedItem);
+                                    onChange(updatedItem, 'generic');
                                 }}
                             >
                                 <option value="left">Left</option>
@@ -218,18 +237,27 @@ export default function EditObjectPanel({item, onChange, onRemove, unit}: {item:
             )}
             <div className="ui-field">
                 <label className="ui-label">Rotation (degrees)</label>
-                <input
-                    className="ui-input"
-                    type="number"
-                    value={draftValues.rotate}
-                    onChange={(e) => setDraftValues(prev => ({ ...prev, rotate: e.target.value }))}
-                    onBlur={() => commitField("rotate")}
-                    onKeyDown={(e) => handleFieldKeyDown("rotate", e)}
-                    onMouseDown={(e) => startDrag("rotate", e)}
-                />
+                <div className="flex items-center gap-2">
+                    <input
+                        className="ui-input"
+                        type="number"
+                        value={draftValues.rotate}
+                        onChange={(e) => setDraftValues(prev => ({ ...prev, rotate: e.target.value }))}
+                        onBlur={() => commitField("rotate")}
+                        onKeyDown={(e) => handleFieldKeyDown("rotate", e)}
+                        onMouseDown={(e) => startDrag("rotate", e)}
+                    />
+                    <button
+                        className="ui-btn ui-btn-ghost toolbar-icon-btn"
+                        onClick={() => handleChangeBase("rotate", ((item.rotate || 0) + 90) % 360)}
+                        aria-label="Rotate 90 degrees"
+                        title="Rotate 90 degrees"
+                    >
+                        <RotateCw className="toolbar-icon-svg" />
+                    </button>
+                </div>
             </div>
             <div className="flex flex-wrap gap-3">
-                <button className="ui-btn ui-btn-ghost" onClick={() => handleChangeBase('rotate', ((item.rotate || 0) + 90) % 360)}>Rotate 90°</button>
                 <button className="ui-btn ui-btn-secondary" onClick={onRemove}>Remove</button>
             </div>
         </div>

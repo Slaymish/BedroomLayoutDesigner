@@ -254,6 +254,16 @@
   background: #fff;
 }
 
+.autosave-status-chip {
+  border-style: dashed !important;
+}
+
+.autosave-status-chip-pending {
+  color: #8a3e12;
+  border-color: rgb(217 119 6 / 0.45) !important;
+  background: #fff9ee !important;
+}
+
 .toolbar-divider {
   width: 1px;
   height: 1.8rem;
@@ -374,6 +384,29 @@
   padding: 0.1rem 0.25rem 0.45rem;
   border-bottom: 1px solid rgb(203 213 225 / 0.7);
   margin-bottom: 0.3rem;
+}
+
+.dimensions-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.9rem;
+  background: rgb(15 23 42 / 0.36);
+  backdrop-filter: blur(2px);
+}
+
+.dimensions-overlay-card {
+  width: min(28rem, calc(100% - 1rem));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 16px 32px -22px rgb(15 23 42 / 0.55);
+  padding: 0.9rem;
+  display: grid;
+  gap: 0.7rem;
 }
 
 details > summary::-webkit-details-marker {

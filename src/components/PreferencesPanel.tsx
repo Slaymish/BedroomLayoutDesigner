@@ -1,21 +1,34 @@
 import type { Preferences } from "../types";
 import { fromBaseCm, toBaseCm } from "../utils/units";
+import type { ChangeEvent } from "react";
 
 interface PreferencesPanelProps {
     onChange: (prefs: Preferences) => void;
     preferences: Preferences;
     onResetSetup?: () => void;
+    onSaveWorkspace?: () => void;
+    onExportWorkspace?: () => void;
+    onLoadWorkspace?: () => void;
+    autosaveStatusLabel?: string;
 }
 
-export default function PreferencesPanel({ onChange, preferences, onResetSetup }: PreferencesPanelProps) {
+export default function PreferencesPanel({
+    onChange,
+    preferences,
+    onResetSetup,
+    onSaveWorkspace,
+    onExportWorkspace,
+    onLoadWorkspace,
+    autosaveStatusLabel,
+}: PreferencesPanelProps) {
     const activeUnit = preferences.unit || 'cm';
 
-    const handleGridSpacingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleGridSpacingChange = (e: ChangeEvent<HTMLInputElement>) => {
         const newSpacing = Math.max(0.1, parseFloat(e.target.value) || 0.1);
         onChange({ ...preferences, gridSpacing: newSpacing });
     };
 
-    const handleGridColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleGridColorChange = (e: ChangeEvent<HTMLInputElement>) => {
         const color = e.target.value; // hex from color input
         onChange({ ...preferences, gridColor: color });
     };
@@ -77,6 +90,38 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
                     Show debug performance
                 </label>
             </div>
+            {(onSaveWorkspace || onExportWorkspace || onLoadWorkspace) && (
+                <div className="pt-3 border-t border-slate-200 space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Workspace</p>
+                    {autosaveStatusLabel && (
+                        <p className="text-xs text-slate-500">{autosaveStatusLabel}</p>
+                    )}
+                    {onSaveWorkspace && (
+                        <button
+                            className="ui-btn ui-btn-secondary w-full"
+                            onClick={onSaveWorkspace}
+                        >
+                            Save Workspace
+                        </button>
+                    )}
+                    {onExportWorkspace && (
+                        <button
+                            className="ui-btn ui-btn-secondary w-full"
+                            onClick={onExportWorkspace}
+                        >
+                            Export Workspace
+                        </button>
+                    )}
+                    {onLoadWorkspace && (
+                        <button
+                            className="ui-btn ui-btn-secondary w-full"
+                            onClick={onLoadWorkspace}
+                        >
+                            Load Workspace
+                        </button>
+                    )}
+                </div>
+            )}
             {onResetSetup && (
                 <div className="pt-3 border-t border-slate-200 space-y-2">
                     <button

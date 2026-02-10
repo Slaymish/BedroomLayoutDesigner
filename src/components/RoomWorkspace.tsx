@@ -7,6 +7,7 @@ interface RoomWorkspaceProps {
   rooms: RoomDesign[];
   activeRoomId: string;
   unit: Unit;
+  roomUiStateTokens: Record<string, string>;
   onActivateRoom: (roomId: string) => void;
   onRenameRoom: (roomId: string, name: string) => void;
   onDeleteRoom: (roomId: string) => void;
@@ -18,6 +19,7 @@ function RoomWorkspace({
   rooms,
   activeRoomId,
   unit,
+  roomUiStateTokens,
   onActivateRoom,
   onRenameRoom,
   onDeleteRoom,
@@ -57,6 +59,7 @@ function RoomWorkspace({
               room={room}
               unit={unit}
               isActive={isActive}
+              uiStateToken={roomUiStateTokens[room.id] || ''}
               canDelete={rooms.length > 1}
               onActivate={onActivateRoom}
               onRename={onRenameRoom}

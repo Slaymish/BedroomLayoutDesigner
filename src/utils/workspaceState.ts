@@ -217,8 +217,8 @@ export const createBlankRoom = (name: string): RoomDesign => ({
   nextItemId: 1,
   editingItemId: null,
   setup: {
-    onboardingComplete: true,
-    onboardingStep: 'openings',
+    onboardingComplete: false,
+    onboardingStep: 'dimensions',
     doorDefaults: {
       doorOpenDirection: 'in',
       doorOpenSide: 'left',
@@ -243,8 +243,8 @@ export const createDuplicateRoom = (source: RoomDesign, name: string): RoomDesig
     nextItemId: Math.max(highestId + 1, 1),
     editingItemId: null,
     setup: {
-      onboardingComplete: true,
-      onboardingStep: 'openings',
+      onboardingComplete: source.setup.onboardingComplete,
+      onboardingStep: source.setup.onboardingComplete ? 'openings' : 'dimensions',
       doorDefaults: { ...source.setup.doorDefaults },
       windowDraftWidthCm: source.setup.windowDraftWidthCm || OPENING_PRESETS.Window.widthCm,
     },

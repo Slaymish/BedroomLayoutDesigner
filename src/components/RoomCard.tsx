@@ -6,6 +6,7 @@ interface RoomCardProps {
   room: RoomDesign;
   unit: Unit;
   isActive: boolean;
+  uiStateToken: string;
   canDelete: boolean;
   onActivate: (roomId: string) => void;
   onRename: (roomId: string, name: string) => void;
@@ -27,6 +28,7 @@ function RoomCard({
   room,
   unit,
   isActive,
+  uiStateToken,
   canDelete,
   onActivate,
   onRename,
@@ -54,6 +56,7 @@ function RoomCard({
   return (
     <article
       className={`surface-card room-card ${isActive ? 'room-card-active' : ''}`}
+      data-ui-state-token={uiStateToken}
       onMouseDown={() => onActivate(room.id)}
       onDragOver={(event) => {
         event.preventDefault();
@@ -151,6 +154,7 @@ const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean =
   prev.room === next.room &&
   prev.unit === next.unit &&
   prev.isActive === next.isActive &&
+  prev.uiStateToken === next.uiStateToken &&
   prev.canDelete === next.canDelete &&
   prev.onActivate === next.onActivate &&
   prev.onRename === next.onRename &&
@@ -158,8 +162,7 @@ const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean =
   prev.onDragStart === next.onDragStart &&
   prev.onDragEnd === next.onDragEnd &&
   prev.onDragOver === next.onDragOver &&
-  prev.onDrop === next.onDrop &&
-  prev.renderRoomContent === next.renderRoomContent
+  prev.onDrop === next.onDrop
 );
 
 export default memo(RoomCard, roomCardPropsEqual);

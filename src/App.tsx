@@ -4,6 +4,20 @@ import EditObjectPanel from './components/EditObjectPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
 import RoomWorkspace from './components/RoomWorkspace';
+import {
+  AppWindow,
+  Archive,
+  BedDouble,
+  DoorOpen,
+  LampDesk,
+  Plus,
+  Redo2,
+  Ruler,
+  Sofa,
+  Square,
+  Table2,
+  Undo2,
+} from 'lucide-react';
 import type { LayoutInteractionTelemetry, MeasureLine, RoomDesign, RoomItem, WorkspaceState } from './types';
 import { fromBaseCm, toBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
@@ -36,6 +50,8 @@ interface AddItemOptions {
   doorOpenDirection?: 'in' | 'out';
   doorOpenSide?: 'left' | 'right';
 }
+
+type ItemUpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic';
 
 interface ScrollTelemetrySummary {
   sampleCount: number;
@@ -94,107 +110,19 @@ const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
 const SCROLL_SLOW_FRAME_MS = 24;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 
-function ToolbarIcon({ name }: { name: string }) {
-  switch (name) {
-    case 'undo':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <path d="M9 7H4v5" />
-          <path d="M4 12a8 8 0 1 0 3-6" />
-        </svg>
-      );
-    case 'redo':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <path d="M15 7h5v5" />
-          <path d="M20 12a8 8 0 1 1-3-6" />
-        </svg>
-      );
-    case 'measure':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <path d="M4 16l8-8 8 8" />
-          <path d="M5 19h14" />
-          <path d="M9 15l1.2 1.2" />
-          <path d="M12 12l1.2 1.2" />
-          <path d="M15 9l1.2 1.2" />
-        </svg>
-      );
-    case 'custom':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <path d="M12 5v14" />
-          <path d="M5 12h14" />
-        </svg>
-      );
-    case 'bed':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="3" y="8" width="18" height="9" rx="2" />
-          <rect x="5" y="10" width="6" height="4" rx="1" />
-          <rect x="13" y="10" width="6" height="4" rx="1" />
-          <path d="M4 17v2" />
-          <path d="M20 17v2" />
-        </svg>
-      );
-    case 'wardrobe':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="5" y="4" width="14" height="16" rx="1.5" />
-          <path d="M12 4v16" />
-        </svg>
-      );
-    case 'desk':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="4" y="7" width="16" height="4" rx="1" />
-          <path d="M7 11v7" />
-          <path d="M17 11v7" />
-        </svg>
-      );
-    case 'couch':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="4" y="9" width="16" height="7" rx="2" />
-          <path d="M6 16v2" />
-          <path d="M18 16v2" />
-          <path d="M4 11h16" />
-        </svg>
-      );
-    case 'bedside table':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="6" y="5" width="12" height="14" rx="1.5" />
-          <path d="M8 10h8" />
-          <path d="M8 14h8" />
-        </svg>
-      );
-    case 'door':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <path d="M5 18h14" />
-          <path d="M5 18V8h8" />
-          <path d="M13 8a7 7 0 0 1 7 7" />
-        </svg>
-      );
-    case 'window':
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="4" y="7" width="16" height="10" rx="1.5" />
-          <path d="M12 7v10" />
-          <path d="M4 12h16" />
-        </svg>
-      );
-    default:
-      return (
-        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
-          <rect x="5" y="5" width="14" height="14" rx="2" />
-        </svg>
-      );
-  }
-}
+const iconClassName = 'toolbar-icon-svg';
 
-const getPresetIconName = (presetType: string): string => presetType.trim().toLowerCase();
+const renderPresetIcon = (type: string) => {
+  const normalized = type.trim().toLowerCase();
+  if (normalized === 'bed') return <BedDouble className={iconClassName} />;
+  if (normalized === 'wardrobe') return <Archive className={iconClassName} />;
+  if (normalized === 'desk') return <Table2 className={iconClassName} />;
+  if (normalized === 'couch') return <Sofa className={iconClassName} />;
+  if (normalized === 'bedside table') return <LampDesk className={iconClassName} />;
+  if (normalized === 'door') return <DoorOpen className={iconClassName} />;
+  if (normalized === 'window') return <AppWindow className={iconClassName} />;
+  return <Square className={iconClassName} />;
+};
 
 function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
@@ -205,13 +133,18 @@ function App() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [lastAutosaveAt, setLastAutosaveAt] = useState<number | null>(null);
+  const [isAutosavePending, setIsAutosavePending] = useState(false);
   const [layoutTelemetry, setLayoutTelemetry] = useState<LayoutInteractionTelemetry[]>([]);
   const [scrollTelemetry, setScrollTelemetry] = useState<ScrollTelemetrySummary>(DEFAULT_SCROLL_TELEMETRY);
   const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZES[0]);
   const [measureMode, setMeasureMode] = useState(false);
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
+  const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bedPopoverRef = useRef<HTMLDetailsElement>(null);
+  const customPopoverRef = useRef<HTMLDetailsElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
@@ -231,6 +164,8 @@ function App() {
     () => findRoom(workspace, workspace.activeRoomId),
     [workspace]
   );
+  const canEditActiveRoom = !!activeRoom?.setup.onboardingComplete;
+  const canAddObjectsToActiveRoom = !!activeRoom && canEditActiveRoom;
 
   const gridSpacingCm = useMemo(
     () => toBaseCm(workspace.preferences.gridSpacing, activeUnit),
@@ -396,13 +331,20 @@ function App() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   }, []);
 
+  const persistWorkspaceAutosave = useCallback((state: WorkspaceState) => {
+    persistWorkspace(state);
+    setLastAutosaveAt(Date.now());
+    setIsAutosavePending(false);
+  }, [persistWorkspace]);
+
   useEffect(() => {
     if (!isHydrated) return;
+    setIsAutosavePending(true);
     if (autosaveTimeoutRef.current !== null) {
       window.clearTimeout(autosaveTimeoutRef.current);
     }
     autosaveTimeoutRef.current = window.setTimeout(() => {
-      persistWorkspace(workspaceRef.current);
+      persistWorkspaceAutosave(workspaceRef.current);
       autosaveTimeoutRef.current = null;
     }, 220);
     return () => {
@@ -410,7 +352,7 @@ function App() {
         window.clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [isHydrated, workspace, persistWorkspace]);
+  }, [isHydrated, workspace, persistWorkspaceAutosave]);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -430,6 +372,12 @@ function App() {
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    if (!canEditActiveRoom && measureMode) {
+      setMeasureMode(false);
+    }
+  }, [canEditActiveRoom, measureMode]);
 
   useEffect(() => {
     const metrics = scrollTelemetryRef.current;
@@ -702,7 +650,7 @@ function App() {
   );
 
   const updateRoomItem = useCallback(
-    (roomId: string, updatedItem: RoomItem) => {
+    (roomId: string, updatedItem: RoomItem, intent: ItemUpdateIntent = 'generic') => {
       updateRoom(roomId, (room) => {
         const existing = room.items.find((item) => item.id === updatedItem.id);
         if (!existing) return room;
@@ -710,13 +658,17 @@ function App() {
         let nextItem = { ...updatedItem };
 
         if (!isOpening(nextItem)) {
-          const sizeOrRotationChanged =
-            existing.width !== updatedItem.width ||
-            existing.height !== updatedItem.height ||
-            (existing.rotate ?? 0) !== (updatedItem.rotate ?? 0);
-          const positionChanged = existing.x !== updatedItem.x || existing.y !== updatedItem.y;
+          const widthChanged = existing.width !== updatedItem.width;
+          const heightChanged = existing.height !== updatedItem.height;
+          const rotationChanged = (existing.rotate ?? 0) !== (updatedItem.rotate ?? 0);
+          const shouldPreserveCenter =
+            intent === 'dimensions' ||
+            intent === 'rotation' ||
+            widthChanged ||
+            heightChanged ||
+            rotationChanged;
 
-          if (sizeOrRotationChanged && !positionChanged) {
+          if (shouldPreserveCenter) {
             const centerX = existing.x + existing.width / 2;
             const centerY = existing.y + existing.height / 2;
             nextItem = {
@@ -726,8 +678,13 @@ function App() {
             };
           }
 
-          const clampedX = clamp(nextItem.x, 0, Math.max(0, room.roomWidthCm - nextItem.width));
-          const clampedY = clamp(nextItem.y, 0, Math.max(0, room.roomHeightCm - nextItem.height));
+          const bbox = getBoundingBox(nextItem.width, nextItem.height, nextItem.rotate);
+          const minX = (bbox.width - nextItem.width) / 2;
+          const maxX = room.roomWidthCm - (nextItem.width + bbox.width) / 2;
+          const minY = (bbox.height - nextItem.height) / 2;
+          const maxY = room.roomHeightCm - (nextItem.height + bbox.height) / 2;
+          const clampedX = clamp(nextItem.x, Math.min(minX, maxX), Math.max(minX, maxX));
+          const clampedY = clamp(nextItem.y, Math.min(minY, maxY), Math.max(minY, maxY));
           nextItem = {
             ...nextItem,
             x: clampedX,
@@ -813,6 +770,69 @@ function App() {
     [updateRoom]
   );
 
+  const setDimensionDraftValue = useCallback((roomId: string, field: 'width' | 'height', value: string) => {
+    setDimensionDraftByRoom((previous) => ({
+      ...previous,
+      [roomId]: {
+        width: previous[roomId]?.width ?? '',
+        height: previous[roomId]?.height ?? '',
+        [field]: value,
+      },
+    }));
+  }, []);
+
+  const clearDimensionDraft = useCallback((roomId: string) => {
+    setDimensionDraftByRoom((previous) => {
+      if (!(roomId in previous)) return previous;
+      const next = { ...previous };
+      delete next[roomId];
+      return next;
+    });
+  }, []);
+
+  const completeRoomDimensions = useCallback((roomId: string, widthInput: string, heightInput: string) => {
+    const widthValue = parseFloat(widthInput);
+    const heightValue = parseFloat(heightInput);
+    if (!Number.isFinite(widthValue) || !Number.isFinite(heightValue) || widthValue <= 0 || heightValue <= 0) {
+      setErrorMessage('Please enter valid room dimensions.');
+      return;
+    }
+
+    const widthCm = Math.round(toBaseCm(widthValue, activeUnit));
+    const heightCm = Math.round(toBaseCm(heightValue, activeUnit));
+    if (widthCm < 180 || heightCm < 180) {
+      setErrorMessage('Room dimensions are too small. Use at least 180cm x 180cm.');
+      return;
+    }
+
+    updateRoom(roomId, (room) => ({
+      ...room,
+      roomWidthCm: widthCm,
+      roomHeightCm: heightCm,
+      items: room.items.map((item) => (
+        isOpening(item)
+          ? normalizeOpeningForRoom(item, widthCm, heightCm)
+          : item
+      )),
+      measures: room.measures.map((measure) => ({
+        ...measure,
+        x1: clamp(measure.x1, 0, widthCm),
+        y1: clamp(measure.y1, 0, heightCm),
+        x2: clamp(measure.x2, 0, widthCm),
+        y2: clamp(measure.y2, 0, heightCm),
+      })),
+      setup: {
+        ...room.setup,
+        onboardingComplete: true,
+        onboardingStep: 'openings',
+      },
+      editingItemId: null,
+    }));
+
+    setErrorMessage(null);
+    clearDimensionDraft(roomId);
+  }, [activeUnit, clearDimensionDraft, updateRoom]);
+
   const handleAddRoom = () => {
     updateWorkspace((current) => {
       const room = createBlankRoom(getNextRoomName(current.rooms));
@@ -882,7 +902,8 @@ function App() {
       delete next[roomId];
       return next;
     });
-  }, [updateWorkspace, workspace.rooms]);
+    clearDimensionDraft(roomId);
+  }, [clearDimensionDraft, updateWorkspace, workspace.rooms]);
 
   const handleReorderRooms = useCallback((sourceRoomId: string, targetRoomId: string) => {
     updateWorkspace((current) => ({
@@ -902,6 +923,7 @@ function App() {
     setHistoryPast([]);
     setHistoryFuture([]);
     setSelectedMeasureByRoom({});
+    setDimensionDraftByRoom({});
     interactionStartSnapshotRef.current = null;
     setErrorMessage(null);
     setInfoMessage(null);
@@ -934,7 +956,7 @@ function App() {
   }, [loadExportDependencies]);
 
   const handleAddObjectToActiveRoom = useCallback((widthCm: number, heightCm: number, type: string) => {
-    if (!activeRoom) return;
+    if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
     addItemToRoom(activeRoom.id, widthCm, heightCm, type);
   }, [activeRoom, addItemToRoom]);
 
@@ -944,6 +966,9 @@ function App() {
 
   const handleAddSelectedBed = useCallback(() => {
     handleAddObjectToActiveRoom(selectedBedPreset.widthCm, selectedBedPreset.heightCm, 'Bed');
+    if (bedPopoverRef.current) {
+      bedPopoverRef.current.open = false;
+    }
   }, [handleAddObjectToActiveRoom, selectedBedPreset.heightCm, selectedBedPreset.widthCm]);
 
   const handleAddCustomObject = useCallback((event: FormEvent<HTMLFormElement>) => {
@@ -963,6 +988,9 @@ function App() {
       type
     );
     form.reset();
+    if (customPopoverRef.current) {
+      customPopoverRef.current.open = false;
+    }
   }, [activeUnit, handleAddObjectToActiveRoom]);
 
   const handleExportRoomPdf = useCallback(
@@ -1056,6 +1084,7 @@ function App() {
 
   const handleSaveWorkspaceLocal = () => {
     persistWorkspace(workspaceRef.current);
+    setIsAutosavePending(false);
     setInfoMessage('Workspace saved in this browser.');
   };
 
@@ -1079,6 +1108,7 @@ function App() {
       setHistoryPast([]);
       setHistoryFuture([]);
       setSelectedMeasureByRoom({});
+      setDimensionDraftByRoom({});
       interactionStartSnapshotRef.current = null;
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
@@ -1088,6 +1118,20 @@ function App() {
       setErrorMessage(message);
     }
   };
+
+  const autosaveStatusLabel = useMemo(() => {
+    if (isAutosavePending) {
+      return 'Autosave pending...';
+    }
+    if (lastAutosaveAt === null) {
+      return 'Autosave enabled';
+    }
+    return `Last autosave: ${new Date(lastAutosaveAt).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+    })}`;
+  }, [isAutosavePending, lastAutosaveAt]);
 
   const renderRoomContent = useCallback((room: RoomDesign, isActive: boolean) => {
     const selectedMeasureId = selectedMeasureByRoom[room.id] ?? null;
@@ -1104,31 +1148,77 @@ function App() {
           activeUnit
         )
       : null;
+    const roomNeedsDimensions = !room.setup.onboardingComplete;
+    const defaultWidth = Number(fromBaseCm(room.roomWidthCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
+    const defaultHeight = Number(fromBaseCm(room.roomHeightCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
+    const dimensionDraft = dimensionDraftByRoom[room.id] ?? { width: defaultWidth, height: defaultHeight };
 
     const canvas = (
-      <RoomCanvas
-        items={room.items}
-        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
-        selectedItemId={room.editingItemId}
-        roomWidthCm={room.roomWidthCm}
-        roomHeightCm={room.roomHeightCm}
-        onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
-        gridSpacingCm={gridSpacingCm}
-        gridColor={workspace.preferences.gridColor}
-        unit={activeUnit}
-        onLayoutInteractionStart={handleLayoutInteractionStart}
-        onLayoutInteractionEnd={handleLayoutInteractionEnd}
-        onLayoutTelemetry={handleLayoutTelemetry}
-        exportRoomId={room.id}
-        allowResize={isActive && !measureMode}
-        measures={room.measures}
-        onMeasuresChange={(update) => handleRoomMeasuresChange(room.id, update)}
-        measureMode={measureMode && isActive}
-        selectedMeasureId={selectedMeasureId}
-        onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
-        isExportingPdf={isExportingPdf}
-      />
+      <div className="relative">
+        <RoomCanvas
+          items={room.items}
+          onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+          onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
+          selectedItemId={room.editingItemId}
+          roomWidthCm={room.roomWidthCm}
+          roomHeightCm={room.roomHeightCm}
+          onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
+          gridSpacingCm={gridSpacingCm}
+          gridColor={workspace.preferences.gridColor}
+          unit={activeUnit}
+          onLayoutInteractionStart={handleLayoutInteractionStart}
+          onLayoutInteractionEnd={handleLayoutInteractionEnd}
+          onLayoutTelemetry={handleLayoutTelemetry}
+          exportRoomId={room.id}
+          allowResize={isActive && !measureMode && !roomNeedsDimensions}
+          measures={room.measures}
+          onMeasuresChange={(update) => handleRoomMeasuresChange(room.id, update)}
+          measureMode={measureMode && isActive && !roomNeedsDimensions}
+          selectedMeasureId={selectedMeasureId}
+          onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
+          isExportingPdf={isExportingPdf}
+        />
+        {isActive && roomNeedsDimensions && (
+          <div className="dimensions-overlay" onClick={(event) => event.stopPropagation()}>
+            <div className="dimensions-overlay-card">
+              <h4 className="text-lg font-semibold text-slate-900">Set Room Dimensions</h4>
+              <p className="text-sm text-slate-600">
+                Enter width and length before adding objects to this room.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="ui-field">
+                  <label className="ui-label">Width ({activeUnit})</label>
+                  <input
+                    className="ui-input"
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={dimensionDraft.width}
+                    onChange={(event) => setDimensionDraftValue(room.id, 'width', event.target.value)}
+                  />
+                </div>
+                <div className="ui-field">
+                  <label className="ui-label">Length ({activeUnit})</label>
+                  <input
+                    className="ui-input"
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={dimensionDraft.height}
+                    onChange={(event) => setDimensionDraftValue(room.id, 'height', event.target.value)}
+                  />
+                </div>
+              </div>
+              <button
+                className="ui-btn ui-btn-primary w-full"
+                onClick={() => completeRoomDimensions(room.id, dimensionDraft.width, dimensionDraft.height)}
+              >
+                Save Dimensions
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     );
 
     if (!isActive) {
@@ -1141,14 +1231,13 @@ function App() {
         <aside className="surface-card room-edit-rail" onClick={(event) => event.stopPropagation()}>
           <div className="room-edit-rail-header">
             <h3 className="text-base font-semibold text-slate-900">Edit</h3>
-            <span className="text-xs text-slate-500">Always visible</span>
           </div>
           {editingItem ? (
             <EditObjectPanel
               item={editingItem}
-              onChange={(item) => {
+              onChange={(item, intent) => {
                 handleRoomMeasureSelection(room.id, null);
-                updateRoomItem(room.id, item);
+                updateRoomItem(room.id, item, intent ?? 'generic');
               }}
               onRemove={() => removeSelectedItem(room.id)}
               unit={activeUnit}
@@ -1199,6 +1288,8 @@ function App() {
     handleLayoutInteractionEnd,
     handleLayoutInteractionStart,
     handleLayoutTelemetry,
+    completeRoomDimensions,
+    dimensionDraftByRoom,
     handleRoomItemSelection,
     handleRoomItemsChange,
     handleRoomMeasureSelection,
@@ -1208,10 +1299,54 @@ function App() {
     measureMode,
     removeSelectedItem,
     removeSelectedMeasure,
+    setDimensionDraftValue,
     selectedMeasureByRoom,
     updateRoomItem,
     updateSelectedMeasure,
     workspace.preferences.gridColor,
+  ]);
+
+  const renderRoomContentRef = useRef(renderRoomContent);
+  useEffect(() => {
+    renderRoomContentRef.current = renderRoomContent;
+  }, [renderRoomContent]);
+
+  const renderRoomContentStable = useCallback((room: RoomDesign, isActive: boolean) => {
+    return renderRoomContentRef.current(room, isActive);
+  }, []);
+
+  const roomUiStateTokens = useMemo(() => {
+    const globalVisualToken = [
+      activeUnit,
+      workspace.preferences.gridColor || '',
+      gridSpacingCm.toFixed(3),
+      isExportingPdf ? '1' : '0',
+    ].join('|');
+
+    const tokens: Record<string, string> = {};
+    workspace.rooms.forEach((room) => {
+      const isActive = room.id === workspace.activeRoomId;
+      const roomDraft = dimensionDraftByRoom[room.id];
+      tokens[room.id] = [
+        globalVisualToken,
+        isActive ? 'active' : 'inactive',
+        isActive ? (measureMode ? 'measure-on' : 'measure-off') : 'na',
+        isActive ? String(selectedMeasureByRoom[room.id] ?? 'none') : 'na',
+        room.setup.onboardingComplete ? 'ready' : 'needs-dimensions',
+        roomDraft ? `${roomDraft.width}:${roomDraft.height}` : 'no-draft',
+      ].join('|');
+    });
+    return tokens;
+  }, [
+    activeUnit,
+    dimensionDraftByRoom,
+    gridSpacingCm,
+    isExportingPdf,
+    measureMode,
+    selectedMeasureByRoom,
+    workspace.activeRoomId,
+    workspace.preferences.gridColor,
+    workspace.rooms,
   ]);
 
   if (!isHydrated) {
@@ -1242,11 +1377,6 @@ function App() {
               <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
               <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
                 Duplicate Active Room
-              </button>
-              <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceLocal}>Save Workspace</button>
-              <button className="ui-btn ui-btn-ghost" onClick={handleExportWorkspaceFile}>Export Workspace</button>
-              <button className="ui-btn ui-btn-ghost" onClick={() => fileInputRef.current?.click()}>
-                Load Workspace
               </button>
               <details
                 className="relative app-export-menu"
@@ -1295,25 +1425,25 @@ function App() {
               onClick={undo}
               disabled={historyPast.length === 0}
               aria-label="Undo"
-              title="Undo"
+              title={`Undo (${historyPast.length})`}
             >
-              <ToolbarIcon name="undo" />
+              <Undo2 className={iconClassName} />
             </button>
             <button
               className="ui-btn ui-btn-subtle toolbar-icon-btn disabled:opacity-50"
               onClick={redo}
               disabled={historyFuture.length === 0}
               aria-label="Redo"
-              title="Redo"
+              title={`Redo (${historyFuture.length})`}
             >
-              <ToolbarIcon name="redo" />
+              <Redo2 className={iconClassName} />
             </button>
 
             <div className="toolbar-divider" />
 
-            <details className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
+            <details ref={bedPopoverRef} className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
               <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add bed" title="Add bed">
-                <ToolbarIcon name="bed" />
+                <BedDouble className={iconClassName} />
               </summary>
               <div className="toolbar-popover-panel">
                 <label className="ui-label">Bed size</label>
@@ -1334,7 +1464,7 @@ function App() {
                 <button
                   className="ui-btn ui-btn-primary w-full mt-2"
                   onClick={handleAddSelectedBed}
-                  disabled={!activeRoom}
+                  disabled={!canAddObjectsToActiveRoom}
                 >
                   Add Bed
                 </button>
@@ -1346,17 +1476,17 @@ function App() {
                 key={preset.type}
                 className="ui-btn ui-btn-subtle toolbar-icon-btn"
                 onClick={() => handleQuickAddPreset(preset)}
-                disabled={!activeRoom}
+                disabled={!canAddObjectsToActiveRoom}
                 title={`Add ${preset.type}`}
                 aria-label={`Add ${preset.type}`}
               >
-                <ToolbarIcon name={getPresetIconName(preset.type)} />
+                {renderPresetIcon(preset.type)}
               </button>
             ))}
 
-            <details className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
+            <details ref={customPopoverRef} className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
               <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add custom object" title="Add custom object">
-                <ToolbarIcon name="custom" />
+                <Plus className={iconClassName} />
               </summary>
               <form className="toolbar-popover-panel" onSubmit={handleAddCustomObject}>
                 <div className="ui-field">
@@ -1373,7 +1503,7 @@ function App() {
                     <input className="ui-input" type="number" name="height" min={0.1} step={0.1} required />
                   </div>
                 </div>
-                <button className="ui-btn ui-btn-primary w-full mt-2" type="submit" disabled={!activeRoom}>
+                <button className="ui-btn ui-btn-primary w-full mt-2" type="submit" disabled={!canAddObjectsToActiveRoom}>
                   Add Custom
                 </button>
               </form>
@@ -1383,6 +1513,7 @@ function App() {
 
             <button
               className={`ui-btn ui-btn-subtle toolbar-icon-btn ${measureMode ? 'toolbar-icon-btn-active' : ''}`}
+              disabled={!canEditActiveRoom}
               onClick={() => {
                 setMeasureMode((previous) => {
                   const next = !previous;
@@ -1395,13 +1526,14 @@ function App() {
               title={measureMode ? 'Exit measure mode' : 'Enter measure mode'}
               aria-label={measureMode ? 'Exit measure mode' : 'Enter measure mode'}
             >
-              <ToolbarIcon name="measure" />
+              <Ruler className={iconClassName} />
             </button>
           </div>
 
           <div className="command-toolbar-meta">
-            <span>Undo {historyPast.length}</span>
-            <span>Redo {historyFuture.length}</span>
+            <span className={`autosave-status-chip ${isAutosavePending ? 'autosave-status-chip-pending' : ''}`}>
+              {autosaveStatusLabel}
+            </span>
             <span>{measureMode ? 'Measure mode on' : 'Measure mode off'}</span>
             {workspace.preferences.showDebugTelemetry && (
               <>
@@ -1442,11 +1574,12 @@ function App() {
               rooms={workspace.rooms}
               activeRoomId={workspace.activeRoomId}
               unit={activeUnit}
+              roomUiStateTokens={roomUiStateTokens}
               onActivateRoom={handleActivateRoom}
               onRenameRoom={handleRenameRoom}
               onDeleteRoom={handleDeleteRoom}
               onReorderRooms={handleReorderRooms}
-              renderRoomContent={renderRoomContent}
+              renderRoomContent={renderRoomContentStable}
             />
           </section>
         </div>
@@ -1467,6 +1600,10 @@ function App() {
                 onChange={handlePreferencesChange}
                 preferences={workspace.preferences}
                 onResetSetup={handleResetWorkspace}
+                onSaveWorkspace={handleSaveWorkspaceLocal}
+                onExportWorkspace={handleExportWorkspaceFile}
+                onLoadWorkspace={() => fileInputRef.current?.click()}
+                autosaveStatusLabel={autosaveStatusLabel}
               />
               <div className="mt-4 text-xs text-slate-500">
                 Supported units: {UNIT_OPTIONS.join(', ')}
@@ -1478,6 +1615,16 @@ function App() {
     </div>
   );
 }
+
+const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
+  const rad = (rotation * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(rad));
+  const cos = Math.abs(Math.cos(rad));
+  return {
+    width: w * cos + h * sin,
+    height: w * sin + h * cos,
+  };
+};
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 

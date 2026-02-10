@@ -191,6 +191,8 @@ function RoomCanvasComponent({
 }: RoomCanvasProps) {
   const [width, setWidth] = useState(roomWidthCm);
   const [height, setHeight] = useState(roomHeightCm);
+  const [localItems, setLocalItems] = useState(items);
+  const [localMeasures, setLocalMeasures] = useState(measures);
   const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -198,16 +200,31 @@ function RoomCanvasComponent({
   const hasDragged = useRef(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const itemsRef = useRef(items);
-  const measuresRef = useRef(measures);
+  const localItemsRef = useRef(localItems);
+  const localMeasuresRef = useRef(localMeasures);
+  const draftMeasureRef = useRef<MeasureLine | null>(draftMeasure);
   const widthRef = useRef(width);
   const heightRef = useRef(height);
   const dragOffsetRef = useRef(dragOffset);
   const draggingIdRef = useRef<number | null>(draggingId);
   const isResizingRef = useRef<null | 'right' | 'bottom' | 'corner'>(isResizing);
+  const itemsDirtyRef = useRef(false);
+  const sizeDirtyRef = useRef(false);
+  const measuresDirtyRef = useRef(false);
+  const activeMeasureDragRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const latestPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const telemetrySessionRef = useRef<TelemetrySession | null>(null);
+
+  const setNextLocalItems = useCallback((next: RoomItem[]) => {
+    localItemsRef.current = next;
+    setLocalItems(next);
+  }, []);
+
+  const setNextLocalMeasures = useCallback((next: MeasureLine[]) => {
+    localMeasuresRef.current = next;
+    setLocalMeasures(next);
+  }, []);
 
   useEffect(() => {
     setWidth(roomWidthCm);
@@ -218,16 +235,28 @@ function RoomCanvasComponent({
   }, [roomHeightCm]);
 
   useEffect(() => {
-    onRoomSizeChange?.(width, height);
-  }, [width, height, onRoomSizeChange]);
+    if (draggingIdRef.current !== null) return;
+    setNextLocalItems(items);
+    itemsDirtyRef.current = false;
+  }, [items, setNextLocalItems]);
 
   useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
+    if (activeMeasureDragRef.current || draftMeasureRef.current) return;
+    setNextLocalMeasures(measures);
+    measuresDirtyRef.current = false;
+  }, [measures, setNextLocalMeasures]);
 
   useEffect(() => {
-    measuresRef.current = measures;
-  }, [measures]);
+    localItemsRef.current = localItems;
+  }, [localItems]);
+
+  useEffect(() => {
+    localMeasuresRef.current = localMeasures;
+  }, [localMeasures]);
+
+  useEffect(() => {
+    draftMeasureRef.current = draftMeasure;
+  }, [draftMeasure]);
 
   useEffect(() => {
     widthRef.current = width;
@@ -257,7 +286,7 @@ function RoomCanvasComponent({
       { x: 0, y: height },
     ];
 
-    items.forEach((item) => {
+    localItems.forEach((item) => {
       getRotatedCorners(item).forEach((corner) => {
         points.push({
           x: clamp(corner.x, 0, width),
@@ -267,7 +296,7 @@ function RoomCanvasComponent({
     });
 
     return points;
-  }, [height, items, width]);
+  }, [height, localItems, width]);
 
   const startTelemetrySession = useCallback((interaction: 'drag' | 'resize', itemType?: string) => {
     telemetrySessionRef.current = {
@@ -339,7 +368,7 @@ function RoomCanvasComponent({
 
     if (allowResize && activeResize && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
-      const currentItems = itemsRef.current;
+      const currentItems = localItemsRef.current;
 
       const minWidth = Math.max(100, ...currentItems.map((item) => {
         const { width: bboxW } = getBoundingBox(item.width, item.height, item.rotate);
@@ -354,15 +383,17 @@ function RoomCanvasComponent({
         const nextWidth = Math.max(minWidth, clientX - rect.left);
         if (nextWidth !== widthRef.current) {
           markTelemetryChanged();
+          sizeDirtyRef.current = true;
+          setWidth(nextWidth);
         }
-        setWidth((prev) => (prev === nextWidth ? prev : nextWidth));
       }
       if (activeResize === 'bottom' || activeResize === 'corner') {
         const nextHeight = Math.max(minHeight, clientY - rect.top);
         if (nextHeight !== heightRef.current) {
           markTelemetryChanged();
+          sizeDirtyRef.current = true;
+          setHeight(nextHeight);
         }
-        setHeight((prev) => (prev === nextHeight ? prev : nextHeight));
       }
       return;
     }
@@ -379,55 +410,55 @@ function RoomCanvasComponent({
     const currentHeight = heightRef.current;
     const currentDragOffset = dragOffsetRef.current;
 
-    onItemsChange((prevItems) => {
-      const targetIndex = prevItems.findIndex((item) => item.id === activeDraggingId);
-      if (targetIndex < 0) return prevItems;
+    const previousItems = localItemsRef.current;
+    const targetIndex = previousItems.findIndex((item) => item.id === activeDraggingId);
+    if (targetIndex < 0) return;
 
-      const item = prevItems[targetIndex];
-      let nextItem = item;
+    const item = previousItems[targetIndex];
+    let nextItem = item;
 
-      if (isOpening(item)) {
-        const snapped = snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, currentWidth, currentHeight);
-        if (
-          snapped.x === item.x &&
-          snapped.y === item.y &&
-          snapped.rotate === item.rotate &&
-          snapped.openingWall === item.openingWall
-        ) {
-          return prevItems;
-        }
-        nextItem = snapped;
-        markTelemetryChanged();
-      } else {
-        const newX = mouseXInCanvas - currentDragOffset.x;
-        const newY = mouseYInCanvas - currentDragOffset.y;
-        const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
+    if (isOpening(item)) {
+      const snapped = snapOpeningToNearestWall(item, mouseXInCanvas, mouseYInCanvas, currentWidth, currentHeight);
+      if (
+        snapped.x === item.x &&
+        snapped.y === item.y &&
+        snapped.rotate === item.rotate &&
+        snapped.openingWall === item.openingWall
+      ) {
+        return;
+      }
+      nextItem = snapped;
+      markTelemetryChanged();
+    } else {
+      const newX = mouseXInCanvas - currentDragOffset.x;
+      const newY = mouseYInCanvas - currentDragOffset.y;
+      const { width: bboxW, height: bboxH } = getBoundingBox(item.width, item.height, item.rotate);
 
-        const minX = (bboxW - item.width) / 2;
-        const maxX = currentWidth - (item.width + bboxW) / 2;
-        const minY = (bboxH - item.height) / 2;
-        const maxY = currentHeight - (item.height + bboxH) / 2;
+      const minX = (bboxW - item.width) / 2;
+      const maxX = currentWidth - (item.width + bboxW) / 2;
+      const minY = (bboxH - item.height) / 2;
+      const maxY = currentHeight - (item.height + bboxH) / 2;
 
-        const clampedX = Math.max(minX, Math.min(newX, maxX));
-        const clampedY = Math.max(minY, Math.min(newY, maxY));
+      const clampedX = Math.max(minX, Math.min(newX, maxX));
+      const clampedY = Math.max(minY, Math.min(newY, maxY));
 
-        if (clampedX === item.x && clampedY === item.y) {
-          return prevItems;
-        }
-
-        nextItem = {
-          ...item,
-          x: clampedX,
-          y: clampedY,
-        };
-        markTelemetryChanged();
+      if (clampedX === item.x && clampedY === item.y) {
+        return;
       }
 
-      const nextItems = [...prevItems];
-      nextItems[targetIndex] = nextItem;
-      return nextItems;
-    });
-  }, [allowResize, markTelemetryChanged, onItemsChange]);
+      nextItem = {
+        ...item,
+        x: clampedX,
+        y: clampedY,
+      };
+      markTelemetryChanged();
+    }
+
+    const nextItems = [...previousItems];
+    nextItems[targetIndex] = nextItem;
+    itemsDirtyRef.current = true;
+    setNextLocalItems(nextItems);
+  }, [allowResize, markTelemetryChanged, setNextLocalItems]);
 
   useEffect(() => {
     const runFrame = () => {
@@ -465,12 +496,25 @@ function RoomCanvasComponent({
 
     const handleMouseUp = () => {
       flushPointer();
-      const hadInteraction = (allowResize && isResizingRef.current !== null) || draggingIdRef.current !== null;
+      const hadResize = allowResize && isResizingRef.current !== null;
+      const hadDrag = draggingIdRef.current !== null;
+
       isResizingRef.current = null;
       draggingIdRef.current = null;
       setIsResizing(null);
       setDraggingId(null);
-      if (hadInteraction) {
+
+      if (hadDrag && itemsDirtyRef.current) {
+        itemsDirtyRef.current = false;
+        onItemsChange(localItemsRef.current.map((item) => ({ ...item })));
+      }
+
+      if (hadResize && sizeDirtyRef.current) {
+        sizeDirtyRef.current = false;
+        onRoomSizeChange?.(widthRef.current, heightRef.current);
+      }
+
+      if (hadDrag || hadResize) {
         onLayoutInteractionEnd?.();
       }
       flushTelemetrySession();
@@ -496,7 +540,9 @@ function RoomCanvasComponent({
     draggingId,
     flushTelemetrySession,
     isResizing,
+    onItemsChange,
     onLayoutInteractionEnd,
+    onRoomSizeChange,
     recordAppliedFrame,
     recordPointerEvent,
   ]);
@@ -513,11 +559,12 @@ function RoomCanvasComponent({
     hasDragged.current = false;
     latestPointerRef.current = null;
 
-    const item = items.find((current) => current.id === id);
+    const item = localItemsRef.current.find((current) => current.id === id);
     if (!item || !canvasRef.current) return;
 
     onLayoutInteractionStart?.();
     startTelemetrySession('drag', item.type || 'Object');
+    itemsDirtyRef.current = false;
     const rect = canvasRef.current.getBoundingClientRect();
     draggingIdRef.current = id;
     setDraggingId(id);
@@ -611,8 +658,10 @@ function RoomCanvasComponent({
       };
 
       if (distanceBetween({ x: nextMeasure.x1, y: nextMeasure.y1 }, { x: nextMeasure.x2, y: nextMeasure.y2 }) >= MIN_MEASURE_LENGTH_CM) {
-        const nextId = getNextMeasureId(measuresRef.current);
-        onMeasuresChange((prev) => [...prev, { ...nextMeasure, id: nextId }]);
+        const nextId = getNextMeasureId(localMeasuresRef.current);
+        const nextMeasures = [...localMeasuresRef.current, { ...nextMeasure, id: nextId }];
+        setNextLocalMeasures(nextMeasures);
+        onMeasuresChange(nextMeasures.map((measure) => ({ ...measure })));
         onSelectMeasure?.(nextId);
       }
 
@@ -640,6 +689,8 @@ function RoomCanvasComponent({
       ? { x: measure.x2, y: measure.y2 }
       : { x: measure.x1, y: measure.y1 };
 
+    activeMeasureDragRef.current = true;
+    measuresDirtyRef.current = false;
     onLayoutInteractionStart?.();
     onEditItem(null);
     onSelectMeasure?.(measure.id);
@@ -655,15 +706,22 @@ function RoomCanvasComponent({
         heightRef.current
       );
 
-      onMeasuresChange((prev) => prev.map((candidate) => {
+      const nextMeasures = localMeasuresRef.current.map((candidate) => {
         if (candidate.id !== measure.id) return candidate;
         return endpoint === 'start'
           ? { ...candidate, x1: constrained.x, y1: constrained.y }
           : { ...candidate, x2: constrained.x, y2: constrained.y };
-      }));
+      });
+      measuresDirtyRef.current = true;
+      setNextLocalMeasures(nextMeasures);
     };
 
     const finish = () => {
+      if (measuresDirtyRef.current) {
+        measuresDirtyRef.current = false;
+        onMeasuresChange(localMeasuresRef.current.map((candidate) => ({ ...candidate })));
+      }
+      activeMeasureDragRef.current = false;
       onLayoutInteractionEnd?.();
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', finish);
@@ -674,12 +732,12 @@ function RoomCanvasComponent({
   };
 
   const displayedMeasures = useMemo(() => {
-    if (!isExportingPdf) return measures;
-    return measures.filter((measure) => measure.includeInPdf);
-  }, [isExportingPdf, measures]);
+    if (!isExportingPdf) return localMeasures;
+    return localMeasures.filter((measure) => measure.includeInPdf);
+  }, [isExportingPdf, localMeasures]);
 
   const openingLabels = useMemo(
-    () => items
+    () => localItems
       .filter((item) => item.type === 'Door' || item.type === 'Window')
       .map((item) => {
         const rawX = item.x + item.width / 2;
@@ -695,7 +753,7 @@ function RoomCanvasComponent({
           isDoor: item.type === 'Door',
         };
       }),
-    [items, selectedItemId, width, height]
+    [localItems, selectedItemId, width, height]
   );
 
   const canvasStyle = useMemo(
@@ -735,7 +793,7 @@ function RoomCanvasComponent({
               {Math.round(displayHeight * 100) / 100}{unit}
             </div>
 
-            {items.map((item) => (
+            {localItems.map((item) => (
               <RoomObject
                 key={item.id}
                 width={item.width}
@@ -755,7 +813,7 @@ function RoomCanvasComponent({
               />
             ))}
 
-            <svg className="absolute inset-0 h-full w-full">
+            <svg className="absolute inset-0 h-full w-full pointer-events-none">
               {displayedMeasures.map((measure) => {
                 const dx = measure.x2 - measure.x1;
                 const dy = measure.y2 - measure.y1;
@@ -775,7 +833,7 @@ function RoomCanvasComponent({
                       stroke={selected ? '#1d4ed8' : '#0f172a'}
                       strokeWidth={selected ? 2.2 : 1.8}
                       strokeDasharray={measure.includeInPdf ? '0' : '5 3'}
-                      className={isExportingPdf ? '' : 'cursor-pointer'}
+                      className={isExportingPdf ? '' : 'cursor-pointer pointer-events-auto'}
                       onMouseDown={(event) => {
                         if (isExportingPdf) return;
                         event.stopPropagation();
@@ -791,7 +849,7 @@ function RoomCanvasComponent({
                         y2={measure.y2}
                         stroke="transparent"
                         strokeWidth={12}
-                        className="cursor-pointer"
+                        className="cursor-pointer pointer-events-auto"
                         onMouseDown={(event) => {
                           event.stopPropagation();
                           onEditItem(null);
@@ -816,7 +874,7 @@ function RoomCanvasComponent({
                           cy={measure.y1}
                           r={4.5}
                           fill={selected ? '#1d4ed8' : '#334155'}
-                          className="cursor-grab"
+                          className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'start')}
                         />
                         <circle
@@ -824,7 +882,7 @@ function RoomCanvasComponent({
                           cy={measure.y2}
                           r={4.5}
                           fill={selected ? '#1d4ed8' : '#334155'}
-                          className="cursor-grab"
+                          className="cursor-grab pointer-events-auto"
                           onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'end')}
                         />
                       </>
@@ -866,6 +924,7 @@ function RoomCanvasComponent({
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
+                    sizeDirtyRef.current = false;
                     isResizingRef.current = 'right';
                     setIsResizing('right');
                   }}
@@ -877,6 +936,7 @@ function RoomCanvasComponent({
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
+                    sizeDirtyRef.current = false;
                     isResizingRef.current = 'bottom';
                     setIsResizing('bottom');
                   }}
@@ -888,6 +948,7 @@ function RoomCanvasComponent({
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
+                    sizeDirtyRef.current = false;
                     isResizingRef.current = 'corner';
                     setIsResizing('corner');
                   }}

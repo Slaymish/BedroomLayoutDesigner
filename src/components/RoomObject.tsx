@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { OpeningWall } from "../types";
 import { inferWallFromRotation, rotationForWall } from "../utils/openings";
+import type { MouseEvent as ReactMouseEvent } from "react";
 
 interface RoomObjectProps {
     width?: number;
@@ -15,8 +16,8 @@ interface RoomObjectProps {
     openingWall?: OpeningWall;
     isSelected?: boolean;
     showLabel?: boolean;
-    onMouseDown?: (e: React.MouseEvent) => void;
-    onMouseClick?: (e: React.MouseEvent) => void;
+    onMouseDown?: (e: ReactMouseEvent) => void;
+    onMouseClick?: (e: ReactMouseEvent) => void;
 }
 
 function RoomObject({ 
