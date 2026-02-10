@@ -28,6 +28,7 @@ export interface Preferences {
     gridColor?: string; // CSS color string (e.g., #94a3b8 or rgba(...))
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
     showDebugTelemetry: boolean;
+    themeMode: 'system' | 'light' | 'dark';
 }
 
 export type OnboardingStep = 'welcome' | 'dimensions' | 'openings';

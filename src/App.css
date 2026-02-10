@@ -1,15 +1,16 @@
 .app-shell {
-  background: #f3f6f7;
+  background: var(--app-shell-bg);
   min-height: 100%;
 }
 
 .app-header {
-  border-bottom: 1px solid rgb(116 155 157 / 0.2);
-  background: #ffffff;
+  border-bottom: 1px solid var(--app-header-border);
+  background: var(--app-header-bg);
 }
 
 .app-header h1 {
   letter-spacing: -0.04em;
+  color: var(--app-header-title);
 }
 
 .app-header-top {
@@ -28,7 +29,7 @@
 
 .app-subtitle {
   margin: 0;
-  color: #5f7477;
+  color: var(--app-subtitle-color);
   font-size: 0.86rem;
 }
 
@@ -220,9 +221,9 @@
 }
 
 .command-toolbar {
-  border: 1px solid rgb(141 181 179 / 0.36);
+  border: 1px solid var(--command-border);
   border-radius: 0.78rem;
-  background: #fff;
+  background: var(--command-surface);
   padding: 0.56rem 0.62rem;
   display: flex;
   flex-wrap: wrap;
@@ -243,15 +244,15 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 0.55rem;
-  color: #4d6e71;
+  color: var(--command-meta-color);
   font-size: 0.76rem;
 }
 
 .command-toolbar-meta span {
-  border: 1px solid rgb(141 181 179 / 0.3);
+  border: 1px solid var(--command-chip-border);
   border-radius: 999px;
   padding: 0.16rem 0.5rem;
-  background: #fff;
+  background: var(--command-chip-bg);
 }
 
 .autosave-status-chip {

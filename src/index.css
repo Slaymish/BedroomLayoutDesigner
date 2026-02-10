@@ -17,6 +17,36 @@
 	--accent-strong: #0e6a6f;
 	--accent-soft: #e4f6f4;
 	--accent-ink: #0b4f53;
+	--app-shell-bg: #f3f6f7;
+	--app-header-bg: #ffffff;
+	--app-header-border: rgb(116 155 157 / 0.2);
+	--app-header-title: #0f172a;
+	--app-subtitle-color: #5f7477;
+	--command-surface: #ffffff;
+	--command-border: rgb(141 181 179 / 0.36);
+	--command-meta-color: #4d6e71;
+	--command-chip-bg: #ffffff;
+	--command-chip-border: rgb(141 181 179 / 0.3);
+}
+
+:root[data-theme='dark'] {
+	--surface-base: #0f171a;
+	--surface-soft: #edf4f4;
+	--surface-card: #f8fcfc;
+	--text-strong: #14282c;
+	--text-muted: #3d5f64;
+	--border-subtle: #bfd1d3;
+	--border-strong: #9ab4b7;
+	--app-shell-bg: #0f171a;
+	--app-header-bg: #152328;
+	--app-header-border: rgb(74 109 116 / 0.55);
+	--app-header-title: #e6f1f3;
+	--app-subtitle-color: #b3c8cd;
+	--command-surface: #152328;
+	--command-border: rgb(92 129 133 / 0.6);
+	--command-meta-color: #bdd1d5;
+	--command-chip-bg: #1b2d33;
+	--command-chip-border: rgb(108 146 149 / 0.45);
 }
 
 /* Minimal base resets; rely on Tailwind for component styling */

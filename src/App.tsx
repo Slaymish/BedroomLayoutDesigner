@@ -139,6 +139,10 @@ function App() {
   const [isAutosavePending, setIsAutosavePending] = useState(false);
   const [layoutTelemetry, setLayoutTelemetry] = useState<LayoutInteractionTelemetry[]>([]);
   const [scrollTelemetry, setScrollTelemetry] = useState<ScrollTelemetrySummary>(DEFAULT_SCROLL_TELEMETRY);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZES[0]);
   const [measureMode, setMeasureMode] = useState(false);
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
@@ -172,6 +176,12 @@ function App() {
   );
   const canEditActiveRoom = !!activeRoom && !activeRoomNeedsDimensions;
   const canAddObjectsToActiveRoom = canEditActiveRoom;
+  const resolvedTheme = useMemo<'light' | 'dark'>(() => {
+    if (workspace.preferences.themeMode === 'light' || workspace.preferences.themeMode === 'dark') {
+      return workspace.preferences.themeMode;
+    }
+    return systemPrefersDark ? 'dark' : 'light';
+  }, [systemPrefersDark, workspace.preferences.themeMode]);
 
   const gridSpacingCm = useMemo(
     () => toBaseCm(workspace.preferences.gridSpacing, activeUnit),
@@ -378,6 +388,32 @@ function App() {
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setSystemPrefersDark(event.matches);
+    };
+    setSystemPrefersDark(mediaQuery.matches);
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => {
+        mediaQuery.removeEventListener('change', handleChange);
+      };
+    }
+
+    mediaQuery.addListener(handleChange);
+    return () => {
+      mediaQuery.removeListener(handleChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.style.colorScheme = resolvedTheme;
+  }, [resolvedTheme]);
 
   useEffect(() => {
     if (!canEditActiveRoom && measureMode) {
@@ -1255,27 +1291,6 @@ function App() {
               >
                 Save Dimensions
               </button>
-              {room.setup.onboardingComplete && isDimensionsEditorOpen && (
-                <button
-                  type="button"
-                  className="ui-btn ui-btn-secondary w-full"
-                  onPointerDown={(event) => {
-                    event.stopPropagation();
-                    clearDimensionDraft(room.id);
-                    setErrorMessage(null);
-                    setDimensionEditorRoomId(null);
-                  }}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    clearDimensionDraft(room.id);
-                    setErrorMessage(null);
-                    setDimensionEditorRoomId(null);
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -1359,6 +1374,7 @@ function App() {
     );
   }, [
     activeUnit,
+    clearDimensionDraft,
     dimensionEditorRoomId,
     gridSpacingCm,
     handleLayoutInteractionEnd,

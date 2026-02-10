@@ -47,6 +47,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   gridColor: '#c8d2dd',
   unit: 'cm',
   showDebugTelemetry: false,
+  themeMode: 'system',
 };
 
 const isValidUnit = (unit: string | undefined): unit is Unit =>
@@ -119,6 +120,10 @@ const sanitizePreferences = (preferences: Preferences | undefined): Preferences 
     showDebugTelemetry: typeof preferences?.showDebugTelemetry === 'boolean'
       ? preferences.showDebugTelemetry
       : DEFAULT_PREFERENCES.showDebugTelemetry,
+    themeMode:
+      preferences?.themeMode === 'light' || preferences?.themeMode === 'dark' || preferences?.themeMode === 'system'
+        ? preferences.themeMode
+        : DEFAULT_PREFERENCES.themeMode,
   };
 };
 
@@ -332,7 +337,8 @@ const preferencesEquals = (left: Preferences, right: Preferences): boolean => (
   left.gridSpacing === right.gridSpacing &&
   left.gridColor === right.gridColor &&
   left.unit === right.unit &&
-  left.showDebugTelemetry === right.showDebugTelemetry
+  left.showDebugTelemetry === right.showDebugTelemetry &&
+  left.themeMode === right.themeMode
 );
 
 export const workspaceStateEquals = (left: WorkspaceState, right: WorkspaceState): boolean => {

@@ -81,6 +81,18 @@ export default function PreferencesPanel({
                 </select>
             </div>
             <div className="ui-field">
+                <label className="ui-label">Theme</label>
+                <select
+                    value={preferences.themeMode}
+                    onChange={e => onChange({ ...preferences, themeMode: e.target.value as Preferences['themeMode'] })}
+                    className="ui-select"
+                >
+                    <option value="system">System (match computer)</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
+            <div className="ui-field">
                 <label className="inline-flex items-center gap-2 text-sm text-slate-700">
                     <input
                         type="checkbox"
