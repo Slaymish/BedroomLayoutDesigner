@@ -223,7 +223,7 @@
   --canvas-size-chip-bg: rgb(13 24 31 / 0.88);
   --canvas-size-chip-border: #3d5d69;
   --canvas-size-chip-text: #b2c8cf;
-  --grid-line-color: rgb(96 127 141 / 0.35);
+  --grid-line-color: rgba(70, 98, 111, 0.351);
 
   --measure-line: #d7e8ec;
   --measure-line-selected: #7cc6ff;

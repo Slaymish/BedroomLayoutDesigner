@@ -4,6 +4,7 @@ import { useEffect, useState, type ChangeEvent, type KeyboardEvent as ReactKeybo
 
 interface PreferencesPanelProps {
     onChange: (prefs: Preferences) => void;
+    onGridSpacingPreviewChange?: (value: number | null) => void;
     preferences: Preferences;
     onResetSetup?: () => void;
     onSaveWorkspace?: () => void;
@@ -14,6 +15,7 @@ interface PreferencesPanelProps {
 
 export default function PreferencesPanel({
     onChange,
+    onGridSpacingPreviewChange,
     preferences,
     onResetSetup,
     onSaveWorkspace,
@@ -28,22 +30,29 @@ export default function PreferencesPanel({
         setGridSpacingDraft(preferences.gridSpacing.toString());
     }, [preferences.gridSpacing, activeUnit]);
 
+    useEffect(() => () => {
+        onGridSpacingPreviewChange?.(null);
+    }, [onGridSpacingPreviewChange]);
+
     const commitGridSpacing = (rawValue?: string) => {
         const normalized = (rawValue ?? gridSpacingDraft).trim();
         if (!normalized) {
             setGridSpacingDraft(preferences.gridSpacing.toString());
+            onGridSpacingPreviewChange?.(null);
             return;
         }
 
         const parsed = Number(normalized);
         if (!Number.isFinite(parsed) || parsed <= 0) {
             setGridSpacingDraft(preferences.gridSpacing.toString());
+            onGridSpacingPreviewChange?.(null);
             return;
         }
 
         const newSpacing = Math.max(0.1, parsed);
         onChange({ ...preferences, gridSpacing: newSpacing });
         setGridSpacingDraft(newSpacing.toString());
+        onGridSpacingPreviewChange?.(null);
     };
 
     const handleGridSpacingKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
@@ -56,6 +65,7 @@ export default function PreferencesPanel({
         if (event.key === 'Escape') {
             event.preventDefault();
             setGridSpacingDraft(preferences.gridSpacing.toString());
+            onGridSpacingPreviewChange?.(null);
             event.currentTarget.blur();
         }
     };
@@ -81,7 +91,24 @@ export default function PreferencesPanel({
                     min={0.1}
                     step={0.1}
                     value={gridSpacingDraft}
-                    onChange={(event) => setGridSpacingDraft(event.target.value)}
+                    onChange={(event) => {
+                        const rawValue = event.target.value;
+                        setGridSpacingDraft(rawValue);
+
+                        const normalized = rawValue.trim();
+                        if (!normalized) {
+                            onGridSpacingPreviewChange?.(null);
+                            return;
+                        }
+
+                        const parsed = Number(normalized);
+                        if (!Number.isFinite(parsed) || parsed <= 0) {
+                            onGridSpacingPreviewChange?.(null);
+                            return;
+                        }
+
+                        onGridSpacingPreviewChange?.(Math.max(0.1, parsed));
+                    }}
                     onBlur={(event) => commitGridSpacing(event.target.value)}
                     onKeyDown={handleGridSpacingKeyDown}
                     className="ui-input"

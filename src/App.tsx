@@ -148,6 +148,7 @@ function App() {
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
   const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
   const [dimensionEditorRoomId, setDimensionEditorRoomId] = useState<string | null>(null);
+  const [gridSpacingPreview, setGridSpacingPreview] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bedPopoverRef = useRef<HTMLDetailsElement>(null);
@@ -191,9 +192,18 @@ function App() {
     return systemPrefersDark ? 'dark' : 'light';
   }, [systemPrefersDark, workspace.preferences.themeMode]);
 
+  const effectiveGridSpacing = gridSpacingPreview ?? workspace.preferences.gridSpacing;
+  const effectiveGridColor = useMemo(() => {
+    const configured = workspace.preferences.gridColor?.trim();
+    if (!configured) return undefined;
+    const normalized = configured.toLowerCase();
+    const defaultColor = (DEFAULT_PREFERENCES.gridColor || '').toLowerCase();
+    if (!defaultColor) return configured;
+    return normalized === defaultColor ? undefined : configured;
+  }, [workspace.preferences.gridColor]);
   const gridSpacingCm = useMemo(
-    () => toBaseCm(workspace.preferences.gridSpacing, activeUnit),
-    [activeUnit, workspace.preferences.gridSpacing]
+    () => toBaseCm(effectiveGridSpacing, activeUnit),
+    [activeUnit, effectiveGridSpacing]
   );
 
   const telemetryInsights = useMemo(() => {
@@ -1057,9 +1067,11 @@ function App() {
     setInfoMessage(null);
     setPreferencesPanelOpen(false);
     setMeasureMode(false);
+    setGridSpacingPreview(null);
   };
 
   const handlePreferencesChange = (preferences: WorkspaceState['preferences']) => {
+    setGridSpacingPreview(null);
     setWorkspace((current) => ({
       ...current,
       preferences: {
@@ -1291,7 +1303,7 @@ function App() {
           roomHeightCm={room.roomHeightCm}
           onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
           gridSpacingCm={gridSpacingCm}
-          gridColor={workspace.preferences.gridColor}
+          gridColor={effectiveGridColor}
           unit={activeUnit}
           onLayoutInteractionStart={handleLayoutInteractionStart}
           onLayoutInteractionEnd={handleLayoutInteractionEnd}
@@ -1405,7 +1417,7 @@ function App() {
     selectedMeasureByRoom,
     updateRoomItem,
     updateSelectedMeasure,
-    workspace.preferences.gridColor,
+    effectiveGridColor,
   ]);
 
   const renderRoomContentRef = useRef(renderRoomContent);
@@ -1418,8 +1430,8 @@ function App() {
   const roomUiStateTokens = useMemo(() => {
     const globalVisualToken = [
       activeUnit,
-      workspace.preferences.gridColor || '',
-      String(workspace.preferences.gridSpacing),
+      effectiveGridColor || 'theme-default',
+      String(effectiveGridSpacing),
       String(gridSpacingCm),
       isExportingPdf ? '1' : '0',
     ].join('|');
@@ -1447,9 +1459,9 @@ function App() {
     isExportingPdf,
     measureMode,
     selectedMeasureByRoom,
+    effectiveGridSpacing,
+    effectiveGridColor,
     workspace.activeRoomId,
-    workspace.preferences.gridColor,
-    workspace.preferences.gridSpacing,
     workspace.rooms,
   ]);
 
@@ -1772,13 +1784,17 @@ function App() {
                 <h2 className="text-lg font-semibold theme-text-heading">Workspace Preferences</h2>
                 <button
                   className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
-                  onClick={() => setPreferencesPanelOpen(false)}
+                  onClick={() => {
+                    setGridSpacingPreview(null);
+                    setPreferencesPanelOpen(false);
+                  }}
                 >
                   Close
                 </button>
               </div>
               <PreferencesPanel
                 onChange={handlePreferencesChange}
+                onGridSpacingPreviewChange={setGridSpacingPreview}
                 preferences={workspace.preferences}
                 onResetSetup={handleResetWorkspace}
                 onSaveWorkspace={handleSaveWorkspaceLocal}
