@@ -460,7 +460,7 @@
 }
 
 .room-canvas-surface {
-  background: var(--canvas-bg);
+  background-color: var(--canvas-bg);
   border: 1px solid var(--canvas-ring);
 }
 

@@ -1,6 +1,6 @@
 import type { Preferences } from "../types";
 import { fromBaseCm, toBaseCm } from "../utils/units";
-import type { ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 
 interface PreferencesPanelProps {
     onChange: (prefs: Preferences) => void;
@@ -22,10 +22,42 @@ export default function PreferencesPanel({
     autosaveStatusLabel,
 }: PreferencesPanelProps) {
     const activeUnit = preferences.unit || 'cm';
+    const [gridSpacingDraft, setGridSpacingDraft] = useState(() => preferences.gridSpacing.toString());
 
-    const handleGridSpacingChange = (e: ChangeEvent<HTMLInputElement>) => {
-        const newSpacing = Math.max(0.1, parseFloat(e.target.value) || 0.1);
+    useEffect(() => {
+        setGridSpacingDraft(preferences.gridSpacing.toString());
+    }, [preferences.gridSpacing, activeUnit]);
+
+    const commitGridSpacing = (rawValue?: string) => {
+        const normalized = (rawValue ?? gridSpacingDraft).trim();
+        if (!normalized) {
+            setGridSpacingDraft(preferences.gridSpacing.toString());
+            return;
+        }
+
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            setGridSpacingDraft(preferences.gridSpacing.toString());
+            return;
+        }
+
+        const newSpacing = Math.max(0.1, parsed);
         onChange({ ...preferences, gridSpacing: newSpacing });
+        setGridSpacingDraft(newSpacing.toString());
+    };
+
+    const handleGridSpacingKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitGridSpacing(event.currentTarget.value);
+            event.currentTarget.blur();
+            return;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setGridSpacingDraft(preferences.gridSpacing.toString());
+            event.currentTarget.blur();
+        }
     };
 
     const handleGridColorChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -48,8 +80,10 @@ export default function PreferencesPanel({
                     type="number"
                     min={0.1}
                     step={0.1}
-                    value={preferences.gridSpacing}
-                    onChange={handleGridSpacingChange}
+                    value={gridSpacingDraft}
+                    onChange={(event) => setGridSpacingDraft(event.target.value)}
+                    onBlur={(event) => commitGridSpacing(event.target.value)}
+                    onKeyDown={handleGridSpacingKeyDown}
                     className="ui-input"
                 />
             </div>

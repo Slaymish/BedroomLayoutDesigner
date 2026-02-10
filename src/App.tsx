@@ -177,6 +177,13 @@ function App() {
   );
   const canEditActiveRoom = !!activeRoom && !activeRoomNeedsDimensions;
   const canAddObjectsToActiveRoom = canEditActiveRoom;
+  const activeRoomDimensionDraft = useMemo(() => {
+    if (!activeRoom) return null;
+    const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+    const defaultWidth = Number(fromBaseCm(activeRoom.roomWidthCm, activeUnit).toFixed(decimals)).toString();
+    const defaultHeight = Number(fromBaseCm(activeRoom.roomHeightCm, activeUnit).toFixed(decimals)).toString();
+    return dimensionDraftByRoom[activeRoom.id] ?? { width: defaultWidth, height: defaultHeight };
+  }, [activeRoom, activeUnit, dimensionDraftByRoom]);
   const resolvedTheme = useMemo<'light' | 'dark'>(() => {
     if (workspace.preferences.themeMode === 'light' || workspace.preferences.themeMode === 'dark') {
       return workspace.preferences.themeMode;
@@ -855,12 +862,22 @@ function App() {
     setDimensionDraftByRoom((previous) => ({
       ...previous,
       [roomId]: {
-        width: previous[roomId]?.width ?? '',
-        height: previous[roomId]?.height ?? '',
+        width: previous[roomId]?.width ?? (() => {
+          const room = workspaceRef.current.rooms.find((candidate) => candidate.id === roomId);
+          if (!room) return '';
+          const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+          return Number(fromBaseCm(room.roomWidthCm, activeUnit).toFixed(decimals)).toString();
+        })(),
+        height: previous[roomId]?.height ?? (() => {
+          const room = workspaceRef.current.rooms.find((candidate) => candidate.id === roomId);
+          if (!room) return '';
+          const decimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1;
+          return Number(fromBaseCm(room.roomHeightCm, activeUnit).toFixed(decimals)).toString();
+        })(),
         [field]: value,
       },
     }));
-  }, []);
+  }, [activeUnit]);
 
   const clearDimensionDraft = useCallback((roomId: string) => {
     setDimensionDraftByRoom((previous) => {
@@ -1262,9 +1279,6 @@ function App() {
       : null;
     const isDimensionsEditorOpen = dimensionEditorRoomId === room.id;
     const roomNeedsDimensions = !room.setup.onboardingComplete || isDimensionsEditorOpen;
-    const defaultWidth = Number(fromBaseCm(room.roomWidthCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
-    const defaultHeight = Number(fromBaseCm(room.roomHeightCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)).toString();
-    const dimensionDraft = dimensionDraftByRoom[room.id] ?? { width: defaultWidth, height: defaultHeight };
 
     const canvas = (
       <div className="relative">
@@ -1291,72 +1305,6 @@ function App() {
           onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
           isExportingPdf={isExportingPdf}
         />
-        {isActive && roomNeedsDimensions && (
-          <div
-            className="dimensions-overlay"
-            onPointerDownCapture={(event) => event.stopPropagation()}
-            onClickCapture={(event) => event.stopPropagation()}
-          >
-            <form
-              className="dimensions-overlay-card"
-              onPointerDownCapture={(event) => event.stopPropagation()}
-              onClickCapture={(event) => event.stopPropagation()}
-              onSubmit={(event) => {
-                event.preventDefault();
-                completeRoomDimensions(room.id, dimensionDraft.width, dimensionDraft.height);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  cancelRoomDimensionEditor(room.id);
-                }
-              }}
-            >
-              <h4 className="text-lg font-semibold theme-text-heading">Set Room Dimensions</h4>
-              <p className="text-sm theme-text-muted">
-                Enter width and length before adding objects to this room.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="ui-field">
-                  <label className="ui-label">Width ({activeUnit})</label>
-                  <input
-                    className="ui-input"
-                    type="number"
-                    min={0.1}
-                    step={0.1}
-                    value={dimensionDraft.width}
-                    onChange={(event) => setDimensionDraftValue(room.id, 'width', event.target.value)}
-                  />
-                </div>
-                <div className="ui-field">
-                  <label className="ui-label">Length ({activeUnit})</label>
-                  <input
-                    className="ui-input"
-                    type="number"
-                    min={0.1}
-                    step={0.1}
-                    value={dimensionDraft.height}
-                    onChange={(event) => setDimensionDraftValue(room.id, 'height', event.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button className="ui-btn ui-btn-primary w-full" type="submit">
-                  Save Dimensions
-                </button>
-                {room.setup.onboardingComplete && isDimensionsEditorOpen && (
-                  <button
-                    className="ui-btn ui-btn-ghost"
-                    type="button"
-                    onClick={() => cancelRoomDimensionEditor(room.id)}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
-          </div>
-        )}
       </div>
     );
 
@@ -1444,7 +1392,6 @@ function App() {
     handleLayoutInteractionStart,
     handleLayoutTelemetry,
     completeRoomDimensions,
-    dimensionDraftByRoom,
     handleRoomItemSelection,
     handleRoomItemsChange,
     handleRoomMeasureSelection,
@@ -1756,6 +1703,67 @@ function App() {
             />
           </section>
         </div>
+
+        {activeRoom && activeRoomNeedsDimensions && activeRoomDimensionDraft && (
+          <div className="fixed inset-0 z-20 flex items-center justify-center p-4 modal-backdrop">
+            <form
+              className="dimensions-overlay-card"
+              onSubmit={(event) => {
+                event.preventDefault();
+                completeRoomDimensions(activeRoom.id, activeRoomDimensionDraft.width, activeRoomDimensionDraft.height);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelRoomDimensionEditor(activeRoom.id);
+                }
+              }}
+            >
+              <h4 className="text-lg font-semibold theme-text-heading">Set Room Dimensions</h4>
+              <p className="text-sm theme-text-muted">
+                Enter width and length before adding objects to this room.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="ui-field">
+                  <label className="ui-label">Width ({activeUnit})</label>
+                  <input
+                    className="ui-input"
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={activeRoomDimensionDraft.width}
+                    onChange={(event) => setDimensionDraftValue(activeRoom.id, 'width', event.target.value)}
+                  />
+                </div>
+                <div className="ui-field">
+                  <label className="ui-label">Length ({activeUnit})</label>
+                  <input
+                    className="ui-input"
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={activeRoomDimensionDraft.height}
+                    onChange={(event) => setDimensionDraftValue(activeRoom.id, 'height', event.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button className="ui-btn ui-btn-primary w-full" type="submit">
+                  Save Dimensions
+                </button>
+                {activeRoom.setup.onboardingComplete && dimensionEditorRoomId === activeRoom.id && (
+                  <button
+                    className="ui-btn ui-btn-ghost"
+                    type="button"
+                    onClick={() => cancelRoomDimensionEditor(activeRoom.id)}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        )}
 
         {preferencesPanelOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center p-4 modal-backdrop">
