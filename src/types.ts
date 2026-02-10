@@ -1,5 +1,14 @@
 export type OpeningWall = 'top' | 'right' | 'bottom' | 'left';
 
+export interface MeasureLine {
+    id: number;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    includeInPdf: boolean;
+}
+
 export interface RoomItem {
     id: number;
     width: number;
@@ -14,9 +23,11 @@ export interface RoomItem {
 }
 
 export interface Preferences {
-    gridSize: number;
+    gridSpacing: number;
+    gridSize?: number; // legacy migration support
     gridColor?: string; // CSS color string (e.g., #94a3b8 or rgba(...))
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
+    showDebugTelemetry: boolean;
 }
 
 export type OnboardingStep = 'welcome' | 'dimensions' | 'openings';
@@ -37,6 +48,7 @@ export interface RoomDesign {
     roomWidthCm: number;
     roomHeightCm: number;
     items: RoomItem[];
+    measures: MeasureLine[];
     nextItemId: number;
     editingItemId: number | null;
     setup: RoomSetupState;

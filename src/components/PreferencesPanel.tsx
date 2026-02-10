@@ -1,4 +1,5 @@
 import type { Preferences } from "../types";
+import { fromBaseCm, toBaseCm } from "../utils/units";
 
 interface PreferencesPanelProps {
     onChange: (prefs: Preferences) => void;
@@ -7,9 +8,11 @@ interface PreferencesPanelProps {
 }
 
 export default function PreferencesPanel({ onChange, preferences, onResetSetup }: PreferencesPanelProps) {
-    const handleGridSizeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newSize = Math.max(2, parseInt(e.target.value, 10) || 2);
-        onChange({ ...preferences, gridSize: newSize });
+    const activeUnit = preferences.unit || 'cm';
+
+    const handleGridSpacingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newSpacing = Math.max(0.1, parseFloat(e.target.value) || 0.1);
+        onChange({ ...preferences, gridSpacing: newSpacing });
     };
 
     const handleGridColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -17,17 +20,23 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
         onChange({ ...preferences, gridColor: color });
     };
 
+    const handleUnitChange = (newUnit: Preferences['unit']) => {
+        const spacingInCm = toBaseCm(preferences.gridSpacing, activeUnit);
+        const convertedSpacing = Number(fromBaseCm(spacingInCm, newUnit || 'cm').toFixed(3));
+        onChange({ ...preferences, unit: newUnit, gridSpacing: Math.max(0.1, convertedSpacing) });
+    };
+
     return (
         <div className="space-y-4">
             <h3 className="text-lg font-semibold text-slate-900">Preferences</h3>
             <div className="ui-field">
-                <label className="ui-label">Grid Size (px)</label>
+                <label className="ui-label">Grid Spacing ({activeUnit})</label>
                 <input
                     type="number"
-                    min={2}
-                    step={1}
-                    value={preferences.gridSize}
-                    onChange={handleGridSizeChange}
+                    min={0.1}
+                    step={0.1}
+                    value={preferences.gridSpacing}
+                    onChange={handleGridSpacingChange}
                     className="ui-input"
                 />
             </div>
@@ -48,7 +57,7 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
                 <label className="ui-label">Unit</label>
                 <select
                     value={preferences.unit}
-                    onChange={e => onChange({ ...preferences, unit: e.target.value as Preferences['unit'] })}
+                    onChange={e => handleUnitChange(e.target.value as Preferences['unit'])}
                     className="ui-select"
                 >
                     <option value="mm">mm</option>
@@ -57,6 +66,16 @@ export default function PreferencesPanel({ onChange, preferences, onResetSetup }
                     <option value="in">in</option>
                     <option value="ft">ft</option>
                 </select>
+            </div>
+            <div className="ui-field">
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                        type="checkbox"
+                        checked={preferences.showDebugTelemetry}
+                        onChange={(e) => onChange({ ...preferences, showDebugTelemetry: e.target.checked })}
+                    />
+                    Show debug performance
+                </label>
             </div>
             {onResetSetup && (
                 <div className="pt-3 border-t border-slate-200 space-y-2">

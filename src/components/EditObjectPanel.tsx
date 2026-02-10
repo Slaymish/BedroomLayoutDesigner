@@ -25,7 +25,7 @@ const createDraftValues = (item: RoomItem, unit: Preferences["unit"]) => ({
     rotate: formatDraftNumber(toDisplayValue(item, "rotate", unit)),
 });
 
-export default function EditObjectPanel({item, onClose, onChange, onRemove, unit}: {item: RoomItem; onClose: () => void; onChange: (updatedItem: RoomItem) => void; onRemove: () => void; unit: Preferences['unit']}) {
+export default function EditObjectPanel({item, onChange, onRemove, unit}: {item: RoomItem; onChange: (updatedItem: RoomItem) => void; onRemove: () => void; unit: Preferences['unit']}) {
     const u = unit || 'cm';
     const [draftValues, setDraftValues] = useState(() => createDraftValues(item, u));
 
@@ -126,18 +126,8 @@ export default function EditObjectPanel({item, onClose, onChange, onRemove, unit
     return (
         <div 
             onClick={(e) => e.stopPropagation()}
-            className="surface-card panel-shell w-full min-w-0 p-4 sm:p-5 space-y-4"
+            className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3"
         >
-            <div className="flex items-start justify-between gap-2">
-                <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
-                <button
-                    className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
-                    onClick={onClose}
-                    aria-label="Close edit panel"
-                >
-                    Close
-                </button>
-            </div>
             <p className="text-xs text-slate-600">Hold Alt and drag on a number field to scrub values.</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="ui-field">

@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type SetStateAction } from 'react';
 import './App.css';
-import AddObjectPanel from './components/AddObjectPanel';
 import EditObjectPanel from './components/EditObjectPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
-import RoomOnboardingPanel from './components/RoomOnboardingPanel';
 import RoomWorkspace from './components/RoomWorkspace';
-import type { LayoutInteractionTelemetry, RoomDesign, RoomItem, WorkspaceState } from './types';
-import { fromBaseCm, type Unit } from './utils/units';
+import type { LayoutInteractionTelemetry, MeasureLine, RoomDesign, RoomItem, WorkspaceState } from './types';
+import { fromBaseCm, toBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
 import {
   DEFAULT_PREFERENCES,
-  OPENING_PRESETS,
   SOFT_ROOM_WARNING_COUNT,
   STORAGE_KEY,
   UNIT_OPTIONS,
@@ -49,6 +46,36 @@ interface ScrollTelemetrySummary {
   isActive: boolean;
 }
 
+interface BedSizePreset {
+  name: string;
+  widthCm: number;
+  heightCm: number;
+}
+
+interface ObjectPreset {
+  type: string;
+  widthCm: number;
+  heightCm: number;
+}
+
+const BED_SIZES: BedSizePreset[] = [
+  { name: 'Single', widthCm: 90, heightCm: 190 },
+  { name: 'King Single', widthCm: 107, heightCm: 203 },
+  { name: 'Double', widthCm: 135, heightCm: 190 },
+  { name: 'Queen', widthCm: 150, heightCm: 190 },
+  { name: 'King', widthCm: 150, heightCm: 200 },
+  { name: 'Super King', widthCm: 180, heightCm: 200 },
+];
+
+const QUICK_OBJECT_PRESETS: ObjectPreset[] = [
+  { type: 'Wardrobe', widthCm: 150, heightCm: 60 },
+  { type: 'Desk', widthCm: 120, heightCm: 60 },
+  { type: 'Couch', widthCm: 200, heightCm: 90 },
+  { type: 'Bedside Table', widthCm: 45, heightCm: 45 },
+  { type: 'Door', widthCm: 80, heightCm: 10 },
+  { type: 'Window', widthCm: 100, heightCm: 10 },
+];
+
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -67,12 +94,112 @@ const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
 const SCROLL_SLOW_FRAME_MS = 24;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 
+function ToolbarIcon({ name }: { name: string }) {
+  switch (name) {
+    case 'undo':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <path d="M9 7H4v5" />
+          <path d="M4 12a8 8 0 1 0 3-6" />
+        </svg>
+      );
+    case 'redo':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <path d="M15 7h5v5" />
+          <path d="M20 12a8 8 0 1 1-3-6" />
+        </svg>
+      );
+    case 'measure':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <path d="M4 16l8-8 8 8" />
+          <path d="M5 19h14" />
+          <path d="M9 15l1.2 1.2" />
+          <path d="M12 12l1.2 1.2" />
+          <path d="M15 9l1.2 1.2" />
+        </svg>
+      );
+    case 'custom':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case 'bed':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="3" y="8" width="18" height="9" rx="2" />
+          <rect x="5" y="10" width="6" height="4" rx="1" />
+          <rect x="13" y="10" width="6" height="4" rx="1" />
+          <path d="M4 17v2" />
+          <path d="M20 17v2" />
+        </svg>
+      );
+    case 'wardrobe':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="5" y="4" width="14" height="16" rx="1.5" />
+          <path d="M12 4v16" />
+        </svg>
+      );
+    case 'desk':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="4" y="7" width="16" height="4" rx="1" />
+          <path d="M7 11v7" />
+          <path d="M17 11v7" />
+        </svg>
+      );
+    case 'couch':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="4" y="9" width="16" height="7" rx="2" />
+          <path d="M6 16v2" />
+          <path d="M18 16v2" />
+          <path d="M4 11h16" />
+        </svg>
+      );
+    case 'bedside table':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="6" y="5" width="12" height="14" rx="1.5" />
+          <path d="M8 10h8" />
+          <path d="M8 14h8" />
+        </svg>
+      );
+    case 'door':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <path d="M5 18h14" />
+          <path d="M5 18V8h8" />
+          <path d="M13 8a7 7 0 0 1 7 7" />
+        </svg>
+      );
+    case 'window':
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="4" y="7" width="16" height="10" rx="1.5" />
+          <path d="M12 7v10" />
+          <path d="M4 12h16" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="toolbar-icon-svg">
+          <rect x="5" y="5" width="14" height="14" rx="2" />
+        </svg>
+      );
+  }
+}
+
+const getPresetIconName = (presetType: string): string => presetType.trim().toLowerCase();
+
 function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
   const [isHydrated, setIsHydrated] = useState(false);
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
-  const [isAddPanelOpen, setIsAddPanelOpen] = useState(false);
-  const [isEditPanelOpen, setIsEditPanelOpen] = useState(false);
   const [historyPast, setHistoryPast] = useState<WorkspaceSnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<WorkspaceSnapshot[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -80,6 +207,9 @@ function App() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [layoutTelemetry, setLayoutTelemetry] = useState<LayoutInteractionTelemetry[]>([]);
   const [scrollTelemetry, setScrollTelemetry] = useState<ScrollTelemetrySummary>(DEFAULT_SCROLL_TELEMETRY);
+  const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZES[0]);
+  const [measureMode, setMeasureMode] = useState(false);
+  const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
@@ -101,40 +231,11 @@ function App() {
     () => findRoom(workspace, workspace.activeRoomId),
     [workspace]
   );
-  const activeEditingItem = useMemo(
-    () =>
-      activeRoom && activeRoom.editingItemId !== null
-        ? activeRoom.items.find((item) => item.id === activeRoom.editingItemId) || null
-        : null,
-    [activeRoom]
-  );
-  const workspaceInsights = useMemo(() => {
-    const roomCount = workspace.rooms.length;
-    const totalObjects = workspace.rooms.reduce((count, room) => count + room.items.length, 0);
-    const totalOpenings = workspace.rooms.reduce(
-      (count, room) => count + room.items.filter((item) => item.type === 'Door' || item.type === 'Window').length,
-      0
-    );
-    const roomsInSetup = workspace.rooms.filter((room) => !room.setup.onboardingComplete).length;
-    const activeRoomItems = activeRoom?.items.length ?? 0;
-    const activeRoomOpenings = activeRoom
-      ? activeRoom.items.filter((item) => item.type === 'Door' || item.type === 'Window').length
-      : 0;
-    const activeRoomArea = activeRoom
-      ? fromBaseCm(activeRoom.roomWidthCm, activeUnit) * fromBaseCm(activeRoom.roomHeightCm, activeUnit)
-      : 0;
-    const areaDecimals = activeUnit === 'm' || activeUnit === 'ft' ? 2 : 0;
 
-    return {
-      roomCount,
-      totalObjects,
-      totalOpenings,
-      roomsInSetup,
-      activeRoomItems,
-      activeRoomOpenings,
-      activeRoomArea: Number(activeRoomArea.toFixed(areaDecimals)),
-    };
-  }, [activeRoom, activeUnit, workspace.rooms]);
+  const gridSpacingCm = useMemo(
+    () => toBaseCm(workspace.preferences.gridSpacing, activeUnit),
+    [activeUnit, workspace.preferences.gridSpacing]
+  );
 
   const telemetryInsights = useMemo(() => {
     if (layoutTelemetry.length === 0) {
@@ -174,6 +275,7 @@ function App() {
         rooms: snapshot.rooms.map((room) => ({
           ...room,
           items: room.items.map(cloneRoomItem),
+          measures: room.measures.map((measure) => ({ ...measure })),
           setup: {
             ...room.setup,
             doorDefaults: { ...room.setup.doorDefaults },
@@ -384,11 +486,24 @@ function App() {
     };
   }, []);
 
+  const clearActiveSelections = useCallback(() => {
+    const roomId = workspaceRef.current.activeRoomId;
+    updateRoom(
+      roomId,
+      (room) => ({
+        ...room,
+        editingItemId: null,
+      }),
+      { recordHistory: false }
+    );
+    setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
+  }, [updateRoom]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsAddPanelOpen(false);
-        setIsEditPanelOpen(false);
+        setMeasureMode(false);
+        clearActiveSelections();
       }
 
       const hasModifier = event.metaKey || event.ctrlKey;
@@ -416,7 +531,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [historyPast.length, historyFuture.length, redo, undo]);
+  }, [clearActiveSelections, historyPast.length, historyFuture.length, redo, undo]);
 
   const setActiveRoom = useCallback(
     (roomId: string) => {
@@ -448,8 +563,20 @@ function App() {
   const handleRoomItemSelection = useCallback((roomId: string, itemId: number | null) => {
     setActiveRoom(roomId);
     setRoomEditingItem(roomId, itemId);
-    if (itemId !== null) {
-      setIsEditPanelOpen(true);
+    setSelectedMeasureByRoom((previous) => ({
+      ...previous,
+      [roomId]: null,
+    }));
+  }, [setActiveRoom, setRoomEditingItem]);
+
+  const handleRoomMeasureSelection = useCallback((roomId: string, measureId: number | null) => {
+    setActiveRoom(roomId);
+    setSelectedMeasureByRoom((previous) => ({
+      ...previous,
+      [roomId]: measureId,
+    }));
+    if (measureId !== null) {
+      setRoomEditingItem(roomId, null);
     }
   }, [setActiveRoom, setRoomEditingItem]);
 
@@ -510,6 +637,24 @@ function App() {
     [updateRoom]
   );
 
+  const handleRoomMeasuresChange = useCallback(
+    (roomId: string, update: SetStateAction<MeasureLine[]>) => {
+      updateRoom(
+        roomId,
+        (room) => {
+          const nextMeasures = typeof update === 'function' ? update(room.measures) : update;
+          if (nextMeasures === room.measures) return room;
+          return {
+            ...room,
+            measures: nextMeasures,
+          };
+        },
+        { recordHistory: false }
+      );
+    },
+    [updateRoom]
+  );
+
   const addItemToRoom = useCallback(
     (roomId: string, width: number, height: number, type: string, options?: AddItemOptions) => {
       updateRoom(roomId, (room) => {
@@ -524,8 +669,8 @@ function App() {
           rotate: options?.rotate ?? 0,
           ...(type === 'Door'
             ? {
-                doorOpenDirection: options?.doorOpenDirection ?? 'in',
-                doorOpenSide: options?.doorOpenSide ?? 'left',
+                doorOpenDirection: options?.doorOpenDirection ?? room.setup.doorDefaults.doorOpenDirection,
+                doorOpenSide: options?.doorOpenSide ?? room.setup.doorDefaults.doorOpenSide,
               }
             : {}),
         };
@@ -551,6 +696,7 @@ function App() {
           editingItemId: options?.select ?? true ? newId : room.editingItemId,
         };
       });
+      setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
     },
     [updateRoom]
   );
@@ -562,22 +708,32 @@ function App() {
         if (!existing) return room;
 
         let nextItem = { ...updatedItem };
-        const windowResized = existing.type === 'Window' && (
-          existing.width !== updatedItem.width ||
-          existing.height !== updatedItem.height
-        );
 
-        if (windowResized) {
-          const centerX = existing.x + existing.width / 2;
-          const centerY = existing.y + existing.height / 2;
+        if (!isOpening(nextItem)) {
+          const sizeOrRotationChanged =
+            existing.width !== updatedItem.width ||
+            existing.height !== updatedItem.height ||
+            (existing.rotate ?? 0) !== (updatedItem.rotate ?? 0);
+          const positionChanged = existing.x !== updatedItem.x || existing.y !== updatedItem.y;
+
+          if (sizeOrRotationChanged && !positionChanged) {
+            const centerX = existing.x + existing.width / 2;
+            const centerY = existing.y + existing.height / 2;
+            nextItem = {
+              ...nextItem,
+              x: centerX - nextItem.width / 2,
+              y: centerY - nextItem.height / 2,
+            };
+          }
+
+          const clampedX = clamp(nextItem.x, 0, Math.max(0, room.roomWidthCm - nextItem.width));
+          const clampedY = clamp(nextItem.y, 0, Math.max(0, room.roomHeightCm - nextItem.height));
           nextItem = {
             ...nextItem,
-            x: centerX - updatedItem.width / 2,
-            y: centerY - updatedItem.height / 2,
+            x: clampedX,
+            y: clampedY,
           };
-        }
-
-        if (isOpening(nextItem)) {
+        } else {
           nextItem = normalizeOpeningForRoom(nextItem, room.roomWidthCm, room.roomHeightCm);
         }
 
@@ -604,6 +760,28 @@ function App() {
     [updateRoom]
   );
 
+  const removeSelectedMeasure = useCallback((roomId: string, measureId: number) => {
+    updateRoom(roomId, (room) => ({
+      ...room,
+      measures: room.measures.filter((measure) => measure.id !== measureId),
+    }));
+    setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
+  }, [updateRoom]);
+
+  const updateSelectedMeasure = useCallback((roomId: string, measureId: number, update: Partial<MeasureLine>) => {
+    updateRoom(roomId, (room) => ({
+      ...room,
+      measures: room.measures.map((measure) => (
+        measure.id === measureId
+          ? {
+              ...measure,
+              ...update,
+            }
+          : measure
+      )),
+    }));
+  }, [updateRoom]);
+
   const handleRoomSizeChange = useCallback(
     (roomId: string, widthCm: number, heightCm: number) => {
       updateRoom(
@@ -614,11 +792,19 @@ function App() {
             if (!isOpening(item)) return item;
             return normalizeOpeningForRoom(item, widthCm, heightCm);
           });
+          const normalizedMeasures = room.measures.map((measure) => ({
+            ...measure,
+            x1: clamp(measure.x1, 0, widthCm),
+            y1: clamp(measure.y1, 0, heightCm),
+            x2: clamp(measure.x2, 0, widthCm),
+            y2: clamp(measure.y2, 0, heightCm),
+          }));
           return {
             ...room,
             roomWidthCm: widthCm,
             roomHeightCm: heightCm,
             items: normalizedItems,
+            measures: normalizedMeasures,
           };
         },
         { recordHistory: false }
@@ -690,6 +876,12 @@ function App() {
         activeRoomId: nextActiveRoomId,
       };
     });
+
+    setSelectedMeasureByRoom((previous) => {
+      const next = { ...previous };
+      delete next[roomId];
+      return next;
+    });
   }, [updateWorkspace, workspace.rooms]);
 
   const handleReorderRooms = useCallback((sourceRoomId: string, targetRoomId: string) => {
@@ -709,12 +901,12 @@ function App() {
     setWorkspace(createDefaultWorkspaceState());
     setHistoryPast([]);
     setHistoryFuture([]);
+    setSelectedMeasureByRoom({});
     interactionStartSnapshotRef.current = null;
     setErrorMessage(null);
     setInfoMessage(null);
     setPreferencesPanelOpen(false);
-    setIsAddPanelOpen(false);
-    setIsEditPanelOpen(false);
+    setMeasureMode(false);
   };
 
   const handlePreferencesChange = (preferences: WorkspaceState['preferences']) => {
@@ -726,107 +918,6 @@ function App() {
       },
     }));
   };
-
-  const handleOnboardingStep = useCallback((roomId: string, step: RoomDesign['setup']['onboardingStep']) => {
-    updateRoom(roomId, (room) => ({
-      ...room,
-      setup: {
-        ...room.setup,
-        onboardingStep: step,
-      },
-      editingItemId: null,
-    }));
-  }, [updateRoom]);
-
-  const handleOnboardingDimensions = useCallback((roomId: string, widthCm: number, heightCm: number) => {
-    updateRoom(roomId, (room) => ({
-      ...room,
-      roomWidthCm: widthCm,
-      roomHeightCm: heightCm,
-      items: room.items
-        .filter((item) => item.type === 'Door' || item.type === 'Window')
-        .map((item) => normalizeOpeningForRoom(item, widthCm, heightCm)),
-      editingItemId: null,
-    }));
-  }, [updateRoom]);
-
-  const handleOnboardingAddOpening = useCallback((
-    roomId: string,
-    type: 'Door' | 'Window',
-    windowWidthCm?: number
-  ) => {
-    updateRoom(roomId, (room) => {
-      const openingWidthCm = type === 'Window'
-        ? Math.max(1, Math.round(windowWidthCm ?? room.setup.windowDraftWidthCm))
-        : OPENING_PRESETS.Door.widthCm;
-      const openingHeightCm = type === 'Window' ? OPENING_PRESETS.Window.heightCm : OPENING_PRESETS.Door.heightCm;
-      const spawnX = Math.max(0, room.roomWidthCm / 2 - openingWidthCm / 2);
-      const spawnY = type === 'Door'
-        ? Math.max(0, room.roomHeightCm - openingHeightCm / 2)
-        : Math.max(0, openingHeightCm);
-
-      const newId = room.nextItemId;
-      const draftItem: RoomItem = {
-        id: newId,
-        width: openingWidthCm,
-        height: openingHeightCm,
-        x: spawnX,
-        y: spawnY,
-        type,
-        doorOpenDirection: type === 'Door' ? room.setup.doorDefaults.doorOpenDirection : undefined,
-        doorOpenSide: type === 'Door' ? room.setup.doorDefaults.doorOpenSide : undefined,
-      };
-
-      return {
-        ...room,
-        items: [...room.items, normalizeOpeningForRoom(draftItem, room.roomWidthCm, room.roomHeightCm)],
-        nextItemId: newId + 1,
-        editingItemId: newId,
-      };
-    });
-  }, [updateRoom]);
-
-  const handleOnboardingDoorDefaults = useCallback((
-    roomId: string,
-    field: 'doorOpenDirection' | 'doorOpenSide',
-    value: 'in' | 'out' | 'left' | 'right'
-  ) => {
-    updateRoom(roomId, (room) => ({
-      ...room,
-      setup: {
-        ...room.setup,
-        doorDefaults: {
-          ...room.setup.doorDefaults,
-          [field]: value,
-        },
-      },
-    }));
-  }, [updateRoom]);
-
-  const handleOnboardingWindowDraft = useCallback((roomId: string, widthCm: number) => {
-    updateRoom(
-      roomId,
-      (room) => ({
-        ...room,
-        setup: {
-          ...room.setup,
-          windowDraftWidthCm: Math.max(1, widthCm),
-        },
-      }),
-      { recordHistory: false }
-    );
-  }, [updateRoom]);
-
-  const handleOnboardingFinish = useCallback((roomId: string) => {
-    updateRoom(roomId, (room) => ({
-      ...room,
-      editingItemId: null,
-      setup: {
-        ...room.setup,
-        onboardingComplete: true,
-      },
-    }));
-  }, [updateRoom]);
 
   const loadExportDependencies = useCallback(() => {
     if (!exportDepsPromiseRef.current) {
@@ -843,124 +934,36 @@ function App() {
   }, [loadExportDependencies]);
 
   const handleAddObjectToActiveRoom = useCallback((widthCm: number, heightCm: number, type: string) => {
-    if (!activeRoom || !activeRoom.setup.onboardingComplete) return;
+    if (!activeRoom) return;
     addItemToRoom(activeRoom.id, widthCm, heightCm, type);
   }, [activeRoom, addItemToRoom]);
 
-  const handleEditItemInActiveRoom = useCallback((item: RoomItem) => {
-    if (!activeRoom) return;
-    updateRoomItem(activeRoom.id, item);
-  }, [activeRoom, updateRoomItem]);
+  const handleQuickAddPreset = useCallback((preset: ObjectPreset) => {
+    handleAddObjectToActiveRoom(preset.widthCm, preset.heightCm, preset.type);
+  }, [handleAddObjectToActiveRoom]);
 
-  const handleRemoveActiveSelection = useCallback(() => {
-    if (!activeRoom) return;
-    removeSelectedItem(activeRoom.id);
-  }, [activeRoom, removeSelectedItem]);
+  const handleAddSelectedBed = useCallback(() => {
+    handleAddObjectToActiveRoom(selectedBedPreset.widthCm, selectedBedPreset.heightCm, 'Bed');
+  }, [handleAddObjectToActiveRoom, selectedBedPreset.heightCm, selectedBedPreset.widthCm]);
 
-  const renderRoomContent = useCallback((room: RoomDesign, isActive: boolean) => {
-    const editingItem = room.editingItemId !== null
-      ? room.items.find((item) => item.id === room.editingItemId) || null
-      : null;
-
-    if (!room.setup.onboardingComplete) {
-      return (
-        <div className="grid gap-3 lg:[grid-template-columns:20rem_minmax(0,1fr)] items-start">
-          <RoomOnboardingPanel
-            key={`${room.id}-${activeUnit}-${room.setup.onboardingStep}-${room.roomWidthCm}-${room.roomHeightCm}-${room.setup.windowDraftWidthCm}`}
-            room={room}
-            unit={activeUnit}
-            selectedItem={editingItem}
-            onSetStep={(step) => {
-              setActiveRoom(room.id);
-              handleOnboardingStep(room.id, step);
-            }}
-            onApplyDimensions={(widthCm, heightCm) => {
-              setActiveRoom(room.id);
-              handleOnboardingDimensions(room.id, widthCm, heightCm);
-            }}
-            onAddOpening={(type, windowWidthCm) => {
-              setActiveRoom(room.id);
-              handleOnboardingAddOpening(room.id, type, windowWidthCm);
-            }}
-            onRemoveSelected={() => {
-              setActiveRoom(room.id);
-              removeSelectedItem(room.id);
-            }}
-            onUpdateItem={(item) => {
-              setActiveRoom(room.id);
-              updateRoomItem(room.id, item);
-            }}
-            onUpdateDoorDefaults={(field, value) => {
-              setActiveRoom(room.id);
-              handleOnboardingDoorDefaults(room.id, field, value);
-            }}
-            onUpdateWindowDraftWidthCm={(widthCm) => {
-              handleOnboardingWindowDraft(room.id, widthCm);
-            }}
-            onFinish={() => {
-              setActiveRoom(room.id);
-              handleOnboardingFinish(room.id);
-            }}
-          />
-          <RoomCanvas
-            items={room.items}
-            onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-            onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
-            selectedItemId={room.editingItemId}
-            roomWidthCm={room.roomWidthCm}
-            roomHeightCm={room.roomHeightCm}
-            allowResize={false}
-            gridSize={workspace.preferences.gridSize}
-            gridColor={workspace.preferences.gridColor}
-            unit={activeUnit}
-            onLayoutInteractionStart={handleLayoutInteractionStart}
-            onLayoutInteractionEnd={handleLayoutInteractionEnd}
-            onLayoutTelemetry={handleLayoutTelemetry}
-            exportRoomId={room.id}
-          />
-        </div>
-      );
+  const handleAddCustomObject = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const type = (formData.get('type') as string | null)?.trim() || '';
+    const widthRaw = parseFloat((formData.get('width') as string | null) || '');
+    const heightRaw = parseFloat((formData.get('height') as string | null) || '');
+    if (!type || !Number.isFinite(widthRaw) || !Number.isFinite(heightRaw) || widthRaw <= 0 || heightRaw <= 0) {
+      return;
     }
 
-    return (
-      <RoomCanvas
-        items={room.items}
-        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
-        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
-        selectedItemId={room.editingItemId}
-        roomWidthCm={room.roomWidthCm}
-        roomHeightCm={room.roomHeightCm}
-        onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
-        gridSize={workspace.preferences.gridSize}
-        gridColor={workspace.preferences.gridColor}
-        unit={activeUnit}
-        onLayoutInteractionStart={handleLayoutInteractionStart}
-        onLayoutInteractionEnd={handleLayoutInteractionEnd}
-        onLayoutTelemetry={handleLayoutTelemetry}
-        exportRoomId={room.id}
-        allowResize={isActive}
-      />
+    handleAddObjectToActiveRoom(
+      toBaseCm(widthRaw, activeUnit),
+      toBaseCm(heightRaw, activeUnit),
+      type
     );
-  }, [
-    activeUnit,
-    handleLayoutInteractionEnd,
-    handleLayoutInteractionStart,
-    handleLayoutTelemetry,
-    handleOnboardingAddOpening,
-    handleOnboardingDimensions,
-    handleOnboardingDoorDefaults,
-    handleOnboardingFinish,
-    handleOnboardingStep,
-    handleOnboardingWindowDraft,
-    handleRoomItemSelection,
-    handleRoomItemsChange,
-    handleRoomSizeChange,
-    removeSelectedItem,
-    setActiveRoom,
-    updateRoomItem,
-    workspace.preferences.gridColor,
-    workspace.preferences.gridSize,
-  ]);
+    form.reset();
+  }, [activeUnit, handleAddObjectToActiveRoom]);
 
   const handleExportRoomPdf = useCallback(
     async (roomsToExport: RoomDesign[], includeRoomName: boolean) => {
@@ -1051,8 +1054,13 @@ function App() {
     handleExportRoomPdf(workspace.rooms, true);
   };
 
-  const handleSaveWorkspaceFile = () => {
-    downloadWorkspaceFile(workspace);
+  const handleSaveWorkspaceLocal = () => {
+    persistWorkspace(workspaceRef.current);
+    setInfoMessage('Workspace saved in this browser.');
+  };
+
+  const handleExportWorkspaceFile = () => {
+    downloadWorkspaceFile(workspaceRef.current);
     setInfoMessage('Workspace exported to JSON file.');
   };
 
@@ -1070,16 +1078,141 @@ function App() {
       setWorkspace(imported);
       setHistoryPast([]);
       setHistoryFuture([]);
+      setSelectedMeasureByRoom({});
       interactionStartSnapshotRef.current = null;
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
-      setIsAddPanelOpen(false);
-      setIsEditPanelOpen(false);
+      setMeasureMode(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load workspace file.';
       setErrorMessage(message);
     }
   };
+
+  const renderRoomContent = useCallback((room: RoomDesign, isActive: boolean) => {
+    const selectedMeasureId = selectedMeasureByRoom[room.id] ?? null;
+    const selectedMeasure = selectedMeasureId !== null
+      ? room.measures.find((measure) => measure.id === selectedMeasureId) || null
+      : null;
+    const editingItem = room.editingItemId !== null
+      ? room.items.find((item) => item.id === room.editingItemId) || null
+      : null;
+
+    const measureLength = selectedMeasure
+      ? fromBaseCm(
+          Math.hypot(selectedMeasure.x2 - selectedMeasure.x1, selectedMeasure.y2 - selectedMeasure.y1),
+          activeUnit
+        )
+      : null;
+
+    const canvas = (
+      <RoomCanvas
+        items={room.items}
+        onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
+        onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
+        selectedItemId={room.editingItemId}
+        roomWidthCm={room.roomWidthCm}
+        roomHeightCm={room.roomHeightCm}
+        onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
+        gridSpacingCm={gridSpacingCm}
+        gridColor={workspace.preferences.gridColor}
+        unit={activeUnit}
+        onLayoutInteractionStart={handleLayoutInteractionStart}
+        onLayoutInteractionEnd={handleLayoutInteractionEnd}
+        onLayoutTelemetry={handleLayoutTelemetry}
+        exportRoomId={room.id}
+        allowResize={isActive && !measureMode}
+        measures={room.measures}
+        onMeasuresChange={(update) => handleRoomMeasuresChange(room.id, update)}
+        measureMode={measureMode && isActive}
+        selectedMeasureId={selectedMeasureId}
+        onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
+        isExportingPdf={isExportingPdf}
+      />
+    );
+
+    if (!isActive) {
+      return canvas;
+    }
+
+    return (
+      <div className="room-designer-layout">
+        <div className="room-designer-canvas">{canvas}</div>
+        <aside className="surface-card room-edit-rail" onClick={(event) => event.stopPropagation()}>
+          <div className="room-edit-rail-header">
+            <h3 className="text-base font-semibold text-slate-900">Edit</h3>
+            <span className="text-xs text-slate-500">Always visible</span>
+          </div>
+          {editingItem ? (
+            <EditObjectPanel
+              item={editingItem}
+              onChange={(item) => {
+                handleRoomMeasureSelection(room.id, null);
+                updateRoomItem(room.id, item);
+              }}
+              onRemove={() => removeSelectedItem(room.id)}
+              unit={activeUnit}
+            />
+          ) : selectedMeasure ? (
+            <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3">
+              <p className="text-xs text-slate-600">
+                Hold <strong>Shift</strong> while dragging nodes for free movement.
+              </p>
+              <div className="surface-card-muted p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">Measurement</p>
+                <p className="text-sm text-slate-800">
+                  Length: <strong>{Number((measureLength ?? 0).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1))}{activeUnit}</strong>
+                </p>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={selectedMeasure.includeInPdf}
+                    onChange={(event) => {
+                      updateSelectedMeasure(room.id, selectedMeasure.id, {
+                        includeInPdf: event.target.checked,
+                      });
+                    }}
+                  />
+                  Include in PDF export
+                </label>
+              </div>
+              <button
+                className="ui-btn ui-btn-secondary w-full"
+                onClick={() => removeSelectedMeasure(room.id, selectedMeasure.id)}
+              >
+                Delete Measure
+              </button>
+            </div>
+          ) : (
+            <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5">
+              <p className="text-sm text-slate-600">
+                Select an object to edit, or enable ruler mode to create/edit measurements.
+              </p>
+            </div>
+          )}
+        </aside>
+      </div>
+    );
+  }, [
+    activeUnit,
+    gridSpacingCm,
+    handleLayoutInteractionEnd,
+    handleLayoutInteractionStart,
+    handleLayoutTelemetry,
+    handleRoomItemSelection,
+    handleRoomItemsChange,
+    handleRoomMeasureSelection,
+    handleRoomMeasuresChange,
+    handleRoomSizeChange,
+    isExportingPdf,
+    measureMode,
+    removeSelectedItem,
+    removeSelectedMeasure,
+    selectedMeasureByRoom,
+    updateRoomItem,
+    updateSelectedMeasure,
+    workspace.preferences.gridColor,
+  ]);
 
   if (!isHydrated) {
     return (
@@ -1103,14 +1236,15 @@ function App() {
           <div className="app-header-top">
             <div className="app-brand-block">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900">Bedroom Layout Designer</h1>
-              <p className="app-subtitle">Plan room size, openings, and furniture.</p>
+              <p className="app-subtitle">Plan room size, openings, furniture, and measurements.</p>
             </div>
             <div className="app-header-actions">
               <button className="ui-btn ui-btn-primary" onClick={handleAddRoom}>Add Room</button>
               <button className="ui-btn ui-btn-secondary" onClick={handleDuplicateActiveRoom} disabled={!activeRoom}>
                 Duplicate Active Room
               </button>
-              <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceFile}>Save Workspace</button>
+              <button className="ui-btn ui-btn-ghost" onClick={handleSaveWorkspaceLocal}>Save Workspace</button>
+              <button className="ui-btn ui-btn-ghost" onClick={handleExportWorkspaceFile}>Export Workspace</button>
               <button className="ui-btn ui-btn-ghost" onClick={() => fileInputRef.current?.click()}>
                 Load Workspace
               </button>
@@ -1144,31 +1278,6 @@ function App() {
               </button>
             </div>
           </div>
-          <div className="workspace-kpi-grid" aria-label="Workspace insights">
-            <div className="workspace-kpi">
-              <span className="workspace-kpi-label">Rooms</span>
-              <span className="workspace-kpi-value">{workspaceInsights.roomCount}</span>
-            </div>
-            <div className="workspace-kpi">
-              <span className="workspace-kpi-label">Objects</span>
-              <span className="workspace-kpi-value">{workspaceInsights.totalObjects}</span>
-            </div>
-            <div className="workspace-kpi">
-              <span className="workspace-kpi-label">Openings</span>
-              <span className="workspace-kpi-value">{workspaceInsights.totalOpenings}</span>
-            </div>
-            <div className="workspace-kpi">
-              <span className="workspace-kpi-label">Pending</span>
-              <span className="workspace-kpi-value">{workspaceInsights.roomsInSetup}</span>
-            </div>
-            <div className="workspace-kpi workspace-kpi-wide">
-              <span className="workspace-kpi-label">Active Room</span>
-              <span className="workspace-kpi-value">{activeRoom?.name ?? 'None selected'}</span>
-              <span className="workspace-kpi-meta">
-                {workspaceInsights.activeRoomItems} items · {workspaceInsights.activeRoomOpenings} openings · {workspaceInsights.activeRoomArea}{activeUnit}²
-              </span>
-            </div>
-          </div>
         </div>
       </header>
       <main className="px-4 py-5 sm:px-6 md:px-8 md:py-7 overflow-x-clip">
@@ -1178,69 +1287,154 @@ function App() {
         {infoMessage && (
           <p className="mx-auto mb-3 max-w-[1600px] text-sm text-sky-700">{infoMessage}</p>
         )}
+
         <div className="mx-auto mb-3 max-w-[1600px] command-toolbar">
           <div className="command-toolbar-group">
             <button
-              className="ui-btn ui-btn-subtle disabled:opacity-50"
+              className="ui-btn ui-btn-subtle toolbar-icon-btn disabled:opacity-50"
               onClick={undo}
               disabled={historyPast.length === 0}
+              aria-label="Undo"
+              title="Undo"
             >
-              Undo
+              <ToolbarIcon name="undo" />
             </button>
             <button
-              className="ui-btn ui-btn-subtle disabled:opacity-50"
+              className="ui-btn ui-btn-subtle toolbar-icon-btn disabled:opacity-50"
               onClick={redo}
               disabled={historyFuture.length === 0}
+              aria-label="Redo"
+              title="Redo"
             >
-              Redo
+              <ToolbarIcon name="redo" />
             </button>
-          </div>
-          <div className="command-toolbar-meta">
-            <span>Undo {historyPast.length}</span>
-            <span>Redo {historyFuture.length}</span>
-            <span>Scroll {scrollTelemetry.avgFrameMs > 0 ? `${scrollTelemetry.avgFrameMs.toFixed(1)}ms` : '--'}</span>
-            <span>Drag {telemetryInsights.avgFrameMs > 0 ? `${telemetryInsights.avgFrameMs.toFixed(1)}ms` : '--'}</span>
-            <details className="perf-details">
-              <summary className="perf-summary">Performance</summary>
-              <div className="perf-popover">
-                <p className="perf-title">Layout</p>
-                <p className="perf-row">Samples: {telemetryInsights.sampleCount}</p>
-                <p className="perf-row">Avg action: {Math.round(telemetryInsights.avgDurationMs)}ms</p>
-                <p className="perf-row">Max frame: {telemetryInsights.maxFrameMs > 0 ? telemetryInsights.maxFrameMs.toFixed(1) : '--'}ms</p>
-                <p className="perf-row">Slow frames: {telemetryInsights.slowFrameRate.toFixed(1)}%</p>
-                <p className="perf-row">Last: {telemetryInsights.latest ? telemetryInsights.latest.interaction : 'none'}</p>
-                <p className="perf-title mt-2">Scroll</p>
-                <p className="perf-row">Events: {scrollTelemetry.scrollEvents}</p>
-                <p className="perf-row">Frames: {scrollTelemetry.sampleCount}</p>
-                <p className="perf-row">Avg frame: {scrollTelemetry.avgFrameMs > 0 ? scrollTelemetry.avgFrameMs.toFixed(1) : '--'}ms</p>
-                <p className="perf-row">Max frame: {scrollTelemetry.maxFrameMs > 0 ? scrollTelemetry.maxFrameMs.toFixed(1) : '--'}ms</p>
-                <p className="perf-row">Slow frames: {scrollTelemetry.slowFrameRate.toFixed(1)}%</p>
-                <button
-                  className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1 text-[11px] mt-1"
-                  onClick={handleClearPerformanceTelemetry}
-                  disabled={telemetryInsights.sampleCount === 0 && scrollTelemetry.sampleCount === 0}
+
+            <div className="toolbar-divider" />
+
+            <details className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
+              <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add bed" title="Add bed">
+                <ToolbarIcon name="bed" />
+              </summary>
+              <div className="toolbar-popover-panel">
+                <label className="ui-label">Bed size</label>
+                <select
+                  className="ui-select"
+                  value={selectedBedPreset.name}
+                  onChange={(event) => {
+                    const next = BED_SIZES.find((size) => size.name === event.target.value);
+                    if (next) setSelectedBedPreset(next);
+                  }}
                 >
-                  Clear
+                  {BED_SIZES.map((size) => (
+                    <option key={size.name} value={size.name}>
+                      {size.name} ({size.widthCm}x{size.heightCm}cm)
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="ui-btn ui-btn-primary w-full mt-2"
+                  onClick={handleAddSelectedBed}
+                  disabled={!activeRoom}
+                >
+                  Add Bed
                 </button>
               </div>
             </details>
+
+            {QUICK_OBJECT_PRESETS.map((preset) => (
+              <button
+                key={preset.type}
+                className="ui-btn ui-btn-subtle toolbar-icon-btn"
+                onClick={() => handleQuickAddPreset(preset)}
+                disabled={!activeRoom}
+                title={`Add ${preset.type}`}
+                aria-label={`Add ${preset.type}`}
+              >
+                <ToolbarIcon name={getPresetIconName(preset.type)} />
+              </button>
+            ))}
+
+            <details className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
+              <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add custom object" title="Add custom object">
+                <ToolbarIcon name="custom" />
+              </summary>
+              <form className="toolbar-popover-panel" onSubmit={handleAddCustomObject}>
+                <div className="ui-field">
+                  <label className="ui-label">Type</label>
+                  <input className="ui-input" type="text" name="type" required />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="ui-field">
+                    <label className="ui-label">W ({activeUnit})</label>
+                    <input className="ui-input" type="number" name="width" min={0.1} step={0.1} required />
+                  </div>
+                  <div className="ui-field">
+                    <label className="ui-label">L ({activeUnit})</label>
+                    <input className="ui-input" type="number" name="height" min={0.1} step={0.1} required />
+                  </div>
+                </div>
+                <button className="ui-btn ui-btn-primary w-full mt-2" type="submit" disabled={!activeRoom}>
+                  Add Custom
+                </button>
+              </form>
+            </details>
+
+            <div className="toolbar-divider" />
+
+            <button
+              className={`ui-btn ui-btn-subtle toolbar-icon-btn ${measureMode ? 'toolbar-icon-btn-active' : ''}`}
+              onClick={() => {
+                setMeasureMode((previous) => {
+                  const next = !previous;
+                  if (next) {
+                    clearActiveSelections();
+                  }
+                  return next;
+                });
+              }}
+              title={measureMode ? 'Exit measure mode' : 'Enter measure mode'}
+              aria-label={measureMode ? 'Exit measure mode' : 'Enter measure mode'}
+            >
+              <ToolbarIcon name="measure" />
+            </button>
+          </div>
+
+          <div className="command-toolbar-meta">
+            <span>Undo {historyPast.length}</span>
+            <span>Redo {historyFuture.length}</span>
+            <span>{measureMode ? 'Measure mode on' : 'Measure mode off'}</span>
+            {workspace.preferences.showDebugTelemetry && (
+              <>
+                <span>Scroll {scrollTelemetry.avgFrameMs > 0 ? `${scrollTelemetry.avgFrameMs.toFixed(1)}ms` : '--'}</span>
+                <span>Drag {telemetryInsights.avgFrameMs > 0 ? `${telemetryInsights.avgFrameMs.toFixed(1)}ms` : '--'}</span>
+                <details className="perf-details">
+                  <summary className="perf-summary">Performance</summary>
+                  <div className="perf-popover">
+                    <p className="perf-title">Layout</p>
+                    <p className="perf-row">Samples: {telemetryInsights.sampleCount}</p>
+                    <p className="perf-row">Avg action: {Math.round(telemetryInsights.avgDurationMs)}ms</p>
+                    <p className="perf-row">Max frame: {telemetryInsights.maxFrameMs > 0 ? telemetryInsights.maxFrameMs.toFixed(1) : '--'}ms</p>
+                    <p className="perf-row">Slow frames: {telemetryInsights.slowFrameRate.toFixed(1)}%</p>
+                    <p className="perf-row">Last: {telemetryInsights.latest ? telemetryInsights.latest.interaction : 'none'}</p>
+                    <p className="perf-title mt-2">Scroll</p>
+                    <p className="perf-row">Events: {scrollTelemetry.scrollEvents}</p>
+                    <p className="perf-row">Frames: {scrollTelemetry.sampleCount}</p>
+                    <p className="perf-row">Avg frame: {scrollTelemetry.avgFrameMs > 0 ? scrollTelemetry.avgFrameMs.toFixed(1) : '--'}ms</p>
+                    <p className="perf-row">Max frame: {scrollTelemetry.maxFrameMs > 0 ? scrollTelemetry.maxFrameMs.toFixed(1) : '--'}ms</p>
+                    <p className="perf-row">Slow frames: {scrollTelemetry.slowFrameRate.toFixed(1)}%</p>
+                    <button
+                      className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1 text-[11px] mt-1"
+                      onClick={handleClearPerformanceTelemetry}
+                      disabled={telemetryInsights.sampleCount === 0 && scrollTelemetry.sampleCount === 0}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </details>
+              </>
+            )}
           </div>
         </div>
-
-        <button
-          className={`side-drawer-toggle side-drawer-toggle-left ${isAddPanelOpen ? 'open' : ''}`}
-          onClick={() => setIsAddPanelOpen((current) => !current)}
-          aria-label={isAddPanelOpen ? 'Hide add objects panel' : 'Show add objects panel'}
-        >
-          {isAddPanelOpen ? 'Hide Add' : 'Show Add'}
-        </button>
-        <button
-          className={`side-drawer-toggle side-drawer-toggle-right ${isEditPanelOpen ? 'open' : ''}`}
-          onClick={() => setIsEditPanelOpen((current) => !current)}
-          aria-label={isEditPanelOpen ? 'Hide edit object panel' : 'Show edit object panel'}
-        >
-          {isEditPanelOpen ? 'Hide Edit' : 'Show Edit'}
-        </button>
 
         <div className="mx-auto max-w-[1600px]">
           <section className="panel-shell min-w-0">
@@ -1256,77 +1450,6 @@ function App() {
             />
           </section>
         </div>
-
-        {(isAddPanelOpen || isEditPanelOpen) && (
-          <button
-            className="drawer-backdrop"
-            aria-label="Close side panels"
-            onClick={() => {
-              setIsAddPanelOpen(false);
-              setIsEditPanelOpen(false);
-            }}
-          />
-        )}
-
-        <aside className={`side-drawer side-drawer-left ${isAddPanelOpen ? 'open' : ''}`}>
-          <div className="side-drawer-content">
-            <div className="side-drawer-header">
-              <h3 className="text-lg font-semibold text-slate-900">Add Objects</h3>
-              <button
-                className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
-                onClick={() => setIsAddPanelOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            {activeRoom && activeRoom.setup.onboardingComplete ? (
-              <AddObjectPanel onAddObject={handleAddObjectToActiveRoom} unit={workspace.preferences.unit} />
-            ) : (
-              <div className="surface-card panel-shell p-4 sm:p-5">
-                <p className="text-sm text-slate-600">
-                  Complete onboarding for the active room before adding furniture.
-                </p>
-              </div>
-            )}
-          </div>
-        </aside>
-
-        <aside className={`side-drawer side-drawer-right ${isEditPanelOpen ? 'open' : ''}`}>
-          <div className="side-drawer-content">
-            <div className="side-drawer-header">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Object</h3>
-              <button
-                className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
-                onClick={() => setIsEditPanelOpen(false)}
-              >
-                Close
-              </button>
-            </div>
-            {activeRoom && activeRoom.setup.onboardingComplete ? (
-              activeEditingItem ? (
-                <EditObjectPanel
-                  item={activeEditingItem}
-                  onClose={() => setIsEditPanelOpen(false)}
-                  onChange={handleEditItemInActiveRoom}
-                  onRemove={handleRemoveActiveSelection}
-                  unit={activeUnit}
-                />
-              ) : (
-                <div className="surface-card panel-shell p-4 sm:p-5">
-                  <p className="text-sm text-slate-600">
-                    Select an object in the active room to edit size, position, or rotation.
-                  </p>
-                </div>
-              )
-            ) : (
-              <div className="surface-card panel-shell p-4 sm:p-5">
-                <p className="text-sm text-slate-600">
-                  Object editing is available after onboarding is complete for the active room.
-                </p>
-              </div>
-            )}
-          </div>
-        </aside>
 
         {preferencesPanelOpen && (
           <div className="fixed inset-0 z-30 flex items-center justify-center p-4 bg-slate-900/35 backdrop-blur-[1px]">
@@ -1355,5 +1478,7 @@ function App() {
     </div>
   );
 }
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 export default App;

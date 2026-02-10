@@ -1,4 +1,5 @@
 import type {
+  MeasureLine,
   OnboardingStep,
   OpeningWall,
   Preferences,
@@ -7,7 +8,7 @@ import type {
   RoomSetupState,
   WorkspaceState,
 } from '../types';
-import type { Unit } from './units';
+import { fromBaseCm, type Unit } from './units';
 import {
   inferNearestWall,
   inferWallFromRotation,
@@ -32,7 +33,7 @@ export interface WorkspaceSnapshot {
 }
 
 export const STORAGE_KEY = 'bedroom-layout-designer:v1';
-export const WORKSPACE_STORAGE_VERSION = 3;
+export const WORKSPACE_STORAGE_VERSION = 4;
 export const DEFAULT_ROOM_WIDTH_CM = 360;
 export const DEFAULT_ROOM_HEIGHT_CM = 320;
 export const SOFT_ROOM_WARNING_COUNT = 8;
@@ -42,9 +43,10 @@ export const OPENING_PRESETS: Record<'Door' | 'Window', { widthCm: number; heigh
   Window: { widthCm: 100, heightCm: 10 },
 };
 export const DEFAULT_PREFERENCES: Preferences = {
-  gridSize: 30,
+  gridSpacing: 30,
   gridColor: '#c8d2dd',
   unit: 'cm',
+  showDebugTelemetry: false,
 };
 
 const isValidUnit = (unit: string | undefined): unit is Unit =>
@@ -71,6 +73,7 @@ export const cloneRoomItem = (item: RoomItem): RoomItem => ({ ...item });
 export const cloneRoomDesign = (room: RoomDesign): RoomDesign => ({
   ...room,
   items: room.items.map(cloneRoomItem),
+  measures: room.measures.map((measure) => ({ ...measure })),
   setup: {
     ...room.setup,
     doorDefaults: { ...room.setup.doorDefaults },
@@ -102,10 +105,20 @@ export const normalizeOpeningForRoom = (
 
 const sanitizePreferences = (preferences: Preferences | undefined): Preferences => {
   const unit = isValidUnit(preferences?.unit) ? preferences?.unit : DEFAULT_PREFERENCES.unit;
+  const legacyGridSize = sanitizeNumber(preferences?.gridSize, DEFAULT_PREFERENCES.gridSpacing, 2);
+  const gridSpacing = sanitizeNumber(
+    preferences?.gridSpacing,
+    fromBaseCm(legacyGridSize, unit || 'cm'),
+    0.1
+  );
   return {
-    gridSize: sanitizeNumber(preferences?.gridSize, DEFAULT_PREFERENCES.gridSize, 2),
+    gridSpacing,
+    gridSize: undefined,
     gridColor: preferences?.gridColor || DEFAULT_PREFERENCES.gridColor,
     unit,
+    showDebugTelemetry: typeof preferences?.showDebugTelemetry === 'boolean'
+      ? preferences.showDebugTelemetry
+      : DEFAULT_PREFERENCES.showDebugTelemetry,
   };
 };
 
@@ -153,6 +166,15 @@ const sanitizeRoomItems = (items: RoomItem[], roomWidthCm: number, roomHeightCm:
   });
 };
 
+const sanitizeMeasureLine = (measure: Partial<MeasureLine>, fallbackId: number): MeasureLine => ({
+  id: sanitizeNumber(measure.id, fallbackId, 1),
+  x1: sanitizeNumber(measure.x1, 0),
+  y1: sanitizeNumber(measure.y1, 0),
+  x2: sanitizeNumber(measure.x2, 0),
+  y2: sanitizeNumber(measure.y2, 0),
+  includeInPdf: typeof measure.includeInPdf === 'boolean' ? measure.includeInPdf : false,
+});
+
 const sanitizeRoomName = (name: unknown, fallback: string): string => {
   if (typeof name !== 'string') return fallback;
   const trimmed = name.trim();
@@ -163,15 +185,19 @@ const sanitizeRoomDesign = (room: Partial<RoomDesign>, fallbackName: string): Ro
   const roomWidthCm = sanitizeNumber(room.roomWidthCm, DEFAULT_ROOM_WIDTH_CM, 180);
   const roomHeightCm = sanitizeNumber(room.roomHeightCm, DEFAULT_ROOM_HEIGHT_CM, 180);
   const items = Array.isArray(room.items) ? sanitizeRoomItems(room.items, roomWidthCm, roomHeightCm) : [];
+  const measures = Array.isArray(room.measures)
+    ? room.measures.map((measure, index) => sanitizeMeasureLine(measure, index + 1))
+    : [];
   const highestId = items.reduce((max, item) => Math.max(max, item.id), 0);
   const nextItemId = Math.max(sanitizeNumber(room.nextItemId, 1, 1), highestId + 1);
-  const setup = sanitizeSetup(room.setup, false);
+  const setup = sanitizeSetup(room.setup, true);
   return {
     id: typeof room.id === 'string' && room.id ? room.id : createRoomId(),
     name: sanitizeRoomName(room.name, fallbackName),
     roomWidthCm,
     roomHeightCm,
     items,
+    measures,
     nextItemId,
     editingItemId:
       typeof room.editingItemId === 'number' && items.some((item) => item.id === room.editingItemId)
@@ -187,11 +213,12 @@ export const createBlankRoom = (name: string): RoomDesign => ({
   roomWidthCm: DEFAULT_ROOM_WIDTH_CM,
   roomHeightCm: DEFAULT_ROOM_HEIGHT_CM,
   items: [],
+  measures: [],
   nextItemId: 1,
   editingItemId: null,
   setup: {
-    onboardingComplete: false,
-    onboardingStep: 'welcome',
+    onboardingComplete: true,
+    onboardingStep: 'openings',
     doorDefaults: {
       doorOpenDirection: 'in',
       doorOpenSide: 'left',
@@ -201,16 +228,18 @@ export const createBlankRoom = (name: string): RoomDesign => ({
 });
 
 export const createDuplicateRoom = (source: RoomDesign, name: string): RoomDesign => {
-  const openings = source.items
-    .filter((item) => item.type === 'Door' || item.type === 'Window')
-    .map((item) => normalizeOpeningForRoom({ ...item }, source.roomWidthCm, source.roomHeightCm));
-  const highestId = openings.reduce((max, item) => Math.max(max, item.id), 0);
+  const copiedItems = source.items.map((item) => {
+    if (!isOpening(item)) return { ...item };
+    return normalizeOpeningForRoom({ ...item }, source.roomWidthCm, source.roomHeightCm);
+  });
+  const highestId = copiedItems.reduce((max, item) => Math.max(max, item.id), 0);
   return {
     id: createRoomId(),
     name,
     roomWidthCm: source.roomWidthCm,
     roomHeightCm: source.roomHeightCm,
-    items: openings,
+    items: copiedItems,
+    measures: source.measures.map((measure) => ({ ...measure })),
     nextItemId: Math.max(highestId + 1, 1),
     editingItemId: null,
     setup: {
@@ -272,6 +301,7 @@ export const roomDesignEquals = (left: RoomDesign, right: RoomDesign): boolean =
     left.nextItemId !== right.nextItemId ||
     left.editingItemId !== right.editingItemId ||
     left.items.length !== right.items.length ||
+    left.measures.length !== right.measures.length ||
     !setupEquals(left.setup, right.setup)
   ) {
     return false;
@@ -281,13 +311,28 @@ export const roomDesignEquals = (left: RoomDesign, right: RoomDesign): boolean =
       return false;
     }
   }
+  for (let index = 0; index < left.measures.length; index += 1) {
+    const leftMeasure = left.measures[index];
+    const rightMeasure = right.measures[index];
+    if (
+      leftMeasure.id !== rightMeasure.id ||
+      leftMeasure.x1 !== rightMeasure.x1 ||
+      leftMeasure.y1 !== rightMeasure.y1 ||
+      leftMeasure.x2 !== rightMeasure.x2 ||
+      leftMeasure.y2 !== rightMeasure.y2 ||
+      leftMeasure.includeInPdf !== rightMeasure.includeInPdf
+    ) {
+      return false;
+    }
+  }
   return true;
 };
 
 const preferencesEquals = (left: Preferences, right: Preferences): boolean => (
-  left.gridSize === right.gridSize &&
+  left.gridSpacing === right.gridSpacing &&
   left.gridColor === right.gridColor &&
-  left.unit === right.unit
+  left.unit === right.unit &&
+  left.showDebugTelemetry === right.showDebugTelemetry
 );
 
 export const workspaceStateEquals = (left: WorkspaceState, right: WorkspaceState): boolean => {
@@ -357,6 +402,7 @@ const migrateLegacyLayoutState = (legacy: LegacyStoredLayoutState): WorkspaceSta
   room.roomWidthCm = roomWidthCm;
   room.roomHeightCm = roomHeightCm;
   room.items = items;
+  room.measures = [];
   room.nextItemId = Math.max(sanitizeNumber(legacy.nextItemId, 1, 1), highestId + 1);
   room.setup.onboardingComplete =
     typeof legacy.onboardingComplete === 'boolean'
@@ -399,4 +445,3 @@ export const hasDoor = (room: RoomDesign): boolean => room.items.some((item) => 
 
 export const findRoom = (workspace: WorkspaceState, roomId: string): RoomDesign | null =>
   workspace.rooms.find((room) => room.id === roomId) || null;
-

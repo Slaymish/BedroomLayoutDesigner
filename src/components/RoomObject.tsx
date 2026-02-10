@@ -42,7 +42,6 @@ function RoomObject({
     const isBed = normalizedType === 'bed';
     const isCouch = normalizedType === 'couch';
     const isDesk = normalizedType === 'desk';
-    const isWardrobe = normalizedType === 'wardrobe';
     const isBedsideTable = normalizedType === 'bedside table';
     const resolvedWall = openingWall ?? inferWallFromRotation(rotate) ?? 'bottom';
     const appliedRotate = isDoor || isWindow ? rotationForWall(resolvedWall) : rotate;
@@ -117,17 +116,6 @@ function RoomObject({
                     <div className="absolute left-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
                     <div className="absolute right-[10%] bottom-[8%] w-[10%] h-[24%] bg-slate-400/70 rounded-[2px]" />
                     <div className="absolute right-[18%] top-[30%] h-[46%] w-[18%] rounded-sm border border-slate-400/80 bg-slate-200/80" />
-                </div>
-            );
-        }
-
-        if (isWardrobe) {
-            return (
-                <div className="absolute inset-[8%] pointer-events-none">
-                    <div className="absolute inset-0 rounded-sm border border-slate-500/70" />
-                    <div className="absolute left-1/2 top-0 bottom-0 border-l border-slate-400/80" />
-                    <div className="absolute left-[44%] top-[30%] h-[40%] border-l border-slate-400/80" />
-                    <div className="absolute left-[56%] top-[30%] h-[40%] border-l border-slate-400/80" />
                 </div>
             );
         }

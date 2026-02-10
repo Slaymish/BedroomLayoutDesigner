@@ -88,9 +88,6 @@ function RoomCard({
           ) : (
             <div className="flex items-center gap-2">
               <h3 className="truncate text-base font-semibold text-slate-900">{room.name}</h3>
-              <span className={`room-card-status ${room.setup.onboardingComplete ? 'ready' : 'setup'}`}>
-                {room.setup.onboardingComplete ? 'Ready' : 'Setup required'}
-              </span>
             </div>
           )}
           <p className="text-xs text-slate-600">
