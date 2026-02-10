@@ -4,6 +4,7 @@ import EditObjectPanel from './components/EditObjectPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
 import RoomWorkspace from './components/RoomWorkspace';
+import { BED_SIZE_PRESETS, OBJECT_PRESETS, type ObjectPreset } from './constants/objectPresets';
 import {
   Archive,
   BedDouble,
@@ -64,36 +65,6 @@ interface ScrollTelemetrySummary {
   isActive: boolean;
 }
 
-interface BedSizePreset {
-  name: string;
-  widthCm: number;
-  heightCm: number;
-}
-
-interface ObjectPreset {
-  type: string;
-  widthCm: number;
-  heightCm: number;
-}
-
-const BED_SIZES: BedSizePreset[] = [
-  { name: 'Single', widthCm: 90, heightCm: 190 },
-  { name: 'King Single', widthCm: 107, heightCm: 203 },
-  { name: 'Double', widthCm: 135, heightCm: 190 },
-  { name: 'Queen', widthCm: 150, heightCm: 190 },
-  { name: 'King', widthCm: 150, heightCm: 200 },
-  { name: 'Super King', widthCm: 180, heightCm: 200 },
-];
-
-const QUICK_OBJECT_PRESETS: ObjectPreset[] = [
-  { type: 'Wardrobe', widthCm: 150, heightCm: 60 },
-  { type: 'Desk', widthCm: 120, heightCm: 60 },
-  { type: 'Couch', widthCm: 200, heightCm: 90 },
-  { type: 'Bedside Table', widthCm: 45, heightCm: 45 },
-  { type: 'Door', widthCm: 80, heightCm: 10 },
-  { type: 'Window', widthCm: 100, heightCm: 10 },
-];
-
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -111,6 +82,7 @@ const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
 
 const SCROLL_SLOW_FRAME_MS = 24;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
+const MAX_HISTORY_SNAPSHOTS = 80;
 
 const iconClassName = 'toolbar-icon-svg';
 
@@ -134,6 +106,7 @@ function App() {
   const [historyFuture, setHistoryFuture] = useState<WorkspaceSnapshot[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [storageErrorMessage, setStorageErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [lastAutosaveAt, setLastAutosaveAt] = useState<number | null>(null);
   const [isAutosavePending, setIsAutosavePending] = useState(false);
@@ -143,7 +116,7 @@ function App() {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
   });
-  const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZES[0]);
+  const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZE_PRESETS[0]);
   const [measureMode, setMeasureMode] = useState(false);
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
   const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
@@ -168,6 +141,7 @@ function App() {
   });
 
   const activeUnit: Unit = workspace.preferences.unit || 'cm';
+  const debugTelemetryEnabled = workspace.preferences.showDebugTelemetry;
   const dimensionDraftUnitRef = useRef<Unit>(activeUnit);
   const activeRoom = useMemo(
     () => findRoom(workspace, workspace.activeRoomId),
@@ -255,7 +229,7 @@ function App() {
       if (last && workspaceSnapshotEquals(last, normalized)) {
         return previous;
       }
-      return [...previous, normalized];
+      return [...previous, normalized].slice(-MAX_HISTORY_SNAPSHOTS);
     });
     setHistoryFuture([]);
   }, []);
@@ -321,7 +295,7 @@ function App() {
       const target = previous[previous.length - 1];
       const current = captureWorkspaceSnapshot(workspaceRef.current);
       if (current) {
-        setHistoryFuture((futurePrevious) => [...futurePrevious, current]);
+        setHistoryFuture((futurePrevious) => [...futurePrevious, current].slice(-MAX_HISTORY_SNAPSHOTS));
       }
       restoreSnapshot(target);
       return previous.slice(0, -1);
@@ -334,7 +308,7 @@ function App() {
       const target = previous[previous.length - 1];
       const current = captureWorkspaceSnapshot(workspaceRef.current);
       if (current) {
-        setHistoryPast((pastPrevious) => [...pastPrevious, current]);
+        setHistoryPast((pastPrevious) => [...pastPrevious, current].slice(-MAX_HISTORY_SNAPSHOTS));
       }
       restoreSnapshot(target);
       return previous.slice(0, -1);
@@ -343,31 +317,44 @@ function App() {
 
   useEffect(() => {
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      const parsed = parseStoredWorkspaceState(stored);
-      if (parsed) {
-        setWorkspace(parsed);
+      try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        const parsed = parseStoredWorkspaceState(stored);
+        if (parsed) {
+          setWorkspace(parsed);
+        }
+      } catch {
+        setStorageErrorMessage('Local browser storage is unavailable. Export your workspace file to avoid data loss.');
       }
     } finally {
       setIsHydrated(true);
     }
   }, []);
 
-  const persistWorkspace = useCallback((state: WorkspaceState) => {
-    const payload: WorkspaceState = {
-      ...state,
-      version: WORKSPACE_STORAGE_VERSION,
-      preferences: {
-        ...DEFAULT_PREFERENCES,
-        ...state.preferences,
-      },
-    };
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  const persistWorkspace = useCallback((state: WorkspaceState): boolean => {
+    try {
+      const payload: WorkspaceState = {
+        ...state,
+        version: WORKSPACE_STORAGE_VERSION,
+        preferences: {
+          ...DEFAULT_PREFERENCES,
+          ...state.preferences,
+        },
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      setStorageErrorMessage(null);
+      return true;
+    } catch {
+      setStorageErrorMessage('Autosave failed. Export your workspace file to avoid data loss.');
+      return false;
+    }
   }, []);
 
   const persistWorkspaceAutosave = useCallback((state: WorkspaceState) => {
-    persistWorkspace(state);
-    setLastAutosaveAt(Date.now());
+    const persisted = persistWorkspace(state);
+    if (persisted) {
+      setLastAutosaveAt(Date.now());
+    }
     setIsAutosavePending(false);
   }, [persistWorkspace]);
 
@@ -487,6 +474,11 @@ function App() {
     metrics.slowFrameCount = 0;
     metrics.scrollEvents = 0;
 
+    if (!debugTelemetryEnabled) {
+      setScrollTelemetry(DEFAULT_SCROLL_TELEMETRY);
+      return;
+    }
+
     const onScroll = () => {
       metrics.lastScrollAt = performance.now();
       metrics.scrollEvents += 1;
@@ -530,7 +522,7 @@ function App() {
       window.cancelAnimationFrame(rafId);
       window.clearInterval(sampleIntervalId);
     };
-  }, []);
+  }, [debugTelemetryEnabled]);
 
   const clearActiveSelections = useCallback(() => {
     const roomId = workspaceRef.current.activeRoomId;
@@ -1223,9 +1215,13 @@ function App() {
   };
 
   const handleSaveWorkspaceLocal = () => {
-    persistWorkspace(workspaceRef.current);
+    const persisted = persistWorkspace(workspaceRef.current);
     setIsAutosavePending(false);
-    setInfoMessage('Workspace saved in this browser.');
+    if (persisted) {
+      setInfoMessage('Workspace saved in this browser.');
+      return;
+    }
+    setErrorMessage('Could not save workspace in this browser.');
   };
 
   const handleExportWorkspaceFile = () => {
@@ -1397,13 +1393,11 @@ function App() {
     );
   }, [
     activeUnit,
-    cancelRoomDimensionEditor,
     dimensionEditorRoomId,
     gridSpacingCm,
     handleLayoutInteractionEnd,
     handleLayoutInteractionStart,
     handleLayoutTelemetry,
-    completeRoomDimensions,
     handleRoomItemSelection,
     handleRoomItemsChange,
     handleRoomMeasureSelection,
@@ -1413,7 +1407,6 @@ function App() {
     measureMode,
     removeSelectedItem,
     removeSelectedMeasure,
-    setDimensionDraftValue,
     selectedMeasureByRoom,
     updateRoomItem,
     updateSelectedMeasure,
@@ -1526,6 +1519,9 @@ function App() {
         {errorMessage && (
           <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-error">{errorMessage}</p>
         )}
+        {storageErrorMessage && (
+          <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-error">{storageErrorMessage}</p>
+        )}
         {infoMessage && (
           <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-info">{infoMessage}</p>
         )}
@@ -1583,11 +1579,11 @@ function App() {
                   className="ui-select"
                   value={selectedBedPreset.name}
                   onChange={(event) => {
-                    const next = BED_SIZES.find((size) => size.name === event.target.value);
+                    const next = BED_SIZE_PRESETS.find((size) => size.name === event.target.value);
                     if (next) setSelectedBedPreset(next);
                   }}
                 >
-                  {BED_SIZES.map((size) => (
+                  {BED_SIZE_PRESETS.map((size) => (
                     <option key={size.name} value={size.name}>
                       {size.name} ({size.widthCm}x{size.heightCm}cm)
                     </option>
@@ -1603,7 +1599,7 @@ function App() {
               </div>
             </details>
 
-            {QUICK_OBJECT_PRESETS.map((preset) => (
+            {OBJECT_PRESETS.map((preset) => (
               <button
                 key={preset.type}
                 className="ui-btn ui-btn-subtle toolbar-icon-btn"

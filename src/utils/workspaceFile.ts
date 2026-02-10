@@ -1,5 +1,5 @@
-import type { WorkspaceFile, WorkspaceState } from '../types';
-import { sanitizeWorkspaceState } from './workspaceState';
+import type { WorkspaceFile, WorkspaceState } from '../types.js';
+import { sanitizeWorkspaceState } from './workspaceState.js';
 
 const WORKSPACE_FILE_KIND = 'BedroomLayoutWorkspace';
 const WORKSPACE_FILE_VERSION = 1;

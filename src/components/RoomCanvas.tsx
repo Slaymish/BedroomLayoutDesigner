@@ -286,6 +286,10 @@ function RoomCanvasComponent({
       { x: 0, y: height },
     ];
 
+    if (!measureMode) {
+      return points;
+    }
+
     localItems.forEach((item) => {
       getRotatedCorners(item).forEach((corner) => {
         points.push({
@@ -296,7 +300,7 @@ function RoomCanvasComponent({
     });
 
     return points;
-  }, [height, localItems, width]);
+  }, [height, localItems, measureMode, width]);
 
   const startTelemetrySession = useCallback((interaction: 'drag' | 'resize', itemType?: string) => {
     telemetrySessionRef.current = {

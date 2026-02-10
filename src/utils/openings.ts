@@ -1,4 +1,4 @@
-import type { OpeningWall, RoomItem } from "../types";
+import type { OpeningWall, RoomItem } from "../types.js";
 
 const OPENING_TYPES = new Set(['Door', 'Window']);
 
@@ -109,4 +109,3 @@ export const snapOpeningToNearestWall = (
   };
   return normalizeOpeningOnWall(roughPosition, wall, roomWidthCm, roomHeightCm);
 };
-

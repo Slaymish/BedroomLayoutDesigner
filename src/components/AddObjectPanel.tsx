@@ -1,24 +1,7 @@
 import { useState } from 'react';
 import type { Preferences } from "../types";
 import { toBaseCm } from "../utils/units";
-
-const BED_SIZES = [
-    { name: 'Single (90x190cm)', width: 90, height: 190 },
-    { name: 'King Single (107x203cm)', width: 107, height: 203 },
-    { name: 'Double (135x190cm)', width: 135, height: 190 },
-    { name: 'Queen (150x190cm)', width: 150, height: 190 },
-    { name: 'King (150x200cm)', width: 150, height: 200 },
-    { name: 'Super King (180x200cm)', width: 180, height: 200 },
-];
-
-const FURNITURE_PRESETS = [
-    { type: 'Wardrobe', widthCm: 150, heightCm: 60 },
-    { type: 'Desk', widthCm: 120, heightCm: 60 },
-    { type: 'Couch', widthCm: 200, heightCm: 90 },
-    { type: 'Bedside Table', widthCm: 45, heightCm: 45 },
-    { type: 'Door', widthCm: 80, heightCm: 10 },
-    { type: 'Window', widthCm: 100, heightCm: 10 },
-];
+import { BED_SIZE_PRESETS, OBJECT_PRESETS } from "../constants/objectPresets";
 
 interface AddObjectPanelProps {
     onAddObject: (widthCm: number, heightCm: number, type: string) => void;
@@ -26,13 +9,13 @@ interface AddObjectPanelProps {
 }
 
 export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProps) {
-    const [selectedBedSize, setSelectedBedSize] = useState(BED_SIZES[0]);
+    const [selectedBedSize, setSelectedBedSize] = useState(BED_SIZE_PRESETS[0]);
     const activeUnit = unit || 'cm';
 
     const addBed = () => {
         onAddObject(
-            toBaseCm(selectedBedSize.width, 'cm'),
-            toBaseCm(selectedBedSize.height, 'cm'),
+            toBaseCm(selectedBedSize.widthCm, 'cm'),
+            toBaseCm(selectedBedSize.heightCm, 'cm'),
             'Bed'
         );
     };
@@ -50,12 +33,14 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                         className="ui-select"
                         value={selectedBedSize.name}
                         onChange={(e) => {
-                            const size = BED_SIZES.find(s => s.name === e.target.value);
+                            const size = BED_SIZE_PRESETS.find(s => s.name === e.target.value);
                             if (size) setSelectedBedSize(size);
                         }}
                     >
-                        {BED_SIZES.map((size) => (
-                            <option key={size.name} value={size.name}>{size.name}</option>
+                        {BED_SIZE_PRESETS.map((size) => (
+                            <option key={size.name} value={size.name}>
+                                {size.name} ({size.widthCm}x{size.heightCm}cm)
+                            </option>
                         ))}
                     </select>
                     <button
@@ -70,7 +55,7 @@ export default function AddObjectPanel({ onAddObject, unit }: AddObjectPanelProp
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600">Objects</h4>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {FURNITURE_PRESETS.map((preset) => (
+                {OBJECT_PRESETS.map((preset) => (
                     <button
                         key={preset.type}
                         className="ui-btn ui-btn-ghost w-full justify-between px-3 overflow-hidden py-2.5"

@@ -7,14 +7,14 @@ import type {
   RoomItem,
   RoomSetupState,
   WorkspaceState,
-} from '../types';
-import { fromBaseCm, type Unit } from './units';
+} from '../types.js';
+import { fromBaseCm, type Unit } from './units.js';
 import {
   inferNearestWall,
   inferWallFromRotation,
   isOpening,
   normalizeOpeningOnWall,
-} from './openings';
+} from './openings.js';
 
 interface LegacyStoredLayoutState {
   version?: number;

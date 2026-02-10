@@ -24,34 +24,31 @@ export default function PreferencesPanel({
     autosaveStatusLabel,
 }: PreferencesPanelProps) {
     const activeUnit = preferences.unit || 'cm';
-    const [gridSpacingDraft, setGridSpacingDraft] = useState(() => preferences.gridSpacing.toString());
-
-    useEffect(() => {
-        setGridSpacingDraft(preferences.gridSpacing.toString());
-    }, [preferences.gridSpacing, activeUnit]);
+    const [gridSpacingDraft, setGridSpacingDraft] = useState<string | null>(null);
+    const gridSpacingInputValue = gridSpacingDraft ?? preferences.gridSpacing.toString();
 
     useEffect(() => () => {
         onGridSpacingPreviewChange?.(null);
     }, [onGridSpacingPreviewChange]);
 
     const commitGridSpacing = (rawValue?: string) => {
-        const normalized = (rawValue ?? gridSpacingDraft).trim();
+        const normalized = (rawValue ?? gridSpacingInputValue).trim();
         if (!normalized) {
-            setGridSpacingDraft(preferences.gridSpacing.toString());
+            setGridSpacingDraft(null);
             onGridSpacingPreviewChange?.(null);
             return;
         }
 
         const parsed = Number(normalized);
         if (!Number.isFinite(parsed) || parsed <= 0) {
-            setGridSpacingDraft(preferences.gridSpacing.toString());
+            setGridSpacingDraft(null);
             onGridSpacingPreviewChange?.(null);
             return;
         }
 
         const newSpacing = Math.max(0.1, parsed);
         onChange({ ...preferences, gridSpacing: newSpacing });
-        setGridSpacingDraft(newSpacing.toString());
+        setGridSpacingDraft(null);
         onGridSpacingPreviewChange?.(null);
     };
 
@@ -64,7 +61,7 @@ export default function PreferencesPanel({
         }
         if (event.key === 'Escape') {
             event.preventDefault();
-            setGridSpacingDraft(preferences.gridSpacing.toString());
+            setGridSpacingDraft(null);
             onGridSpacingPreviewChange?.(null);
             event.currentTarget.blur();
         }
@@ -90,7 +87,7 @@ export default function PreferencesPanel({
                     type="number"
                     min={0.1}
                     step={0.1}
-                    value={gridSpacingDraft}
+                    value={gridSpacingInputValue}
                     onChange={(event) => {
                         const rawValue = event.target.value;
                         setGridSpacingDraft(rawValue);
