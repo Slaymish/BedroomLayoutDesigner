@@ -65,6 +65,12 @@ interface ScrollTelemetrySummary {
   isActive: boolean;
 }
 
+interface ExportImageData {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
 const isEditableElement = (target: EventTarget | null): boolean => {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
@@ -85,6 +91,81 @@ const SCROLL_ACTIVE_WINDOW_MS = 140;
 const MAX_HISTORY_SNAPSHOTS = 80;
 
 const iconClassName = 'toolbar-icon-svg';
+
+const loadExportImage = (dataUrl: string, roomName: string): Promise<HTMLImageElement> => (
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`Failed to render ${roomName}.`));
+    image.src = dataUrl;
+  })
+);
+
+const trimExportImageToVisibleBounds = (image: HTMLImageElement): ExportImageData => {
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.width = sourceWidth;
+  sourceCanvas.height = sourceHeight;
+
+  const sourceContext = sourceCanvas.getContext('2d');
+  if (!sourceContext) {
+    return { dataUrl: image.src, width: sourceWidth, height: sourceHeight };
+  }
+
+  sourceContext.drawImage(image, 0, 0, sourceWidth, sourceHeight);
+  const pixels = sourceContext.getImageData(0, 0, sourceWidth, sourceHeight).data;
+
+  let minX = sourceWidth;
+  let minY = sourceHeight;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < sourceHeight; y += 1) {
+    for (let x = 0; x < sourceWidth; x += 1) {
+      const alpha = pixels[(y * sourceWidth + x) * 4 + 3];
+      if (alpha === 0) continue;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return { dataUrl: image.src, width: sourceWidth, height: sourceHeight };
+  }
+
+  const width = maxX - minX + 1;
+  const height = maxY - minY + 1;
+  if (minX === 0 && minY === 0 && width === sourceWidth && height === sourceHeight) {
+    return { dataUrl: image.src, width, height };
+  }
+
+  const croppedCanvas = document.createElement('canvas');
+  croppedCanvas.width = width;
+  croppedCanvas.height = height;
+  const croppedContext = croppedCanvas.getContext('2d');
+  if (!croppedContext) {
+    return { dataUrl: image.src, width: sourceWidth, height: sourceHeight };
+  }
+
+  croppedContext.fillStyle = '#ffffff';
+  croppedContext.fillRect(0, 0, width, height);
+  croppedContext.drawImage(
+    sourceCanvas,
+    minX,
+    minY,
+    width,
+    height,
+    0,
+    0,
+    width,
+    height
+  );
+
+  return { dataUrl: croppedCanvas.toDataURL('image/png'), width, height };
+};
 
 const renderPresetIcon = (type: string) => {
   const normalized = type.trim().toLowerCase();
@@ -1145,16 +1226,11 @@ function App() {
 
           const imageData = await toPng(exportTarget, {
             pixelRatio: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
-            backgroundColor: '#ffffff',
             cacheBust: true,
             skipFonts: true,
           });
-          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-            const value = new Image();
-            value.onload = () => resolve(value);
-            value.onerror = () => reject(new Error(`Failed to render ${room.name}.`));
-            value.src = imageData;
-          });
+          const renderedImage = await loadExportImage(imageData, room.name);
+          const trimmedImage = trimExportImageToVisibleBounds(renderedImage);
 
           if (index > 0) {
             pdf.addPage();
@@ -1166,9 +1242,9 @@ function App() {
           const headerHeight = includeRoomName ? 72 : 58;
           const availableWidth = pageWidth - margin * 2;
           const availableHeight = pageHeight - margin * 2 - headerHeight;
-          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
-          const renderWidth = image.width * scale;
-          const renderHeight = image.height * scale;
+          const scale = Math.min(availableWidth / trimmedImage.width, availableHeight / trimmedImage.height);
+          const renderWidth = trimmedImage.width * scale;
+          const renderHeight = trimmedImage.height * scale;
           const renderX = (pageWidth - renderWidth) / 2;
           const renderY = margin + headerHeight + Math.max(0, (availableHeight - renderHeight) / 2);
 
@@ -1187,7 +1263,7 @@ function App() {
           if (includeRoomName) {
             pdf.text(`Room ${index + 1} of ${roomsToExport.length}`, margin, margin + 60);
           }
-          pdf.addImage(imageData, 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
+          pdf.addImage(trimmedImage.dataUrl, 'PNG', renderX, renderY, renderWidth, renderHeight, undefined, 'FAST');
         }
 
         const dateLabel = new Date().toISOString().slice(0, 10);
@@ -1278,6 +1354,11 @@ function App() {
     const editingItem = room.editingItemId !== null
       ? room.items.find((item) => item.id === room.editingItemId) || null
       : null;
+    const editPanelTitle = editingItem
+      ? `Edit ${(editingItem.type || 'Object').trim() || 'Object'}`
+      : selectedMeasure
+        ? 'Edit Measurement'
+        : 'Edit';
 
     const measureLength = selectedMeasure
       ? fromBaseCm(
@@ -1325,7 +1406,7 @@ function App() {
         <div className="room-designer-canvas">{canvas}</div>
         <aside className="surface-card room-edit-rail" onClick={(event) => event.stopPropagation()}>
           <div className="room-edit-rail-header">
-            <h3 className="text-base font-semibold theme-text-heading">Edit</h3>
+            <h3 className="text-base font-semibold theme-text-heading">{editPanelTitle}</h3>
           </div>
           {measureMode && (
             <div className="surface-card-muted px-3 py-2 mb-2">

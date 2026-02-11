@@ -13,7 +13,7 @@ import {
 import RoomObject from "./RoomObject";
 import type { LayoutInteractionTelemetry, MeasureLine, RoomItem } from "../types";
 import { fromBaseCm } from "../utils/units";
-import { isOpening, snapOpeningToNearestWall } from "../utils/openings";
+import { inferWallFromRotation, isOpening, snapOpeningToNearestWall } from "../utils/openings";
 
 interface RoomCanvasProps {
   items: RoomItem[];
@@ -60,6 +60,12 @@ interface Point {
 const SLOW_FRAME_THRESHOLD_MS = 24;
 const MIN_MEASURE_LENGTH_CM = 2;
 const MEASURE_SNAP_THRESHOLD_CM = 12;
+const CANVAS_PADDING_PX = 40;
+const EXPORT_CANVAS_PADDING_PX = 96;
+const WINDOW_LABEL_OUTSET_CM = 16;
+const WINDOW_SIDE_LABEL_EXTRA_CM = 22;
+const DOOR_LABEL_OUTSET_CM = 12;
+const DOOR_SIDE_LABEL_EXTRA_CM = 8;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
 
@@ -746,18 +752,42 @@ function RoomCanvasComponent({
       .map((item) => {
         const rawX = item.x + item.width / 2;
         const rawY = item.y + item.height / 2;
-        const labelX = clamp(rawX, 44, width - 44);
-        const labelY = clamp(rawY, 20, height - 20);
+        const isWindow = item.type === 'Window';
+        const isDoor = item.type === 'Door';
+        const isOpeningLabel = isWindow || isDoor;
+        const wall = item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
+        const labelOutset = item.height / 2 + (isWindow ? WINDOW_LABEL_OUTSET_CM : DOOR_LABEL_OUTSET_CM);
+        const sideLabelOutset = labelOutset + (isWindow ? WINDOW_SIDE_LABEL_EXTRA_CM : DOOR_SIDE_LABEL_EXTRA_CM);
+
+        let labelX = clamp(rawX, 44, width - 44);
+        let labelY = clamp(rawY, 20, height - 20);
+
+        if (isOpeningLabel) {
+          if (wall === 'top') {
+            labelY = rawY - labelOutset;
+            labelX = clamp(rawX, 44, width - 44);
+          } else if (wall === 'bottom') {
+            labelY = rawY + labelOutset;
+            labelX = clamp(rawX, 44, width - 44);
+          } else if (wall === 'left') {
+            labelX = rawX - sideLabelOutset;
+            labelY = clamp(rawY, 20, height - 20);
+          } else {
+            labelX = rawX + sideLabelOutset;
+            labelY = clamp(rawY, 20, height - 20);
+          }
+        }
+
         return {
           id: item.id,
           label: item.type || 'Opening',
           x: labelX,
           y: labelY,
           selected: item.id === selectedItemId,
-          isDoor: item.type === 'Door',
+          isDoor,
         };
       }),
-    [localItems, selectedItemId, width, height]
+    [height, localItems, selectedItemId, width]
   );
 
   const canvasStyle = useMemo(
@@ -773,11 +803,17 @@ function RoomCanvasComponent({
   const displayWidth = fromBaseCm(width, unit);
   const displayHeight = fromBaseCm(height, unit);
   const showMeasureHandles = measureMode && !isExportingPdf;
+  const canvasPadding = isExportingPdf ? EXPORT_CANVAS_PADDING_PX : CANVAS_PADDING_PX;
 
   return (
     <div className="workspace-card">
       <div className="workspace-scroll">
-        <div className="mx-auto w-fit">
+        <div
+          className="mx-auto w-fit"
+          style={{ padding: canvasPadding }}
+          data-floorplan-export-room={exportRoomId}
+          data-floorplan-export={exportRoomId ? 'true' : undefined}
+        >
           <div
             ref={canvasRef}
             onMouseDown={beginMeasureCreate}
@@ -785,9 +821,7 @@ function RoomCanvasComponent({
               onEditItem(null);
               onSelectMeasure?.(null);
             }}
-            data-floorplan-export-room={exportRoomId}
-            data-floorplan-export={exportRoomId ? 'true' : undefined}
-            className="room-canvas-surface relative bg-grid rounded-xl shadow-sm overflow-hidden"
+            className="room-canvas-surface relative bg-grid rounded-xl shadow-sm overflow-visible"
             style={canvasStyle}
           >
             <div className="room-canvas-size-chip absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none">
@@ -812,6 +846,7 @@ function RoomCanvasComponent({
                 openingWall={item.openingWall}
                 isSelected={item.id === selectedItemId}
                 showLabel={item.type !== 'Door' && item.type !== 'Window'}
+                bulgeOutward={item.type === 'Window'}
                 onMouseDown={(event) => handleObjectMouseDown(event, item.id)}
                 onMouseClick={(event) => handleObjectClick(event, item.id)}
               />

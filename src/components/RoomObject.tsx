@@ -16,6 +16,7 @@ interface RoomObjectProps {
     openingWall?: OpeningWall;
     isSelected?: boolean;
     showLabel?: boolean;
+    bulgeOutward?: boolean;
     onMouseDown?: (e: ReactMouseEvent) => void;
     onMouseClick?: (e: ReactMouseEvent) => void;
 }
@@ -33,6 +34,7 @@ function RoomObject({
     openingWall,
     isSelected = false,
     showLabel = true,
+    bulgeOutward = false,
     onMouseDown, 
     onMouseClick 
 }: RoomObjectProps) {
@@ -47,6 +49,10 @@ function RoomObject({
     const resolvedWall = openingWall ?? inferWallFromRotation(rotate) ?? 'bottom';
     const appliedRotate = isDoor || isWindow ? rotationForWall(resolvedWall) : rotate;
     const openingHitInset = isDoor || isWindow ? 14 : 0;
+    const windowOutset = isWindow && bulgeOutward ? height / 2 : 0;
+    const objectTransform = isWindow && windowOutset > 0
+        ? `rotate(${appliedRotate}deg) translateY(${windowOutset}px)`
+        : `rotate(${appliedRotate}deg)`;
 
     const renderDoorSwing = () => {
         if (!isDoor) return null;
@@ -149,7 +155,7 @@ function RoomObject({
                 height,
                 left: x,
                 top: y,
-                transform: `rotate(${appliedRotate}deg)`,
+                transform: objectTransform,
                 transformOrigin: 'center center'
             }}
         >
@@ -187,7 +193,8 @@ const roomObjectPropsEqual = (prev: RoomObjectProps, next: RoomObjectProps): boo
     prev.doorOpenSide === next.doorOpenSide &&
     prev.openingWall === next.openingWall &&
     prev.isSelected === next.isSelected &&
-    prev.showLabel === next.showLabel
+    prev.showLabel === next.showLabel &&
+    prev.bulgeOutward === next.bulgeOutward
 );
 
 export default memo(RoomObject, roomObjectPropsEqual);
