@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef, type ReactNode } from 'react';
+import { memo, useCallback, type ReactNode } from 'react';
 import type { RoomDesign } from '../types';
 import type { Unit } from '../utils/units';
 import RoomCard from './RoomCard';
@@ -28,32 +28,22 @@ function RoomWorkspace({
   onReorderRooms,
   renderRoomContent,
 }: RoomWorkspaceProps) {
-  const draggingRoomIdRef = useRef<string | null>(null);
+  const handleMoveUp = useCallback((roomId: string) => {
+    const index = rooms.findIndex((room) => room.id === roomId);
+    if (index <= 0) return;
+    onReorderRooms(roomId, rooms[index - 1].id);
+  }, [onReorderRooms, rooms]);
 
-  const handleDragStart = useCallback((roomId: string) => {
-    draggingRoomIdRef.current = roomId;
-  }, []);
-
-  const handleDragEnd = useCallback(() => {
-    draggingRoomIdRef.current = null;
-  }, []);
-
-  const handleDrop = useCallback((targetRoomId: string) => {
-    const sourceRoomId = draggingRoomIdRef.current;
-    if (sourceRoomId) {
-      onReorderRooms(sourceRoomId, targetRoomId);
-    }
-    draggingRoomIdRef.current = null;
-  }, [onReorderRooms]);
-
-  const handleDragOver = useCallback(() => {
-    // Keep HTML5 DnD target hot; reorder only on drop.
-  }, []);
+  const handleMoveDown = useCallback((roomId: string) => {
+    const index = rooms.findIndex((room) => room.id === roomId);
+    if (index < 0 || index >= rooms.length - 1) return;
+    onReorderRooms(roomId, rooms[index + 1].id);
+  }, [onReorderRooms, rooms]);
 
   return (
     <section className="room-workspace-shell">
       <div className="room-workspace-list">
-        {rooms.map((room) => {
+        {rooms.map((room, index) => {
           const isActive = room.id === activeRoomId;
           return (
             <RoomCard
@@ -67,10 +57,11 @@ function RoomWorkspace({
               onEditDimensions={onEditRoomDimensions}
               onRename={onRenameRoom}
               onDelete={onDeleteRoom}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
+              showReorderControls={rooms.length > 1}
+              canMoveUp={index > 0}
+              canMoveDown={index < rooms.length - 1}
+              onMoveUp={handleMoveUp}
+              onMoveDown={handleMoveDown}
               renderRoomContent={renderRoomContent}
             />
           );

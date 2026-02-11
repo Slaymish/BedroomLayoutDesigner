@@ -1,5 +1,5 @@
 import { memo, useState, type ReactNode } from 'react';
-import { Pencil } from 'lucide-react';
+import { ArrowDown, ArrowUp, Pencil } from 'lucide-react';
 import type { RoomDesign } from '../types';
 import { fromBaseCm, type Unit } from '../utils/units';
 
@@ -13,10 +13,11 @@ interface RoomCardProps {
   onEditDimensions: (roomId: string) => void;
   onRename: (roomId: string, name: string) => void;
   onDelete: (roomId: string) => void;
-  onDragStart: (roomId: string) => void;
-  onDragEnd: () => void;
-  onDragOver: () => void;
-  onDrop: (roomId: string) => void;
+  showReorderControls: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveUp: (roomId: string) => void;
+  onMoveDown: (roomId: string) => void;
   renderRoomContent: (room: RoomDesign, isActive: boolean) => ReactNode;
 }
 
@@ -42,10 +43,11 @@ function RoomCard({
   onEditDimensions,
   onRename,
   onDelete,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
+  showReorderControls,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
   renderRoomContent,
 }: RoomCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
@@ -69,14 +71,6 @@ function RoomCard({
       onClick={(event) => {
         if (isInteractiveTarget(event.target)) return;
         onActivate(room.id);
-      }}
-      onDragOver={(event) => {
-        event.preventDefault();
-        onDragOver();
-      }}
-      onDrop={(event) => {
-        event.preventDefault();
-        onDrop(room.id);
       }}
     >
       <header className="room-card-header">
@@ -127,25 +121,42 @@ function RoomCard({
           <p className="text-[11px] room-card-meta">{room.items.length} objects · {openingCount} openings</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs cursor-grab active:cursor-grabbing"
-            draggable={!isRenaming}
-            onDragStart={(event) => {
-              event.stopPropagation();
-              onDragStart(room.id);
-            }}
-            onDragEnd={(event) => {
-              event.stopPropagation();
-              onDragEnd();
-            }}
-            onMouseDown={(event) => {
-              event.stopPropagation();
-            }}
-            aria-label={`Drag to reorder ${room.name}`}
-            title="Drag to reorder room"
-          >
-            Reorder
-          </button>
+          {showReorderControls && (
+            <>
+              <button
+                className="ui-btn ui-btn-subtle min-h-0 px-2 py-1.5 text-xs disabled:opacity-45"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!canMoveUp) return;
+                  onMoveUp(room.id);
+                }}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
+                disabled={!canMoveUp}
+                aria-label={`Move ${room.name} up`}
+                title="Move room up"
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+              </button>
+              <button
+                className="ui-btn ui-btn-subtle min-h-0 px-2 py-1.5 text-xs disabled:opacity-45"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!canMoveDown) return;
+                  onMoveDown(room.id);
+                }}
+                onMouseDown={(event) => {
+                  event.stopPropagation();
+                }}
+                disabled={!canMoveDown}
+                aria-label={`Move ${room.name} down`}
+                title="Move room down"
+              >
+                <ArrowDown className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
           {!isRenaming && (
             <button
               className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
@@ -188,10 +199,11 @@ const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean =
   prev.onEditDimensions === next.onEditDimensions &&
   prev.onRename === next.onRename &&
   prev.onDelete === next.onDelete &&
-  prev.onDragStart === next.onDragStart &&
-  prev.onDragEnd === next.onDragEnd &&
-  prev.onDragOver === next.onDragOver &&
-  prev.onDrop === next.onDrop
+  prev.showReorderControls === next.showReorderControls &&
+  prev.canMoveUp === next.canMoveUp &&
+  prev.canMoveDown === next.canMoveDown &&
+  prev.onMoveUp === next.onMoveUp &&
+  prev.onMoveDown === next.onMoveDown
 );
 
 export default memo(RoomCard, roomCardPropsEqual);
