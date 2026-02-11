@@ -854,11 +854,11 @@ function RoomCanvasComponent({
       ...baseStyle,
       backgroundColor: '#eef3f8',
       backgroundImage: [
-        'linear-gradient(to right, rgb(30 41 59 / 0.16) 1px, transparent 1px)',
-        'linear-gradient(to bottom, rgb(30 41 59 / 0.16) 1px, transparent 1px)',
-        'linear-gradient(to right, rgb(15 23 42 / 0.28) 1px, transparent 1px)',
-        'linear-gradient(to bottom, rgb(15 23 42 / 0.28) 1px, transparent 1px)',
-        'radial-gradient(circle at 50% 42%, rgb(255 255 255 / 0.4), rgb(148 163 184 / 0.14) 78%, rgb(51 65 85 / 0.16))',
+        'linear-gradient(to right, rgba(30, 41, 59, 0.16) 1px, transparent 1px)',
+        'linear-gradient(to bottom, rgba(30, 41, 59, 0.16) 1px, transparent 1px)',
+        'linear-gradient(to right, rgba(15, 23, 42, 0.28) 1px, transparent 1px)',
+        'linear-gradient(to bottom, rgba(15, 23, 42, 0.28) 1px, transparent 1px)',
+        'radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.4), rgba(148, 163, 184, 0.14) 78%, rgba(51, 65, 85, 0.16))',
       ].join(', '),
       backgroundSize: [
         `${minorGridStep}px ${minorGridStep}px`,
@@ -868,7 +868,7 @@ function RoomCanvasComponent({
         '100% 100%',
       ].join(', '),
       borderColor: '#b6c2cf',
-      boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 -14px 24px -20px rgb(15 23 42 / 0.28)',
+      boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -14px 24px -20px rgba(15, 23, 42, 0.28)',
     };
   }, [gridColor, gridSpacingCm, height, isExportingPdf, width]);
 
