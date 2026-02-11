@@ -7,6 +7,7 @@ export interface MeasureLine {
     x2: number;
     y2: number;
     includeInPdf: boolean;
+    labelT?: number;
 }
 
 export interface RoomItem {
@@ -27,6 +28,7 @@ export interface Preferences {
     gridSize?: number; // legacy migration support
     gridColor?: string; // CSS color string (e.g., #94a3b8 or rgba(...))
     unit?: 'mm' | 'cm' | 'm' | 'in' | 'ft';
+    wallThicknessCm: number;
     showDebugTelemetry: boolean;
     themeMode: 'system' | 'light' | 'dark';
 }
@@ -52,6 +54,10 @@ export interface RoomDesign {
     measures: MeasureLine[];
     nextItemId: number;
     editingItemId: number | null;
+    dimensionLabelLayout?: {
+        widthLabelT: number;
+        heightLabelT: number;
+    };
     setup: RoomSetupState;
 }
 

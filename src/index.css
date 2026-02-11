@@ -97,6 +97,15 @@
   --measure-label: #334155;
   --measure-handle: #334155;
   --measure-draft-line: #2563eb;
+  --measure-target-stroke: #64748b;
+  --measure-target-anchor: #64748b;
+  --measure-guide-line: #60a5fa;
+  --wall-measure-target-stroke: #5b7188;
+  --wall-measure-target-hover: #2563eb;
+  --wall-measure-target-active: #1d4ed8;
+
+  --room-wall-fill: #d6dde8;
+  --room-wall-stroke: #96a7bb;
 
   --opening-door-bg: #ffffff;
   --opening-door-text: #334155;
@@ -108,6 +117,12 @@
 
   --resize-handle-hover: rgb(71 85 105 / 0.18);
   --resize-corner-bg: #94a3b8;
+  --resize-object-handle: #2563eb;
+  --resize-object-handle-ring: #dbeafe;
+
+  --bed-preset-chip-bg: #0f172a;
+  --bed-preset-chip-text: #f8fafc;
+  --bed-preset-chip-border: #1e293b;
 
   --modal-backdrop-bg: rgb(15 23 42 / 0.35);
   --modal-bg: var(--surface-raised);
@@ -230,6 +245,15 @@
   --measure-label: #b9d0d8;
   --measure-handle: #9bb8c2;
   --measure-draft-line: #63aef5;
+  --measure-target-stroke: #7d97a6;
+  --measure-target-anchor: #9db8c6;
+  --measure-guide-line: #6eb8f0;
+  --wall-measure-target-stroke: #7e96a7;
+  --wall-measure-target-hover: #7cc6ff;
+  --wall-measure-target-active: #57a9e1;
+
+  --room-wall-fill: #2b3f4f;
+  --room-wall-stroke: #587083;
 
   --opening-door-bg: #11212a;
   --opening-door-text: #c2d5db;
@@ -241,6 +265,12 @@
 
   --resize-handle-hover: rgb(148 163 184 / 0.26);
   --resize-corner-bg: #5f7f8d;
+  --resize-object-handle: #57a9e1;
+  --resize-object-handle-ring: #163b54;
+
+  --bed-preset-chip-bg: #d8e6ef;
+  --bed-preset-chip-text: #08212e;
+  --bed-preset-chip-border: #8fb1c4;
 
   --modal-backdrop-bg: rgb(2 6 23 / 0.55);
   --modal-bg: var(--surface-raised);

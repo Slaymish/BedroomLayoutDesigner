@@ -33,7 +33,7 @@ export interface WorkspaceSnapshot {
 }
 
 export const STORAGE_KEY = 'bedroom-layout-designer:v1';
-export const WORKSPACE_STORAGE_VERSION = 4;
+export const WORKSPACE_STORAGE_VERSION = 5;
 export const DEFAULT_ROOM_WIDTH_CM = 360;
 export const DEFAULT_ROOM_HEIGHT_CM = 320;
 export const SOFT_ROOM_WARNING_COUNT = 8;
@@ -46,6 +46,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   gridSpacing: 30,
   gridColor: '#c8d2dd',
   unit: 'cm',
+  wallThicknessCm: 12,
   showDebugTelemetry: false,
   themeMode: 'system',
 };
@@ -74,7 +75,10 @@ export const cloneRoomItem = (item: RoomItem): RoomItem => ({ ...item });
 export const cloneRoomDesign = (room: RoomDesign): RoomDesign => ({
   ...room,
   items: room.items.map(cloneRoomItem),
-  measures: room.measures.map((measure) => ({ ...measure })),
+  measures: room.measures.map((measure) => ({ ...measure, labelT: measure.labelT ?? 0.5 })),
+  dimensionLabelLayout: room.dimensionLabelLayout
+    ? { ...room.dimensionLabelLayout }
+    : { widthLabelT: 0.5, heightLabelT: 0.5 },
   setup: {
     ...room.setup,
     doorDefaults: { ...room.setup.doorDefaults },
@@ -117,6 +121,11 @@ const sanitizePreferences = (preferences: Preferences | undefined): Preferences 
     gridSize: undefined,
     gridColor: preferences?.gridColor || DEFAULT_PREFERENCES.gridColor,
     unit,
+    wallThicknessCm: Math.min(60, sanitizeNumber(
+      preferences?.wallThicknessCm,
+      DEFAULT_PREFERENCES.wallThicknessCm,
+      1
+    )),
     showDebugTelemetry: typeof preferences?.showDebugTelemetry === 'boolean'
       ? preferences.showDebugTelemetry
       : DEFAULT_PREFERENCES.showDebugTelemetry,
@@ -178,6 +187,7 @@ const sanitizeMeasureLine = (measure: Partial<MeasureLine>, fallbackId: number):
   x2: sanitizeNumber(measure.x2, 0),
   y2: sanitizeNumber(measure.y2, 0),
   includeInPdf: typeof measure.includeInPdf === 'boolean' ? measure.includeInPdf : false,
+  labelT: Math.min(1, sanitizeNumber(measure.labelT, 0.5, 0)),
 });
 
 const sanitizeRoomName = (name: unknown, fallback: string): string => {
@@ -196,6 +206,8 @@ const sanitizeRoomDesign = (room: Partial<RoomDesign>, fallbackName: string): Ro
   const highestId = items.reduce((max, item) => Math.max(max, item.id), 0);
   const nextItemId = Math.max(sanitizeNumber(room.nextItemId, 1, 1), highestId + 1);
   const setup = sanitizeSetup(room.setup, true);
+  const widthLabelT = sanitizeNumber(room.dimensionLabelLayout?.widthLabelT, 0.5, 0);
+  const heightLabelT = sanitizeNumber(room.dimensionLabelLayout?.heightLabelT, 0.5, 0);
   return {
     id: typeof room.id === 'string' && room.id ? room.id : createRoomId(),
     name: sanitizeRoomName(room.name, fallbackName),
@@ -208,6 +220,10 @@ const sanitizeRoomDesign = (room: Partial<RoomDesign>, fallbackName: string): Ro
       typeof room.editingItemId === 'number' && items.some((item) => item.id === room.editingItemId)
         ? room.editingItemId
         : null,
+    dimensionLabelLayout: {
+      widthLabelT: Math.min(1, widthLabelT),
+      heightLabelT: Math.min(1, heightLabelT),
+    },
     setup,
   };
 };
@@ -221,6 +237,10 @@ export const createBlankRoom = (name: string): RoomDesign => ({
   measures: [],
   nextItemId: 1,
   editingItemId: null,
+  dimensionLabelLayout: {
+    widthLabelT: 0.5,
+    heightLabelT: 0.5,
+  },
   setup: {
     onboardingComplete: false,
     onboardingStep: 'dimensions',
@@ -244,9 +264,12 @@ export const createDuplicateRoom = (source: RoomDesign, name: string): RoomDesig
     roomWidthCm: source.roomWidthCm,
     roomHeightCm: source.roomHeightCm,
     items: copiedItems,
-    measures: source.measures.map((measure) => ({ ...measure })),
+    measures: source.measures.map((measure) => ({ ...measure, labelT: measure.labelT ?? 0.5 })),
     nextItemId: Math.max(highestId + 1, 1),
     editingItemId: null,
+    dimensionLabelLayout: source.dimensionLabelLayout
+      ? { ...source.dimensionLabelLayout }
+      : { widthLabelT: 0.5, heightLabelT: 0.5 },
     setup: {
       onboardingComplete: source.setup.onboardingComplete,
       onboardingStep: source.setup.onboardingComplete ? 'openings' : 'dimensions',
@@ -305,6 +328,8 @@ export const roomDesignEquals = (left: RoomDesign, right: RoomDesign): boolean =
     left.roomHeightCm !== right.roomHeightCm ||
     left.nextItemId !== right.nextItemId ||
     left.editingItemId !== right.editingItemId ||
+    (left.dimensionLabelLayout?.widthLabelT ?? 0.5) !== (right.dimensionLabelLayout?.widthLabelT ?? 0.5) ||
+    (left.dimensionLabelLayout?.heightLabelT ?? 0.5) !== (right.dimensionLabelLayout?.heightLabelT ?? 0.5) ||
     left.items.length !== right.items.length ||
     left.measures.length !== right.measures.length ||
     !setupEquals(left.setup, right.setup)
@@ -325,7 +350,8 @@ export const roomDesignEquals = (left: RoomDesign, right: RoomDesign): boolean =
       leftMeasure.y1 !== rightMeasure.y1 ||
       leftMeasure.x2 !== rightMeasure.x2 ||
       leftMeasure.y2 !== rightMeasure.y2 ||
-      leftMeasure.includeInPdf !== rightMeasure.includeInPdf
+      leftMeasure.includeInPdf !== rightMeasure.includeInPdf ||
+      (leftMeasure.labelT ?? 0.5) !== (rightMeasure.labelT ?? 0.5)
     ) {
       return false;
     }
@@ -337,6 +363,7 @@ const preferencesEquals = (left: Preferences, right: Preferences): boolean => (
   left.gridSpacing === right.gridSpacing &&
   left.gridColor === right.gridColor &&
   left.unit === right.unit &&
+  left.wallThicknessCm === right.wallThicknessCm &&
   left.showDebugTelemetry === right.showDebugTelemetry &&
   left.themeMode === right.themeMode
 );

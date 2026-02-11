@@ -12,9 +12,10 @@ import {
   type SetStateAction,
 } from "react";
 import RoomObject from "./RoomObject";
-import type { LayoutInteractionTelemetry, MeasureLine, RoomItem } from "../types";
+import type { LayoutInteractionTelemetry, MeasureLine, OpeningWall, RoomItem } from "../types";
 import { fromBaseCm } from "../utils/units";
 import { inferWallFromRotation, isOpening, snapOpeningToNearestWall } from "../utils/openings";
+import { BED_SIZE_PRESETS } from "../constants/objectPresets";
 
 interface RoomCanvasProps {
   items: RoomItem[];
@@ -23,6 +24,7 @@ interface RoomCanvasProps {
   selectedItemId: number | null;
   roomWidthCm?: number;
   roomHeightCm?: number;
+  wallThicknessCm?: number;
   allowResize?: boolean;
   onRoomSizeChange?: (roomWidthCm: number, roomHeightCm: number) => void;
   gridSpacingCm?: number;
@@ -34,6 +36,11 @@ interface RoomCanvasProps {
   exportRoomId?: string;
   measures?: MeasureLine[];
   onMeasuresChange?: Dispatch<SetStateAction<MeasureLine[]>>;
+  dimensionLabelLayout?: {
+    widthLabelT: number;
+    heightLabelT: number;
+  };
+  onDimensionLabelLayoutChange?: Dispatch<SetStateAction<{ widthLabelT: number; heightLabelT: number }>>;
   measureMode?: boolean;
   selectedMeasureId?: number | null;
   onSelectMeasure?: (id: number | null) => void;
@@ -58,6 +65,39 @@ interface Point {
   y: number;
 }
 
+interface MeasureConstraintResult {
+  point: Point;
+  snappedX: boolean;
+  snappedY: boolean;
+}
+
+interface MeasureSnapPreview {
+  anchor: Point;
+  point: Point;
+  snapped: Point[];
+}
+
+interface ObjectResizeState {
+  itemId: number;
+  handle: 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+  startItem: RoomItem;
+  basePresetIndex: number;
+  currentPresetIndex: number;
+}
+
+interface WallSegment {
+  key: string;
+  wall: OpeningWall;
+  start: number;
+  end: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  centerlineStart: Point;
+  centerlineEnd: Point;
+}
+
 const SLOW_FRAME_THRESHOLD_MS = 24;
 const MIN_MEASURE_LENGTH_CM = 2;
 const MEASURE_SNAP_THRESHOLD_CM = 12;
@@ -67,8 +107,20 @@ const WINDOW_LABEL_OUTSET_CM = 16;
 const WINDOW_SIDE_LABEL_EXTRA_CM = 22;
 const DOOR_LABEL_OUTSET_CM = 12;
 const DOOR_SIDE_LABEL_EXTRA_CM = 8;
+const DIMENSION_LABEL_OFFSET_CM = 18;
+const WALL_PADDING_CM = 28;
+const BED_PRESET_DRAG_STEP_CM = 24;
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
+
+const resolveOpeningWall = (item: RoomItem): OpeningWall => item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
+
+const getDoorWallCenterOffset = (wall: OpeningWall, wallThicknessCm: number): Point => {
+  if (wall === 'top') return { x: 0, y: -wallThicknessCm / 2 };
+  if (wall === 'bottom') return { x: 0, y: wallThicknessCm / 2 };
+  if (wall === 'left') return { x: -wallThicknessCm / 2, y: 0 };
+  return { x: wallThicknessCm / 2, y: 0 };
+};
 
 const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
   const rad = (rotation * Math.PI) / 180;
@@ -120,6 +172,105 @@ const getRotatedCorners = (item: RoomItem): Point[] => {
   }));
 };
 
+const getRotatedMidpoints = (item: RoomItem): Point[] => {
+  const corners = getRotatedCorners(item);
+  return [
+    { x: (corners[0].x + corners[1].x) / 2, y: (corners[0].y + corners[1].y) / 2 },
+    { x: (corners[1].x + corners[2].x) / 2, y: (corners[1].y + corners[2].y) / 2 },
+    { x: (corners[2].x + corners[3].x) / 2, y: (corners[2].y + corners[3].y) / 2 },
+    { x: (corners[3].x + corners[0].x) / 2, y: (corners[3].y + corners[0].y) / 2 },
+  ];
+};
+
+const getMeasureAnchorsForItem = (item: RoomItem): Point[] => {
+  const corners = getRotatedCorners(item);
+  const midpoints = getRotatedMidpoints(item);
+  return [...corners, ...midpoints];
+};
+
+const normalizeMeasure = (measure: MeasureLine): MeasureLine => ({
+  ...measure,
+  labelT: clamp(measure.labelT ?? 0.5, 0, 1),
+});
+
+const rotationToRadians = (rotation = 0): number => (rotation * Math.PI) / 180;
+
+const worldToLocal = (point: Point, center: Point, rotation = 0): Point => {
+  const rad = rotationToRadians(rotation);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  return {
+    x: dx * cos + dy * sin,
+    y: -dx * sin + dy * cos,
+  };
+};
+
+const localToWorld = (point: Point, center: Point, rotation = 0): Point => {
+  const rad = rotationToRadians(rotation);
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return {
+    x: center.x + point.x * cos - point.y * sin,
+    y: center.y + point.x * sin + point.y * cos,
+  };
+};
+
+const getBedPresetIndex = (item: RoomItem): number => {
+  const widthRounded = Math.round(item.width);
+  const heightRounded = Math.round(item.height);
+  const exact = BED_SIZE_PRESETS.findIndex(
+    (preset) => Math.round(preset.widthCm) === widthRounded && Math.round(preset.heightCm) === heightRounded
+  );
+  if (exact >= 0) return exact;
+  let closestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  BED_SIZE_PRESETS.forEach((preset, index) => {
+    const distance = Math.abs(preset.widthCm - item.width) + Math.abs(preset.heightCm - item.height);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      closestIndex = index;
+    }
+  });
+  return closestIndex;
+};
+
+const projectPointToSegmentT = (point: Point, start: Point, end: Point): number => {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const lengthSq = dx * dx + dy * dy;
+  if (lengthSq <= 0.0001) return 0.5;
+  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq;
+  return clamp(t, 0, 1);
+};
+
+const subtractIntervals = (
+  length: number,
+  cutouts: Array<{ start: number; end: number }>
+): Array<{ start: number; end: number }> => {
+  const normalized = cutouts
+    .map((cutout) => ({
+      start: clamp(Math.min(cutout.start, cutout.end), 0, length),
+      end: clamp(Math.max(cutout.start, cutout.end), 0, length),
+    }))
+    .filter((cutout) => cutout.end > cutout.start)
+    .sort((left, right) => left.start - right.start);
+
+  const solids: Array<{ start: number; end: number }> = [];
+  let cursor = 0;
+  normalized.forEach((cutout) => {
+    if (cutout.start > cursor) {
+      solids.push({ start: cursor, end: cutout.start });
+    }
+    cursor = Math.max(cursor, cutout.end);
+  });
+  if (cursor < length) {
+    solids.push({ start: cursor, end: length });
+  }
+  return solids.filter((segment) => segment.end - segment.start > 0.2);
+};
+
 const applyMeasureConstraint = (
   raw: Point,
   anchor: Point,
@@ -127,14 +278,18 @@ const applyMeasureConstraint = (
   snapTargets: Point[],
   roomWidthCm: number,
   roomHeightCm: number
-): Point => {
+): MeasureConstraintResult => {
   const constrained: Point = {
     x: clamp(raw.x, 0, roomWidthCm),
     y: clamp(raw.y, 0, roomHeightCm),
   };
 
   if (isFreeMove) {
-    return constrained;
+    return {
+      point: constrained,
+      snappedX: false,
+      snappedY: false,
+    };
   }
 
   const deltaX = Math.abs(constrained.x - anchor.x);
@@ -168,8 +323,12 @@ const applyMeasureConstraint = (
   });
 
   return {
-    x: clamp(constrained.x, 0, roomWidthCm),
-    y: clamp(constrained.y, 0, roomHeightCm),
+    point: {
+      x: clamp(constrained.x, 0, roomWidthCm),
+      y: clamp(constrained.y, 0, roomHeightCm),
+    },
+    snappedX: bestXDelta <= MEASURE_SNAP_THRESHOLD_CM,
+    snappedY: bestYDelta <= MEASURE_SNAP_THRESHOLD_CM,
   };
 };
 
@@ -180,6 +339,7 @@ function RoomCanvasComponent({
   selectedItemId,
   roomWidthCm = 800,
   roomHeightCm = 600,
+  wallThicknessCm = 12,
   allowResize = true,
   onRoomSizeChange,
   gridSpacingCm = 30,
@@ -191,6 +351,8 @@ function RoomCanvasComponent({
   exportRoomId,
   measures = [],
   onMeasuresChange,
+  dimensionLabelLayout,
+  onDimensionLabelLayoutChange,
   measureMode = false,
   selectedMeasureId = null,
   onSelectMeasure,
@@ -199,11 +361,21 @@ function RoomCanvasComponent({
   const [width, setWidth] = useState(roomWidthCm);
   const [height, setHeight] = useState(roomHeightCm);
   const [localItems, setLocalItems] = useState(items);
-  const [localMeasures, setLocalMeasures] = useState(measures);
+  const [localMeasures, setLocalMeasures] = useState(measures.map(normalizeMeasure));
   const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [draftMeasure, setDraftMeasure] = useState<MeasureLine | null>(null);
+  const [measureSnapPreview, setMeasureSnapPreview] = useState<MeasureSnapPreview | null>(null);
+  const [objectResizeState, setObjectResizeState] = useState<ObjectResizeState | null>(null);
+  const [bedPresetHint, setBedPresetHint] = useState<{ name: string; x: number; y: number } | null>(null);
+  const [localDimensionLabelLayout, setLocalDimensionLabelLayout] = useState(() => ({
+    widthLabelT: clamp(dimensionLabelLayout?.widthLabelT ?? 0.5, 0, 1),
+    heightLabelT: clamp(dimensionLabelLayout?.heightLabelT ?? 0.5, 0, 1),
+  }));
+  const [hoveredMeasureAnchorKey, setHoveredMeasureAnchorKey] = useState<string | null>(null);
+  const [hoveredWallMeasureKey, setHoveredWallMeasureKey] = useState<string | null>(null);
+  const [activeWallMeasureKey, setActiveWallMeasureKey] = useState<string | null>(null);
   const hasDragged = useRef(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -215,6 +387,8 @@ function RoomCanvasComponent({
   const dragOffsetRef = useRef(dragOffset);
   const draggingIdRef = useRef<number | null>(draggingId);
   const isResizingRef = useRef<null | 'right' | 'bottom' | 'corner'>(isResizing);
+  const objectResizeStateRef = useRef<ObjectResizeState | null>(objectResizeState);
+  const localDimensionLabelLayoutRef = useRef(localDimensionLabelLayout);
   const itemsDirtyRef = useRef(false);
   const sizeDirtyRef = useRef(false);
   const measuresDirtyRef = useRef(false);
@@ -234,6 +408,16 @@ function RoomCanvasComponent({
   const measureCreatePointerIdRef = useRef<number | null>(null);
   const measureEndpointPointerIdRef = useRef<number | null>(null);
   const measureInteractionActiveRef = useRef(false);
+  const measureLabelHandlersRef = useRef<{
+    onMove: (event: PointerEvent) => void;
+    onUp: (event: PointerEvent) => void;
+  } | null>(null);
+  const measureLabelPointerIdRef = useRef<number | null>(null);
+  const dimensionLabelHandlersRef = useRef<{
+    onMove: (event: PointerEvent) => void;
+    onUp: (event: PointerEvent) => void;
+  } | null>(null);
+  const dimensionLabelPointerIdRef = useRef<number | null>(null);
 
   const setNextLocalItems = useCallback((next: RoomItem[]) => {
     localItemsRef.current = next;
@@ -241,8 +425,18 @@ function RoomCanvasComponent({
   }, []);
 
   const setNextLocalMeasures = useCallback((next: MeasureLine[]) => {
-    localMeasuresRef.current = next;
-    setLocalMeasures(next);
+    const normalized = next.map(normalizeMeasure);
+    localMeasuresRef.current = normalized;
+    setLocalMeasures(normalized);
+  }, []);
+
+  const setNextDimensionLabelLayout = useCallback((next: { widthLabelT: number; heightLabelT: number }) => {
+    const normalized = {
+      widthLabelT: clamp(next.widthLabelT, 0, 1),
+      heightLabelT: clamp(next.heightLabelT, 0, 1),
+    };
+    localDimensionLabelLayoutRef.current = normalized;
+    setLocalDimensionLabelLayout(normalized);
   }, []);
 
   const detachMeasureCreateListeners = useCallback(() => {
@@ -253,6 +447,7 @@ function RoomCanvasComponent({
     window.removeEventListener('pointercancel', handlers.onUp);
     measureCreateHandlersRef.current = null;
     measureCreatePointerIdRef.current = null;
+    setActiveWallMeasureKey(null);
   }, []);
 
   const detachMeasureEndpointListeners = useCallback(() => {
@@ -263,6 +458,26 @@ function RoomCanvasComponent({
     window.removeEventListener('pointercancel', handlers.onUp);
     measureEndpointHandlersRef.current = null;
     measureEndpointPointerIdRef.current = null;
+  }, []);
+
+  const detachMeasureLabelListeners = useCallback(() => {
+    const handlers = measureLabelHandlersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('pointermove', handlers.onMove);
+    window.removeEventListener('pointerup', handlers.onUp);
+    window.removeEventListener('pointercancel', handlers.onUp);
+    measureLabelHandlersRef.current = null;
+    measureLabelPointerIdRef.current = null;
+  }, []);
+
+  const detachDimensionLabelListeners = useCallback(() => {
+    const handlers = dimensionLabelHandlersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('pointermove', handlers.onMove);
+    window.removeEventListener('pointerup', handlers.onUp);
+    window.removeEventListener('pointercancel', handlers.onUp);
+    dimensionLabelHandlersRef.current = null;
+    dimensionLabelPointerIdRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -284,6 +499,14 @@ function RoomCanvasComponent({
     setNextLocalMeasures(measures);
     measuresDirtyRef.current = false;
   }, [measures, setNextLocalMeasures]);
+
+  useEffect(() => {
+    if (dimensionLabelPointerIdRef.current !== null) return;
+    setNextDimensionLabelLayout({
+      widthLabelT: dimensionLabelLayout?.widthLabelT ?? 0.5,
+      heightLabelT: dimensionLabelLayout?.heightLabelT ?? 0.5,
+    });
+  }, [dimensionLabelLayout, setNextDimensionLabelLayout]);
 
   useEffect(() => {
     localItemsRef.current = localItems;
@@ -317,6 +540,20 @@ function RoomCanvasComponent({
     isResizingRef.current = isResizing;
   }, [isResizing]);
 
+  useEffect(() => {
+    objectResizeStateRef.current = objectResizeState;
+  }, [objectResizeState]);
+
+  useEffect(() => {
+    localDimensionLabelLayoutRef.current = localDimensionLabelLayout;
+  }, [localDimensionLabelLayout]);
+
+  useEffect(() => {
+    if (measureMode && !isExportingPdf) return;
+    setHoveredWallMeasureKey(null);
+    setActiveWallMeasureKey(null);
+  }, [isExportingPdf, measureMode]);
+
   const snapTargets = useMemo(() => {
     const points: Point[] = [
       { x: 0, y: 0 },
@@ -330,7 +567,8 @@ function RoomCanvasComponent({
     }
 
     localItems.forEach((item) => {
-      getRotatedCorners(item).forEach((corner) => {
+      if (isOpening(item)) return;
+      getMeasureAnchorsForItem(item).forEach((corner) => {
         points.push({
           x: clamp(corner.x, 0, width),
           y: clamp(corner.y, 0, height),
@@ -340,6 +578,27 @@ function RoomCanvasComponent({
 
     return points;
   }, [height, localItems, measureMode, width]);
+
+  const measureTargetGeometry = useMemo(() => {
+    if (!measureMode || isExportingPdf) return [];
+    return localItems
+      .filter((item) => !isOpening(item))
+      .map((item) => {
+        const corners = getRotatedCorners(item);
+        const anchors = getMeasureAnchorsForItem(item).map((point, index) => ({
+          key: `${item.id}-${index}`,
+          point: {
+            x: clamp(point.x, 0, width),
+            y: clamp(point.y, 0, height),
+          },
+        }));
+        return {
+          itemId: item.id,
+          polygon: corners.map((point) => `${clamp(point.x, 0, width)},${clamp(point.y, 0, height)}`).join(' '),
+          anchors,
+        };
+      });
+  }, [height, isExportingPdf, localItems, measureMode, width]);
 
   const startTelemetrySession = useCallback((interaction: 'drag' | 'resize', itemType?: string) => {
     telemetrySessionRef.current = {
@@ -408,6 +667,18 @@ function RoomCanvasComponent({
   const applyPointerMovement = useCallback((clientX: number, clientY: number) => {
     const activeResize = isResizingRef.current;
     const activeDraggingId = draggingIdRef.current;
+    const activeObjectResize = objectResizeStateRef.current;
+
+    const resolveHandleSigns = (handle: ObjectResizeState['handle']): { sx: -1 | 0 | 1; sy: -1 | 0 | 1 } => {
+      if (handle === 'n') return { sx: 0, sy: -1 };
+      if (handle === 's') return { sx: 0, sy: 1 };
+      if (handle === 'e') return { sx: 1, sy: 0 };
+      if (handle === 'w') return { sx: -1, sy: 0 };
+      if (handle === 'ne') return { sx: 1, sy: -1 };
+      if (handle === 'nw') return { sx: -1, sy: -1 };
+      if (handle === 'se') return { sx: 1, sy: 1 };
+      return { sx: -1, sy: 1 };
+    };
 
     if (allowResize && activeResize && canvasRef.current) {
       const rect = canvasRef.current.getBoundingClientRect();
@@ -438,6 +709,144 @@ function RoomCanvasComponent({
           setHeight(nextHeight);
         }
       }
+      return;
+    }
+
+    if (activeObjectResize && canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const pointerInRoom = {
+        x: clamp(clientX - rect.left, 0, widthRef.current),
+        y: clamp(clientY - rect.top, 0, heightRef.current),
+      };
+      const previousItems = localItemsRef.current;
+      const targetIndex = previousItems.findIndex((item) => item.id === activeObjectResize.itemId);
+      if (targetIndex < 0) return;
+
+      const item = previousItems[targetIndex];
+      const startItem = activeObjectResize.startItem;
+      const centerStart = {
+        x: startItem.x + startItem.width / 2,
+        y: startItem.y + startItem.height / 2,
+      };
+      let nextItem: RoomItem | null = null;
+
+      if ((item.type || '').trim().toLowerCase() === 'bed' && activeObjectResize.handle.length === 2) {
+        const { sx, sy } = resolveHandleSigns(activeObjectResize.handle);
+        const pointerLocal = worldToLocal(pointerInRoom, centerStart, startItem.rotate ?? 0);
+        const startCorner = {
+          x: sx * (startItem.width / 2),
+          y: sy * (startItem.height / 2),
+        };
+        const dirLength = Math.hypot(startCorner.x, startCorner.y) || 1;
+        const direction = { x: startCorner.x / dirLength, y: startCorner.y / dirLength };
+        const delta = { x: pointerLocal.x - startCorner.x, y: pointerLocal.y - startCorner.y };
+        const projectedDistance = delta.x * direction.x + delta.y * direction.y;
+        const indexDelta = Math.round(projectedDistance / BED_PRESET_DRAG_STEP_CM);
+        const nextPresetIndex = clamp(
+          activeObjectResize.basePresetIndex + indexDelta,
+          0,
+          BED_SIZE_PRESETS.length - 1
+        );
+        const preset = BED_SIZE_PRESETS[nextPresetIndex];
+        const nextWidth = preset.widthCm;
+        const nextHeight = preset.heightCm;
+        const nextX = centerStart.x - nextWidth / 2;
+        const nextY = centerStart.y - nextHeight / 2;
+        const bbox = getBoundingBox(nextWidth, nextHeight, item.rotate);
+        const minX = (bbox.width - nextWidth) / 2;
+        const maxX = widthRef.current - (nextWidth + bbox.width) / 2;
+        const minY = (bbox.height - nextHeight) / 2;
+        const maxY = heightRef.current - (nextHeight + bbox.height) / 2;
+        const clampedX = clamp(nextX, Math.min(minX, maxX), Math.max(minX, maxX));
+        const clampedY = clamp(nextY, Math.min(minY, maxY), Math.max(minY, maxY));
+        nextItem = {
+          ...item,
+          width: nextWidth,
+          height: nextHeight,
+          x: clampedX,
+          y: clampedY,
+        };
+
+        if (nextPresetIndex !== activeObjectResize.currentPresetIndex) {
+          const updatedState = {
+            ...activeObjectResize,
+            currentPresetIndex: nextPresetIndex,
+          };
+          objectResizeStateRef.current = updatedState;
+          setObjectResizeState(updatedState);
+        }
+        setBedPresetHint({
+          name: preset.name,
+          x: nextItem.x + nextItem.width / 2,
+          y: nextItem.y + nextItem.height / 2,
+        });
+      } else {
+        const { sx, sy } = resolveHandleSigns(activeObjectResize.handle);
+        const pointerLocal = worldToLocal(pointerInRoom, centerStart, startItem.rotate ?? 0);
+        const minSize = 20;
+        const startHalfW = startItem.width / 2;
+        const startHalfH = startItem.height / 2;
+        let nextWidth = startItem.width;
+        let nextHeight = startItem.height;
+        let centerLocalX = 0;
+        let centerLocalY = 0;
+
+        if (sx !== 0) {
+          const opposite = -sx * startHalfW;
+          const moving = pointerLocal.x;
+          const distance = Math.max(minSize, (moving - opposite) * sx);
+          nextWidth = distance;
+          centerLocalX = opposite + sx * (distance / 2);
+        }
+
+        if (sy !== 0) {
+          const opposite = -sy * startHalfH;
+          const moving = pointerLocal.y;
+          const distance = Math.max(minSize, (moving - opposite) * sy);
+          nextHeight = distance;
+          centerLocalY = opposite + sy * (distance / 2);
+        }
+
+        const nextCenterWorld = localToWorld(
+          { x: centerLocalX, y: centerLocalY },
+          centerStart,
+          startItem.rotate ?? 0
+        );
+        let nextX = nextCenterWorld.x - nextWidth / 2;
+        let nextY = nextCenterWorld.y - nextHeight / 2;
+
+        const bbox = getBoundingBox(nextWidth, nextHeight, item.rotate);
+        const minX = (bbox.width - nextWidth) / 2;
+        const maxX = widthRef.current - (nextWidth + bbox.width) / 2;
+        const minY = (bbox.height - nextHeight) / 2;
+        const maxY = heightRef.current - (nextHeight + bbox.height) / 2;
+        nextX = clamp(nextX, Math.min(minX, maxX), Math.max(minX, maxX));
+        nextY = clamp(nextY, Math.min(minY, maxY), Math.max(minY, maxY));
+        nextItem = {
+          ...item,
+          width: nextWidth,
+          height: nextHeight,
+          x: nextX,
+          y: nextY,
+        };
+      }
+
+      if (!nextItem) return;
+      if (
+        nextItem.width === item.width &&
+        nextItem.height === item.height &&
+        nextItem.x === item.x &&
+        nextItem.y === item.y
+      ) {
+        return;
+      }
+
+      hasDragged.current = true;
+      markTelemetryChanged();
+      const nextItems = [...previousItems];
+      nextItems[targetIndex] = nextItem;
+      itemsDirtyRef.current = true;
+      setNextLocalItems(nextItems);
       return;
     }
 
@@ -537,14 +946,18 @@ function RoomCanvasComponent({
       flushPointer();
       const hadResize = allowResize && isResizingRef.current !== null;
       const hadDrag = draggingIdRef.current !== null;
+      const hadObjectResize = objectResizeStateRef.current !== null;
 
       isResizingRef.current = null;
       draggingIdRef.current = null;
+      objectResizeStateRef.current = null;
       activeInteractionPointerIdRef.current = null;
       setIsResizing(null);
       setDraggingId(null);
+      setObjectResizeState(null);
+      setBedPresetHint(null);
 
-      if (hadDrag && itemsDirtyRef.current) {
+      if ((hadDrag || hadObjectResize) && itemsDirtyRef.current) {
         itemsDirtyRef.current = false;
         onItemsChange(localItemsRef.current.map((item) => ({ ...item })));
       }
@@ -554,7 +967,7 @@ function RoomCanvasComponent({
         onRoomSizeChange?.(widthRef.current, heightRef.current);
       }
 
-      if (hadDrag || hadResize) {
+      if (hadDrag || hadResize || hadObjectResize) {
         onLayoutInteractionEnd?.();
       }
       flushTelemetrySession();
@@ -572,7 +985,7 @@ function RoomCanvasComponent({
       completePointerInteraction();
     };
 
-    if ((allowResize && isResizing) || draggingId !== null) {
+    if ((allowResize && isResizing) || draggingId !== null || objectResizeState !== null) {
       window.addEventListener('pointermove', handlePointerMove);
       window.addEventListener('pointerup', handlePointerUpOrCancel);
       window.addEventListener('pointercancel', handlePointerUpOrCancel);
@@ -594,6 +1007,7 @@ function RoomCanvasComponent({
     draggingId,
     flushTelemetrySession,
     isResizing,
+    objectResizeState,
     onItemsChange,
     onLayoutInteractionEnd,
     onRoomSizeChange,
@@ -610,11 +1024,20 @@ function RoomCanvasComponent({
   useEffect(() => () => {
     detachMeasureCreateListeners();
     detachMeasureEndpointListeners();
+    detachMeasureLabelListeners();
+    detachDimensionLabelListeners();
     if (measureInteractionActiveRef.current) {
       measureInteractionActiveRef.current = false;
       onLayoutInteractionEnd?.();
     }
-  }, [detachMeasureCreateListeners, detachMeasureEndpointListeners, onLayoutInteractionEnd]);
+    setMeasureSnapPreview(null);
+  }, [
+    detachDimensionLabelListeners,
+    detachMeasureCreateListeners,
+    detachMeasureEndpointListeners,
+    detachMeasureLabelListeners,
+    onLayoutInteractionEnd,
+  ]);
 
   const handleObjectPointerDown = (event: ReactPointerEvent, id: number) => {
     if (measureMode) return;
@@ -663,7 +1086,32 @@ function RoomCanvasComponent({
     onEditItem(id);
   };
 
-  const beginMeasureCreate = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const updateMeasureSnapPreview = useCallback((anchor: Point, result: MeasureConstraintResult) => {
+    const snapped: Point[] = [];
+    if (result.snappedX || result.snappedY) {
+      snapTargets.forEach((target) => {
+        const xMatch = !result.snappedX || Math.abs(target.x - result.point.x) <= 0.5;
+        const yMatch = !result.snappedY || Math.abs(target.y - result.point.y) <= 0.5;
+        if (xMatch && yMatch) {
+          snapped.push(target);
+        }
+      });
+      if (snapped.length === 0) {
+        snapped.push({ ...result.point });
+      }
+    }
+    setMeasureSnapPreview({
+      anchor,
+      point: result.point,
+      snapped,
+    });
+  }, [snapTargets]);
+
+  const beginMeasureCreate = (
+    event: ReactPointerEvent,
+    startFromAnchor?: Point,
+    wallSourceKey?: string
+  ) => {
     if (!measureMode || !onMeasuresChange || !canvasRef.current || isExportingPdf) {
       return;
     }
@@ -676,8 +1124,9 @@ function RoomCanvasComponent({
     const rect = canvasRef.current.getBoundingClientRect();
     measureCreatePointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
-    const startRaw = toPointInRoom(event.clientX, event.clientY, rect, widthRef.current, heightRef.current);
-    const start = applyMeasureConstraint(
+    setActiveWallMeasureKey(wallSourceKey ?? null);
+    const startRaw = startFromAnchor ?? toPointInRoom(event.clientX, event.clientY, rect, widthRef.current, heightRef.current);
+    const startResult = applyMeasureConstraint(
       startRaw,
       startRaw,
       event.shiftKey,
@@ -685,12 +1134,14 @@ function RoomCanvasComponent({
       widthRef.current,
       heightRef.current
     );
+    const start = startResult.point;
 
     detachMeasureCreateListeners();
     measureInteractionActiveRef.current = true;
     onLayoutInteractionStart?.();
     onEditItem(null);
     onSelectMeasure?.(null);
+    updateMeasureSnapPreview(start, startResult);
 
     setDraftMeasure({
       id: -1,
@@ -699,6 +1150,7 @@ function RoomCanvasComponent({
       x2: start.x,
       y2: start.y,
       includeInPdf: false,
+      labelT: 0.5,
     });
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
@@ -712,7 +1164,12 @@ function RoomCanvasComponent({
         widthRef.current,
         heightRef.current
       );
-      setDraftMeasure((prev) => (prev ? { ...prev, x2: constrained.x, y2: constrained.y } : prev));
+      updateMeasureSnapPreview(start, constrained);
+      setDraftMeasure((prev) => (
+        prev
+          ? { ...prev, x2: constrained.point.x, y2: constrained.point.y }
+          : prev
+      ));
     };
 
     const finish = (upEvent: PointerEvent) => {
@@ -729,9 +1186,10 @@ function RoomCanvasComponent({
       const nextMeasure: Omit<MeasureLine, 'id'> = {
         x1: start.x,
         y1: start.y,
-        x2: constrained.x,
-        y2: constrained.y,
+        x2: constrained.point.x,
+        y2: constrained.point.y,
         includeInPdf: false,
+        labelT: 0.5,
       };
 
       if (distanceBetween({ x: nextMeasure.x1, y: nextMeasure.y1 }, { x: nextMeasure.x2, y: nextMeasure.y2 }) >= MIN_MEASURE_LENGTH_CM) {
@@ -743,6 +1201,8 @@ function RoomCanvasComponent({
       }
 
       setDraftMeasure(null);
+      setMeasureSnapPreview(null);
+      setActiveWallMeasureKey(null);
       if (measureInteractionActiveRef.current) {
         measureInteractionActiveRef.current = false;
         onLayoutInteractionEnd?.();
@@ -754,6 +1214,25 @@ function RoomCanvasComponent({
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
+  };
+
+  const beginMeasureFromWallTarget = (event: ReactPointerEvent, target: WallSegment) => {
+    if (!canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const point = toPointInRoom(event.clientX, event.clientY, rect, widthRef.current, heightRef.current);
+
+    let interiorAnchor: Point;
+    if (target.wall === 'top') {
+      interiorAnchor = { x: clamp(point.x, target.start, target.end), y: 0 };
+    } else if (target.wall === 'bottom') {
+      interiorAnchor = { x: clamp(point.x, target.start, target.end), y: heightRef.current };
+    } else if (target.wall === 'left') {
+      interiorAnchor = { x: 0, y: clamp(point.y, target.start, target.end) };
+    } else {
+      interiorAnchor = { x: widthRef.current, y: clamp(point.y, target.start, target.end) };
+    }
+
+    beginMeasureCreate(event, interiorAnchor, target.key);
   };
 
   const beginMeasureEndpointDrag = (
@@ -781,6 +1260,11 @@ function RoomCanvasComponent({
     onLayoutInteractionStart?.();
     onEditItem(null);
     onSelectMeasure?.(measure.id);
+    setMeasureSnapPreview({
+      anchor,
+      point: endpoint === 'start' ? { x: measure.x1, y: measure.y1 } : { x: measure.x2, y: measure.y2 },
+      snapped: [],
+    });
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== measureEndpointPointerIdRef.current) return;
@@ -793,12 +1277,13 @@ function RoomCanvasComponent({
         widthRef.current,
         heightRef.current
       );
+      updateMeasureSnapPreview(anchor, constrained);
 
       const nextMeasures = localMeasuresRef.current.map((candidate) => {
         if (candidate.id !== measure.id) return candidate;
         return endpoint === 'start'
-          ? { ...candidate, x1: constrained.x, y1: constrained.y }
-          : { ...candidate, x2: constrained.x, y2: constrained.y };
+          ? { ...candidate, x1: constrained.point.x, y1: constrained.point.y }
+          : { ...candidate, x2: constrained.point.x, y2: constrained.point.y };
       });
       measuresDirtyRef.current = true;
       setNextLocalMeasures(nextMeasures);
@@ -815,6 +1300,7 @@ function RoomCanvasComponent({
         measureInteractionActiveRef.current = false;
         onLayoutInteractionEnd?.();
       }
+      setMeasureSnapPreview(null);
       detachMeasureEndpointListeners();
     };
 
@@ -822,6 +1308,129 @@ function RoomCanvasComponent({
     window.addEventListener('pointermove', handlePointerMove);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
+  };
+
+  const beginMeasureLabelDrag = (event: ReactPointerEvent, measure: MeasureLine) => {
+    if (!measureMode || !onMeasuresChange || !canvasRef.current || isExportingPdf) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.stopPropagation();
+    event.preventDefault();
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    measureLabelPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    detachMeasureLabelListeners();
+    activeMeasureDragRef.current = true;
+    measureInteractionActiveRef.current = true;
+    measuresDirtyRef.current = false;
+    onLayoutInteractionStart?.();
+    onEditItem(null);
+    onSelectMeasure?.(measure.id);
+
+    const start = { x: measure.x1, y: measure.y1 };
+    const end = { x: measure.x2, y: measure.y2 };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== measureLabelPointerIdRef.current) return;
+      const point = toPointInRoom(moveEvent.clientX, moveEvent.clientY, rect, widthRef.current, heightRef.current);
+      const labelT = projectPointToSegmentT(point, start, end);
+      const nextMeasures = localMeasuresRef.current.map((candidate) => (
+        candidate.id === measure.id ? { ...candidate, labelT } : candidate
+      ));
+      measuresDirtyRef.current = true;
+      setNextLocalMeasures(nextMeasures);
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== measureLabelPointerIdRef.current) return;
+      if (measuresDirtyRef.current) {
+        measuresDirtyRef.current = false;
+        onMeasuresChange(localMeasuresRef.current.map((candidate) => ({ ...candidate })));
+      }
+      activeMeasureDragRef.current = false;
+      if (measureInteractionActiveRef.current) {
+        measureInteractionActiveRef.current = false;
+        onLayoutInteractionEnd?.();
+      }
+      detachMeasureLabelListeners();
+    };
+
+    measureLabelHandlersRef.current = { onMove: handlePointerMove, onUp: finish };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
+  const beginDimensionLabelDrag = (
+    event: ReactPointerEvent,
+    axis: 'width' | 'height'
+  ) => {
+    if (!onDimensionLabelLayoutChange || isExportingPdf || !canvasRef.current) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    dimensionLabelPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startLayout = localDimensionLabelLayoutRef.current;
+
+    detachDimensionLabelListeners();
+    onLayoutInteractionStart?.();
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== dimensionLabelPointerIdRef.current) return;
+      const point = toPointInRoom(moveEvent.clientX, moveEvent.clientY, rect, widthRef.current, heightRef.current);
+      const next = axis === 'width'
+        ? { ...startLayout, widthLabelT: clamp(point.x / widthRef.current, 0, 1) }
+        : { ...startLayout, heightLabelT: clamp(point.y / heightRef.current, 0, 1) };
+      setNextDimensionLabelLayout(next);
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== dimensionLabelPointerIdRef.current) return;
+      onDimensionLabelLayoutChange(localDimensionLabelLayoutRef.current);
+      onLayoutInteractionEnd?.();
+      detachDimensionLabelListeners();
+    };
+
+    dimensionLabelHandlersRef.current = { onMove: handlePointerMove, onUp: finish };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+  };
+
+  const beginObjectResize = (event: ReactPointerEvent, handle: ObjectResizeState['handle']) => {
+    if (measureMode || !selectedItemId || !canvasRef.current) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const item = localItemsRef.current.find((candidate) => candidate.id === selectedItemId);
+    if (!item || isOpening(item)) return;
+    const normalizedType = (item.type || '').trim().toLowerCase();
+    const isBed = normalizedType === 'bed';
+    if (isBed && (handle === 'n' || handle === 's' || handle === 'e' || handle === 'w')) return;
+
+    activeInteractionPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onLayoutInteractionStart?.();
+    startTelemetrySession('resize', item.type || 'Object');
+    latestPointerRef.current = null;
+    itemsDirtyRef.current = false;
+    const resizeState: ObjectResizeState = {
+      itemId: item.id,
+      handle,
+      startItem: { ...item },
+      basePresetIndex: getBedPresetIndex(item),
+      currentPresetIndex: getBedPresetIndex(item),
+    };
+    objectResizeStateRef.current = resizeState;
+    setObjectResizeState(resizeState);
   };
 
   const displayedMeasures = useMemo(() => {
@@ -833,12 +1442,13 @@ function RoomCanvasComponent({
     () => localItems
       .filter((item) => item.type === 'Door' || item.type === 'Window')
       .map((item) => {
-        const rawX = item.x + item.width / 2;
-        const rawY = item.y + item.height / 2;
         const isWindow = item.type === 'Window';
         const isDoor = item.type === 'Door';
         const isOpeningLabel = isWindow || isDoor;
-        const wall = item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
+        const wall = resolveOpeningWall(item);
+        const doorOffset = isDoor ? getDoorWallCenterOffset(wall, wallThicknessCm) : { x: 0, y: 0 };
+        const rawX = item.x + item.width / 2 + doorOffset.x;
+        const rawY = item.y + item.height / 2 + doorOffset.y;
         const labelOutset = item.height / 2 + (isWindow ? WINDOW_LABEL_OUTSET_CM : DOOR_LABEL_OUTSET_CM);
         const sideLabelOutset = labelOutset + (isWindow ? WINDOW_SIDE_LABEL_EXTRA_CM : DOOR_SIDE_LABEL_EXTRA_CM);
 
@@ -870,8 +1480,107 @@ function RoomCanvasComponent({
           isDoor,
         };
       }),
-    [height, localItems, selectedItemId, width]
+    [height, localItems, selectedItemId, wallThicknessCm, width]
   );
+
+  const wallSegments = useMemo<WallSegment[]>(() => {
+    const cutouts: Record<'top' | 'right' | 'bottom' | 'left', Array<{ start: number; end: number }>> = {
+      top: [],
+      right: [],
+      bottom: [],
+      left: [],
+    };
+
+    localItems.forEach((item) => {
+      if (!isOpening(item)) return;
+      const wall = resolveOpeningWall(item);
+      if (wall === 'top' || wall === 'bottom') {
+        const center = item.x + item.width / 2;
+        const halfSpan = item.width / 2;
+        cutouts[wall].push({ start: center - halfSpan, end: center + halfSpan });
+      } else {
+        const center = item.y + item.height / 2;
+        const halfSpan = item.width / 2;
+        cutouts[wall].push({ start: center - halfSpan, end: center + halfSpan });
+      }
+    });
+
+    const halfThickness = wallThicknessCm / 2;
+
+    const top = subtractIntervals(width, cutouts.top).map((segment, index) => ({
+      key: `top-${index}`,
+      wall: 'top' as const,
+      start: segment.start,
+      end: segment.end,
+      x: segment.start,
+      y: -wallThicknessCm,
+      width: segment.end - segment.start,
+      height: wallThicknessCm,
+      centerlineStart: { x: segment.start, y: -halfThickness },
+      centerlineEnd: { x: segment.end, y: -halfThickness },
+    }));
+    const bottom = subtractIntervals(width, cutouts.bottom).map((segment, index) => ({
+      key: `bottom-${index}`,
+      wall: 'bottom' as const,
+      start: segment.start,
+      end: segment.end,
+      x: segment.start,
+      y: height,
+      width: segment.end - segment.start,
+      height: wallThicknessCm,
+      centerlineStart: { x: segment.start, y: height + halfThickness },
+      centerlineEnd: { x: segment.end, y: height + halfThickness },
+    }));
+    const left = subtractIntervals(height, cutouts.left).map((segment, index) => ({
+      key: `left-${index}`,
+      wall: 'left' as const,
+      start: segment.start,
+      end: segment.end,
+      x: -wallThicknessCm,
+      y: segment.start,
+      width: wallThicknessCm,
+      height: segment.end - segment.start,
+      centerlineStart: { x: -halfThickness, y: segment.start },
+      centerlineEnd: { x: -halfThickness, y: segment.end },
+    }));
+    const right = subtractIntervals(height, cutouts.right).map((segment, index) => ({
+      key: `right-${index}`,
+      wall: 'right' as const,
+      start: segment.start,
+      end: segment.end,
+      x: width,
+      y: segment.start,
+      width: wallThicknessCm,
+      height: segment.end - segment.start,
+      centerlineStart: { x: width + halfThickness, y: segment.start },
+      centerlineEnd: { x: width + halfThickness, y: segment.end },
+    }));
+
+    return [...top, ...bottom, ...left, ...right];
+  }, [height, localItems, wallThicknessCm, width]);
+
+  const wallMeasureTargets = useMemo(() => {
+    if (!measureMode || isExportingPdf) return [];
+    return wallSegments.map((segment) => ({
+      ...segment,
+      hitStrokeWidth: Math.max(10, wallThicknessCm * 0.9),
+    }));
+  }, [isExportingPdf, measureMode, wallSegments, wallThicknessCm]);
+
+  const roomDimensionLabelPositions = useMemo(() => {
+    const widthT = localDimensionLabelLayout.widthLabelT;
+    const heightT = localDimensionLabelLayout.heightLabelT;
+    return {
+      width: {
+        x: clamp(width * widthT, 30, width - 30),
+        y: -(wallThicknessCm + DIMENSION_LABEL_OFFSET_CM),
+      },
+      height: {
+        x: -(wallThicknessCm + DIMENSION_LABEL_OFFSET_CM),
+        y: clamp(height * heightT, 30, height - 30),
+      },
+    };
+  }, [height, localDimensionLabelLayout.heightLabelT, localDimensionLabelLayout.widthLabelT, wallThicknessCm, width]);
 
   const canvasStyle = useMemo(() => {
     const minorGridSizePx = Math.max(2, gridSpacingCm);
@@ -915,10 +1624,39 @@ function RoomCanvasComponent({
   const displayWidth = fromBaseCm(width, unit);
   const displayHeight = fromBaseCm(height, unit);
   const showMeasureHandles = measureMode && !isExportingPdf;
-  const canvasPadding = isExportingPdf ? EXPORT_CANVAS_PADDING_PX : CANVAS_PADDING_PX;
+  const canvasPadding = (isExportingPdf ? EXPORT_CANVAS_PADDING_PX : CANVAS_PADDING_PX) + wallThicknessCm + WALL_PADDING_CM;
   const canvasClassName = `room-canvas-surface relative rounded-xl shadow-sm overflow-visible ${
     isExportingPdf ? 'room-canvas-export-floor' : 'bg-grid'
   }`;
+  const selectedResizableItem = useMemo(() => {
+    if (measureMode || selectedItemId === null) return null;
+    const candidate = localItems.find((item) => item.id === selectedItemId) ?? null;
+    if (!candidate || isOpening(candidate)) return null;
+    return candidate;
+  }, [localItems, measureMode, selectedItemId]);
+
+  const selectedResizeHandles = useMemo(() => {
+    if (!selectedResizableItem) return [];
+    const normalizedType = (selectedResizableItem.type || '').trim().toLowerCase();
+    const isBed = normalizedType === 'bed';
+    const corners = getRotatedCorners(selectedResizableItem);
+    const mids = getRotatedMidpoints(selectedResizableItem);
+    const handles: Array<{ handle: ObjectResizeState['handle']; point: Point; cursor: string }> = [
+      { handle: 'nw', point: corners[0], cursor: 'nwse-resize' },
+      { handle: 'ne', point: corners[1], cursor: 'nesw-resize' },
+      { handle: 'se', point: corners[2], cursor: 'nwse-resize' },
+      { handle: 'sw', point: corners[3], cursor: 'nesw-resize' },
+    ];
+    if (!isBed) {
+      handles.push(
+        { handle: 'n', point: mids[0], cursor: 'ns-resize' },
+        { handle: 'e', point: mids[1], cursor: 'ew-resize' },
+        { handle: 's', point: mids[2], cursor: 'ns-resize' },
+        { handle: 'w', point: mids[3], cursor: 'ew-resize' },
+      );
+    }
+    return handles;
+  }, [selectedResizableItem]);
 
   return (
     <div className="workspace-card">
@@ -939,33 +1677,64 @@ function RoomCanvasComponent({
             className={canvasClassName}
             style={canvasStyle}
           >
-            <div className="room-canvas-size-chip absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none">
+            <div
+              className={`room-canvas-size-chip absolute z-30 -translate-x-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm select-none ${
+                isExportingPdf ? 'pointer-events-none' : 'cursor-ew-resize'
+              }`}
+              style={{ left: roomDimensionLabelPositions.width.x, top: roomDimensionLabelPositions.width.y }}
+              onPointerDown={(event) => beginDimensionLabelDrag(event, 'width')}
+            >
               {Math.round(displayWidth * 100) / 100}{unit}
             </div>
-            <div className="room-canvas-size-chip absolute left-2 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none origin-center -rotate-90">
+            <div
+              className={`room-canvas-size-chip absolute z-30 -translate-x-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm select-none origin-center -rotate-90 ${
+                isExportingPdf ? 'pointer-events-none' : 'cursor-ns-resize'
+              }`}
+              style={{ left: roomDimensionLabelPositions.height.x, top: roomDimensionLabelPositions.height.y }}
+              onPointerDown={(event) => beginDimensionLabelDrag(event, 'height')}
+            >
               {Math.round(displayHeight * 100) / 100}{unit}
             </div>
 
-            {localItems.map((item) => (
-              <RoomObject
-                key={item.id}
-                width={item.width}
-                height={item.height}
-                x={item.x}
-                y={item.y}
-                rotate={item.rotate}
-                label={item.type}
-                type={item.type}
-                doorOpenDirection={item.doorOpenDirection}
-                doorOpenSide={item.doorOpenSide}
-                openingWall={item.openingWall}
-                isSelected={item.id === selectedItemId}
-                showLabel={item.type !== 'Door' && item.type !== 'Window'}
-                bulgeOutward={item.type === 'Window'}
-                onPointerDown={(event) => handleObjectPointerDown(event, item.id)}
-                onMouseClick={(event) => handleObjectClick(event, item.id)}
-              />
-            ))}
+            <svg className="absolute inset-0 z-[1] h-full w-full overflow-visible pointer-events-none">
+              {wallSegments.map((segment) => (
+                <rect
+                  key={`wall-${segment.key}`}
+                  x={segment.x}
+                  y={segment.y}
+                  width={segment.width}
+                  height={segment.height}
+                  fill={isExportingPdf ? '#d7dee7' : 'var(--room-wall-fill)'}
+                  stroke={isExportingPdf ? '#97a7b8' : 'var(--room-wall-stroke)'}
+                  strokeWidth={1}
+                />
+              ))}
+            </svg>
+
+            {localItems.map((item) => {
+              const wall = resolveOpeningWall(item);
+              const doorOffset = item.type === 'Door' ? getDoorWallCenterOffset(wall, wallThicknessCm) : { x: 0, y: 0 };
+              return (
+                <RoomObject
+                  key={item.id}
+                  width={item.width}
+                  height={item.height}
+                  x={item.x + doorOffset.x}
+                  y={item.y + doorOffset.y}
+                  rotate={item.rotate}
+                  label={item.type}
+                  type={item.type}
+                  doorOpenDirection={item.doorOpenDirection}
+                  doorOpenSide={item.doorOpenSide}
+                  openingWall={item.openingWall}
+                  isSelected={item.id === selectedItemId}
+                  showLabel={item.type !== 'Door' && item.type !== 'Window'}
+                  bulgeOutward={item.type === 'Window'}
+                  onPointerDown={(event) => handleObjectPointerDown(event, item.id)}
+                  onMouseClick={(event) => handleObjectClick(event, item.id)}
+                />
+              );
+            })}
 
             {openingLabels.map((label) => (
               <div
@@ -980,16 +1749,128 @@ function RoomCanvasComponent({
             ))}
 
             <svg className="absolute inset-0 z-20 h-full w-full pointer-events-none">
+              {measureMode && !isExportingPdf && wallMeasureTargets.map((target) => {
+                const isHovered = hoveredWallMeasureKey === target.key;
+                const isActive = activeWallMeasureKey === target.key;
+                const stroke = isActive
+                  ? 'var(--wall-measure-target-active)'
+                  : isHovered
+                    ? 'var(--wall-measure-target-hover)'
+                    : 'var(--wall-measure-target-stroke)';
+
+                return (
+                  <g key={`wall-measure-target-${target.key}`}>
+                    <line
+                      x1={target.centerlineStart.x}
+                      y1={target.centerlineStart.y}
+                      x2={target.centerlineEnd.x}
+                      y2={target.centerlineEnd.y}
+                      stroke={stroke}
+                      strokeWidth={1.6}
+                      strokeDasharray="4 3"
+                    />
+                    <line
+                      x1={target.centerlineStart.x}
+                      y1={target.centerlineStart.y}
+                      x2={target.centerlineEnd.x}
+                      y2={target.centerlineEnd.y}
+                      stroke="transparent"
+                      strokeWidth={target.hitStrokeWidth}
+                      className="cursor-crosshair pointer-events-auto"
+                      onPointerEnter={() => setHoveredWallMeasureKey(target.key)}
+                      onPointerLeave={() => setHoveredWallMeasureKey((current) => (current === target.key ? null : current))}
+                      onPointerDown={(event) => beginMeasureFromWallTarget(event, target)}
+                    />
+                  </g>
+                );
+              })}
+
+              {measureMode && !isExportingPdf && measureTargetGeometry.map((target) => (
+                <g key={`measure-target-${target.itemId}`}>
+                  <polygon
+                    points={target.polygon}
+                    fill="transparent"
+                    stroke={hoveredMeasureAnchorKey?.startsWith(`${target.itemId}-`) ? 'var(--measure-line-selected)' : 'var(--measure-target-stroke)'}
+                    strokeWidth={1.2}
+                    strokeDasharray="4 3"
+                    className="pointer-events-auto"
+                    onPointerEnter={() => setHoveredMeasureAnchorKey(`${target.itemId}-rect`)}
+                    onPointerLeave={() => setHoveredMeasureAnchorKey((current) => (current === `${target.itemId}-rect` ? null : current))}
+                  />
+                  {target.anchors.map((anchor) => (
+                    <circle
+                      key={`measure-target-anchor-${anchor.key}`}
+                      cx={anchor.point.x}
+                      cy={anchor.point.y}
+                      r={4}
+                      fill={hoveredMeasureAnchorKey === anchor.key ? 'var(--measure-line-selected)' : 'var(--measure-target-anchor)'}
+                      className="cursor-crosshair pointer-events-auto"
+                      onPointerEnter={() => setHoveredMeasureAnchorKey(anchor.key)}
+                      onPointerLeave={() => setHoveredMeasureAnchorKey((current) => (current === anchor.key ? null : current))}
+                      onPointerDown={(event) => beginMeasureCreate(event, anchor.point)}
+                    />
+                  ))}
+                </g>
+              ))}
+
+              {measureSnapPreview && !isExportingPdf && (
+                <g>
+                  <line
+                    x1={measureSnapPreview.anchor.x}
+                    y1={measureSnapPreview.anchor.y}
+                    x2={measureSnapPreview.point.x}
+                    y2={measureSnapPreview.point.y}
+                    stroke="var(--measure-draft-line)"
+                    strokeWidth={1.3}
+                    strokeDasharray="3 3"
+                  />
+                  {Math.abs(measureSnapPreview.anchor.x - measureSnapPreview.point.x) < 0.25 && (
+                    <line
+                      x1={measureSnapPreview.point.x}
+                      y1={0}
+                      x2={measureSnapPreview.point.x}
+                      y2={height}
+                      stroke="var(--measure-guide-line)"
+                      strokeWidth={1}
+                      strokeDasharray="2 4"
+                    />
+                  )}
+                  {Math.abs(measureSnapPreview.anchor.y - measureSnapPreview.point.y) < 0.25 && (
+                    <line
+                      x1={0}
+                      y1={measureSnapPreview.point.y}
+                      x2={width}
+                      y2={measureSnapPreview.point.y}
+                      stroke="var(--measure-guide-line)"
+                      strokeWidth={1}
+                      strokeDasharray="2 4"
+                    />
+                  )}
+                  {measureSnapPreview.snapped.map((point, index) => (
+                    <circle
+                      key={`measure-snapped-${index}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r={3.5}
+                      fill="var(--measure-line-selected)"
+                    />
+                  ))}
+                </g>
+              )}
+
               {displayedMeasures.map((measure) => {
                 const dx = measure.x2 - measure.x1;
                 const dy = measure.y2 - measure.y1;
                 const lengthCm = Math.hypot(dx, dy);
                 const lengthLabel = `${Number(fromBaseCm(lengthCm, unit).toFixed(unit === 'm' || unit === 'ft' ? 2 : 1))}${unit}`;
                 const selected = selectedMeasureId === measure.id;
-                const midpointX = (measure.x1 + measure.x2) / 2;
-                const midpointY = (measure.y1 + measure.y2) / 2;
-                const labelX = clamp(midpointX, 22, width - 22);
-                const labelY = clamp(midpointY - 6, 12, height - 6);
+                const labelT = clamp(measure.labelT ?? 0.5, 0, 1);
+                const labelPoint = {
+                  x: measure.x1 + dx * labelT,
+                  y: measure.y1 + dy * labelT,
+                };
+                const labelX = clamp(labelPoint.x, 22, width - 22);
+                const labelY = clamp(labelPoint.y - 6, 12, height - 6);
                 const defaultLineColor = isExportingPdf ? '#0f172a' : 'var(--measure-line)';
                 const selectedLineColor = isExportingPdf ? '#1d4ed8' : 'var(--measure-line-selected)';
                 const labelColor = isExportingPdf ? '#334155' : 'var(--measure-label)';
@@ -1053,7 +1934,8 @@ function RoomCanvasComponent({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       textAnchor="middle"
-                      className="pointer-events-none select-none"
+                      className={measureMode && !isExportingPdf ? 'cursor-grab pointer-events-auto select-none' : 'pointer-events-none select-none'}
+                      onPointerDown={(event) => beginMeasureLabelDrag(event, measure)}
                     >
                       {lengthLabel}
                     </text>
@@ -1098,7 +1980,31 @@ function RoomCanvasComponent({
                   strokeDasharray="4 3"
                 />
               )}
+
+              {!measureMode && !isExportingPdf && selectedResizeHandles.map((handle) => (
+                <circle
+                  key={`resize-handle-${handle.handle}`}
+                  cx={handle.point.x}
+                  cy={handle.point.y}
+                  r={4.8}
+                  fill="var(--resize-object-handle)"
+                  stroke="var(--resize-object-handle-ring)"
+                  strokeWidth={1.5}
+                  className="pointer-events-auto"
+                  style={{ cursor: handle.cursor }}
+                  onPointerDown={(event) => beginObjectResize(event, handle.handle)}
+                />
+              ))}
             </svg>
+
+            {bedPresetHint && (
+              <div
+                className="room-bed-preset-chip absolute z-30 -translate-x-1/2 -translate-y-[130%] rounded-md px-2 py-0.5 text-[10px] font-semibold pointer-events-none select-none"
+                style={{ left: bedPresetHint.x, top: bedPresetHint.y }}
+              >
+                {bedPresetHint.name}
+              </div>
+            )}
 
             {allowResize && !measureMode && (
               <>
@@ -1169,12 +2075,14 @@ const roomCanvasPropsEqual = (prev: RoomCanvasProps, next: RoomCanvasProps): boo
   prev.selectedItemId === next.selectedItemId &&
   prev.roomWidthCm === next.roomWidthCm &&
   prev.roomHeightCm === next.roomHeightCm &&
+  prev.wallThicknessCm === next.wallThicknessCm &&
   prev.allowResize === next.allowResize &&
   prev.gridSpacingCm === next.gridSpacingCm &&
   prev.gridColor === next.gridColor &&
   prev.unit === next.unit &&
   prev.exportRoomId === next.exportRoomId &&
   prev.measures === next.measures &&
+  prev.dimensionLabelLayout === next.dimensionLabelLayout &&
   prev.measureMode === next.measureMode &&
   prev.selectedMeasureId === next.selectedMeasureId &&
   prev.isExportingPdf === next.isExportingPdf

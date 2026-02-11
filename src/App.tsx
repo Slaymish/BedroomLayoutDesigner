@@ -28,6 +28,7 @@ import { getExportCaptureSize } from './utils/exportCapture';
 import { buildAutosaveFingerprint } from './utils/autosave';
 import {
   DEFAULT_PREFERENCES,
+  OPENING_PRESETS,
   SOFT_ROOM_WARNING_COUNT,
   STORAGE_KEY,
   UNIT_OPTIONS,
@@ -93,6 +94,9 @@ const SCROLL_ACTIVE_WINDOW_MS = 140;
 const MAX_HISTORY_SNAPSHOTS = 80;
 
 const iconClassName = 'toolbar-icon-svg';
+const FURNITURE_PRESETS = OBJECT_PRESETS.filter(
+  (preset) => preset.type !== 'Door' && preset.type !== 'Window'
+);
 
 const loadExportImage = (dataUrl: string, roomName: string): Promise<HTMLImageElement> => (
   new Promise((resolve, reject) => {
@@ -207,8 +211,7 @@ function App() {
   const [gridSpacingPreview, setGridSpacingPreview] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const bedPopoverRef = useRef<HTMLDetailsElement>(null);
-  const customPopoverRef = useRef<HTMLDetailsElement>(null);
+  const furniturePopoverRef = useRef<HTMLDetailsElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
@@ -802,6 +805,30 @@ function App() {
     [updateRoom]
   );
 
+  const handleRoomDimensionLabelLayoutChange = useCallback(
+    (
+      roomId: string,
+      update: SetStateAction<{ widthLabelT: number; heightLabelT: number }>
+    ) => {
+      updateRoom(
+        roomId,
+        (room) => {
+          const current = room.dimensionLabelLayout ?? { widthLabelT: 0.5, heightLabelT: 0.5 };
+          const next = typeof update === 'function' ? update(current) : update;
+          return {
+            ...room,
+            dimensionLabelLayout: {
+              widthLabelT: Math.max(0, Math.min(1, next.widthLabelT)),
+              heightLabelT: Math.max(0, Math.min(1, next.heightLabelT)),
+            },
+          };
+        },
+        { recordHistory: false }
+      );
+    },
+    [updateRoom]
+  );
+
   const addItemToRoom = useCallback(
     (roomId: string, width: number, height: number, type: string, options?: AddItemOptions) => {
       updateRoom(roomId, (room) => {
@@ -1210,10 +1237,19 @@ function App() {
     handleAddObjectToActiveRoom(preset.widthCm, preset.heightCm, preset.type);
   }, [handleAddObjectToActiveRoom]);
 
+  const handleAddDoor = useCallback(() => {
+    handleAddObjectToActiveRoom(OPENING_PRESETS.Door.widthCm, OPENING_PRESETS.Door.heightCm, 'Door');
+  }, [handleAddObjectToActiveRoom]);
+
+  const handleAddWindow = useCallback(() => {
+    const widthCm = activeRoom?.setup.windowDraftWidthCm ?? OPENING_PRESETS.Window.widthCm;
+    handleAddObjectToActiveRoom(widthCm, OPENING_PRESETS.Window.heightCm, 'Window');
+  }, [activeRoom?.setup.windowDraftWidthCm, handleAddObjectToActiveRoom]);
+
   const handleAddSelectedBed = useCallback(() => {
     handleAddObjectToActiveRoom(selectedBedPreset.widthCm, selectedBedPreset.heightCm, 'Bed');
-    if (bedPopoverRef.current) {
-      bedPopoverRef.current.open = false;
+    if (furniturePopoverRef.current) {
+      furniturePopoverRef.current.open = false;
     }
   }, [handleAddObjectToActiveRoom, selectedBedPreset.heightCm, selectedBedPreset.widthCm]);
 
@@ -1234,8 +1270,8 @@ function App() {
       type
     );
     form.reset();
-    if (customPopoverRef.current) {
-      customPopoverRef.current.open = false;
+    if (furniturePopoverRef.current) {
+      furniturePopoverRef.current.open = false;
     }
   }, [activeUnit, handleAddObjectToActiveRoom]);
 
@@ -1421,6 +1457,7 @@ function App() {
           selectedItemId={room.editingItemId}
           roomWidthCm={room.roomWidthCm}
           roomHeightCm={room.roomHeightCm}
+          wallThicknessCm={workspace.preferences.wallThicknessCm}
           onRoomSizeChange={(widthCm, heightCm) => handleRoomSizeChange(room.id, widthCm, heightCm)}
           gridSpacingCm={gridSpacingCm}
           gridColor={effectiveGridColor}
@@ -1432,6 +1469,8 @@ function App() {
           allowResize={false}
           measures={room.measures}
           onMeasuresChange={(update) => handleRoomMeasuresChange(room.id, update)}
+          dimensionLabelLayout={room.dimensionLabelLayout}
+          onDimensionLabelLayoutChange={(update) => handleRoomDimensionLabelLayoutChange(room.id, update)}
           measureMode={measureMode && isActive && !roomNeedsDimensions}
           selectedMeasureId={selectedMeasureId}
           onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
@@ -1526,6 +1565,7 @@ function App() {
     handleLayoutTelemetry,
     handleRoomItemSelection,
     handleRoomItemsChange,
+    handleRoomDimensionLabelLayoutChange,
     handleRoomMeasureSelection,
     handleRoomMeasuresChange,
     handleRoomSizeChange,
@@ -1537,6 +1577,7 @@ function App() {
     updateRoomItem,
     updateSelectedMeasure,
     effectiveGridColor,
+    workspace.preferences.wallThicknessCm,
   ]);
 
   const renderRoomContentRef = useRef(renderRoomContent);
@@ -1552,6 +1593,7 @@ function App() {
       effectiveGridColor || 'theme-default',
       String(effectiveGridSpacing),
       String(gridSpacingCm),
+      String(workspace.preferences.wallThicknessCm),
       isExportingPdf ? '1' : '0',
     ].join('|');
 
@@ -1580,6 +1622,7 @@ function App() {
     selectedMeasureByRoom,
     effectiveGridSpacing,
     effectiveGridColor,
+    workspace.preferences.wallThicknessCm,
     workspace.activeRoomId,
     workspace.rooms,
   ]);
@@ -1695,72 +1738,100 @@ function App() {
 
             <div className="toolbar-divider" />
 
-            <details ref={bedPopoverRef} className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
-              <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add bed" title="Add bed">
-                <BedDouble className={iconClassName} />
+            <button
+              className="ui-btn ui-btn-subtle toolbar-icon-btn"
+              onClick={handleAddDoor}
+              disabled={!canAddObjectsToActiveRoom}
+              title="Add Door"
+              aria-label="Add Door"
+            >
+              <DoorOpen className={iconClassName} />
+            </button>
+            <button
+              className="ui-btn ui-btn-subtle toolbar-icon-btn"
+              onClick={handleAddWindow}
+              disabled={!canAddObjectsToActiveRoom}
+              title="Add Window"
+              aria-label="Add Window"
+            >
+              <Grid2X2 className={iconClassName} />
+            </button>
+
+            <div className="toolbar-divider" />
+
+            <details ref={furniturePopoverRef} className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
+              <summary className="ui-btn ui-btn-subtle toolbar-menu-btn" aria-label="Furniture menu" title="Furniture">
+                <Sofa className={iconClassName} />
+                <span>Furniture</span>
               </summary>
-              <div className="toolbar-popover-panel">
-                <label className="ui-label">Bed size</label>
-                <select
-                  className="ui-select"
-                  value={selectedBedPreset.name}
-                  onChange={(event) => {
-                    const next = BED_SIZE_PRESETS.find((size) => size.name === event.target.value);
-                    if (next) setSelectedBedPreset(next);
-                  }}
-                >
-                  {BED_SIZE_PRESETS.map((size) => (
-                    <option key={size.name} value={size.name}>
-                      {size.name} ({size.widthCm}x{size.heightCm}cm)
-                    </option>
+              <div className="toolbar-popover-panel toolbar-popover-panel-wide">
+                <div className="space-y-2">
+                  <label className="ui-label">Bed size</label>
+                  <select
+                    className="ui-select"
+                    value={selectedBedPreset.name}
+                    onChange={(event) => {
+                      const next = BED_SIZE_PRESETS.find((size) => size.name === event.target.value);
+                      if (next) setSelectedBedPreset(next);
+                    }}
+                  >
+                    {BED_SIZE_PRESETS.map((size) => (
+                      <option key={size.name} value={size.name}>
+                        {size.name} ({size.widthCm}x{size.heightCm}cm)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="ui-btn ui-btn-primary w-full"
+                    onClick={handleAddSelectedBed}
+                    disabled={!canAddObjectsToActiveRoom}
+                  >
+                    <BedDouble className={iconClassName} />
+                    <span>Add Bed</span>
+                  </button>
+                </div>
+
+                <div className="toolbar-popover-divider" />
+
+                <div className="space-y-1.5">
+                  {FURNITURE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.type}
+                      className="ui-btn ui-btn-subtle w-full justify-start gap-2"
+                      onClick={() => handleQuickAddPreset(preset)}
+                      disabled={!canAddObjectsToActiveRoom}
+                      title={`Add ${preset.type}`}
+                      aria-label={`Add ${preset.type}`}
+                    >
+                      {renderPresetIcon(preset.type)}
+                      <span>{preset.type}</span>
+                    </button>
                   ))}
-                </select>
-                <button
-                  className="ui-btn ui-btn-primary w-full mt-2"
-                  onClick={handleAddSelectedBed}
-                  disabled={!canAddObjectsToActiveRoom}
-                >
-                  Add Bed
-                </button>
+                </div>
+
+                <div className="toolbar-popover-divider" />
+
+                <form className="space-y-2" onSubmit={handleAddCustomObject}>
+                  <div className="ui-field">
+                    <label className="ui-label">Type</label>
+                    <input className="ui-input" type="text" name="type" required />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="ui-field">
+                      <label className="ui-label">W ({activeUnit})</label>
+                      <input className="ui-input" type="number" name="width" min={0.1} step={0.1} required />
+                    </div>
+                    <div className="ui-field">
+                      <label className="ui-label">L ({activeUnit})</label>
+                      <input className="ui-input" type="number" name="height" min={0.1} step={0.1} required />
+                    </div>
+                  </div>
+                  <button className="ui-btn ui-btn-primary w-full" type="submit" disabled={!canAddObjectsToActiveRoom}>
+                    <Plus className={iconClassName} />
+                    <span>Add Custom</span>
+                  </button>
+                </form>
               </div>
-            </details>
-
-            {OBJECT_PRESETS.map((preset) => (
-              <button
-                key={preset.type}
-                className="ui-btn ui-btn-subtle toolbar-icon-btn"
-                onClick={() => handleQuickAddPreset(preset)}
-                disabled={!canAddObjectsToActiveRoom}
-                title={`Add ${preset.type}`}
-                aria-label={`Add ${preset.type}`}
-              >
-                {renderPresetIcon(preset.type)}
-              </button>
-            ))}
-
-            <details ref={customPopoverRef} className="toolbar-popover" onMouseDown={(event) => event.stopPropagation()}>
-              <summary className="ui-btn ui-btn-subtle toolbar-icon-btn" aria-label="Add custom object" title="Add custom object">
-                <Plus className={iconClassName} />
-              </summary>
-              <form className="toolbar-popover-panel" onSubmit={handleAddCustomObject}>
-                <div className="ui-field">
-                  <label className="ui-label">Type</label>
-                  <input className="ui-input" type="text" name="type" required />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="ui-field">
-                    <label className="ui-label">W ({activeUnit})</label>
-                    <input className="ui-input" type="number" name="width" min={0.1} step={0.1} required />
-                  </div>
-                  <div className="ui-field">
-                    <label className="ui-label">L ({activeUnit})</label>
-                    <input className="ui-input" type="number" name="height" min={0.1} step={0.1} required />
-                  </div>
-                </div>
-                <button className="ui-btn ui-btn-primary w-full mt-2" type="submit" disabled={!canAddObjectsToActiveRoom}>
-                  Add Custom
-                </button>
-              </form>
             </details>
 
             <div className="toolbar-divider" />

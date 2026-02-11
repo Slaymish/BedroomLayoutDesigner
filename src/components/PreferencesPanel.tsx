@@ -25,7 +25,11 @@ export default function PreferencesPanel({
 }: PreferencesPanelProps) {
     const activeUnit = preferences.unit || 'cm';
     const [gridSpacingDraft, setGridSpacingDraft] = useState<string | null>(null);
+    const [wallThicknessDraft, setWallThicknessDraft] = useState<string | null>(null);
     const gridSpacingInputValue = gridSpacingDraft ?? preferences.gridSpacing.toString();
+    const wallThicknessInputValue = wallThicknessDraft ?? Number(
+        fromBaseCm(preferences.wallThicknessCm, activeUnit).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1)
+    ).toString();
 
     useEffect(() => () => {
         onGridSpacingPreviewChange?.(null);
@@ -72,10 +76,43 @@ export default function PreferencesPanel({
         onChange({ ...preferences, gridColor: color });
     };
 
+    const commitWallThickness = (rawValue?: string) => {
+        const normalized = (rawValue ?? wallThicknessInputValue).trim();
+        if (!normalized) {
+            setWallThicknessDraft(null);
+            return;
+        }
+
+        const parsed = Number(normalized);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            setWallThicknessDraft(null);
+            return;
+        }
+
+        const baseCm = Math.min(60, Math.max(1, toBaseCm(parsed, activeUnit)));
+        onChange({ ...preferences, wallThicknessCm: baseCm });
+        setWallThicknessDraft(null);
+    };
+
+    const handleWallThicknessKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            commitWallThickness(event.currentTarget.value);
+            event.currentTarget.blur();
+            return;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            setWallThicknessDraft(null);
+            event.currentTarget.blur();
+        }
+    };
+
     const handleUnitChange = (newUnit: Preferences['unit']) => {
         const spacingInCm = toBaseCm(preferences.gridSpacing, activeUnit);
         const convertedSpacing = Number(fromBaseCm(spacingInCm, newUnit || 'cm').toFixed(3));
         onChange({ ...preferences, unit: newUnit, gridSpacing: Math.max(0.1, convertedSpacing) });
+        setWallThicknessDraft(null);
     };
 
     return (
@@ -123,6 +160,20 @@ export default function PreferencesPanel({
                     />
                     <span className="text-xs theme-text-subtle">{preferences.gridColor ?? "#94a3b8"}</span>
                 </div>
+            </div>
+            <div className="ui-field">
+                <label className="ui-label">Wall Thickness ({activeUnit})</label>
+                <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    value={wallThicknessInputValue}
+                    onChange={(event) => setWallThicknessDraft(event.target.value)}
+                    onBlur={(event) => commitWallThickness(event.target.value)}
+                    onKeyDown={handleWallThicknessKeyDown}
+                    className="ui-input"
+                />
+                <p className="text-xs theme-text-subtle">Clamped to 1-60cm.</p>
             </div>
             <div className="ui-field">
                 <label className="ui-label">Unit</label>
