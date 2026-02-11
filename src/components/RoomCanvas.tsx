@@ -834,20 +834,51 @@ function RoomCanvasComponent({
     [height, localItems, selectedItemId, width]
   );
 
-  const canvasStyle = useMemo(
-    () => ({
+  const canvasStyle = useMemo(() => {
+    const minorGridSizePx = Math.max(2, gridSpacingCm);
+    const baseStyle = {
       width,
       height,
-      '--grid-size': `${Math.max(2, gridSpacingCm).toFixed(2)}px`,
+      '--grid-size': `${minorGridSizePx.toFixed(2)}px`,
       '--grid-color': gridColor ?? 'var(--grid-line-color)',
-    } as CSSProperties & Record<'--grid-size' | '--grid-color', string>),
-    [gridColor, gridSpacingCm, height, width]
-  );
+    } as CSSProperties & Record<'--grid-size' | '--grid-color', string>;
+
+    if (!isExportingPdf) {
+      return baseStyle;
+    }
+
+    const minorGridStep = Math.max(8, Math.round(minorGridSizePx));
+    const majorGridStep = minorGridStep * 5;
+
+    return {
+      ...baseStyle,
+      backgroundColor: '#eef3f8',
+      backgroundImage: [
+        'linear-gradient(to right, rgb(30 41 59 / 0.16) 1px, transparent 1px)',
+        'linear-gradient(to bottom, rgb(30 41 59 / 0.16) 1px, transparent 1px)',
+        'linear-gradient(to right, rgb(15 23 42 / 0.28) 1px, transparent 1px)',
+        'linear-gradient(to bottom, rgb(15 23 42 / 0.28) 1px, transparent 1px)',
+        'radial-gradient(circle at 50% 42%, rgb(255 255 255 / 0.4), rgb(148 163 184 / 0.14) 78%, rgb(51 65 85 / 0.16))',
+      ].join(', '),
+      backgroundSize: [
+        `${minorGridStep}px ${minorGridStep}px`,
+        `${minorGridStep}px ${minorGridStep}px`,
+        `${majorGridStep}px ${majorGridStep}px`,
+        `${majorGridStep}px ${majorGridStep}px`,
+        '100% 100%',
+      ].join(', '),
+      borderColor: '#b6c2cf',
+      boxShadow: 'inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 -14px 24px -20px rgb(15 23 42 / 0.28)',
+    };
+  }, [gridColor, gridSpacingCm, height, isExportingPdf, width]);
 
   const displayWidth = fromBaseCm(width, unit);
   const displayHeight = fromBaseCm(height, unit);
   const showMeasureHandles = measureMode && !isExportingPdf;
   const canvasPadding = isExportingPdf ? EXPORT_CANVAS_PADDING_PX : CANVAS_PADDING_PX;
+  const canvasClassName = `room-canvas-surface relative rounded-xl shadow-sm overflow-visible ${
+    isExportingPdf ? 'room-canvas-export-floor' : 'bg-grid'
+  }`;
 
   return (
     <div className="workspace-card">
@@ -865,7 +896,7 @@ function RoomCanvasComponent({
               onEditItem(null);
               onSelectMeasure?.(null);
             }}
-            className="room-canvas-surface relative bg-grid rounded-xl shadow-sm overflow-visible"
+            className={canvasClassName}
             style={canvasStyle}
           >
             <div className="room-canvas-size-chip absolute top-2 left-1/2 -translate-x-1/2 text-[10px] px-2 py-0.5 rounded-md border shadow-sm pointer-events-none select-none">

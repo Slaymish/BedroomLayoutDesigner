@@ -25,6 +25,7 @@ import type { LayoutInteractionTelemetry, MeasureLine, RoomDesign, RoomItem, Wor
 import { fromBaseCm, toBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
 import { getExportCaptureSize } from './utils/exportCapture';
+import { buildAutosaveFingerprint } from './utils/autosave';
 import {
   DEFAULT_PREFERENCES,
   SOFT_ROOM_WARNING_COUNT,
@@ -211,6 +212,7 @@ function App() {
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
+  const lastPersistedAutosaveFingerprintRef = useRef<string | null>(null);
   const exportDepsPromiseRef = useRef<Promise<[typeof import('html-to-image'), typeof import('jspdf')]> | null>(null);
   const scrollTelemetryRef = useRef({
     lastFrameAt: 0,
@@ -433,15 +435,34 @@ function App() {
   }, []);
 
   const persistWorkspaceAutosave = useCallback((state: WorkspaceState) => {
+    const fingerprint = buildAutosaveFingerprint(state);
     const persisted = persistWorkspace(state);
     if (persisted) {
       setLastAutosaveAt(Date.now());
+      lastPersistedAutosaveFingerprintRef.current = fingerprint;
     }
     setIsAutosavePending(false);
   }, [persistWorkspace]);
 
   useEffect(() => {
     if (!isHydrated) return;
+    const fingerprint = buildAutosaveFingerprint(workspace);
+
+    if (lastPersistedAutosaveFingerprintRef.current === null) {
+      lastPersistedAutosaveFingerprintRef.current = fingerprint;
+      setIsAutosavePending(false);
+      return;
+    }
+
+    if (fingerprint === lastPersistedAutosaveFingerprintRef.current) {
+      setIsAutosavePending(false);
+      if (autosaveTimeoutRef.current !== null) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
+      }
+      return;
+    }
+
     setIsAutosavePending(true);
     if (autosaveTimeoutRef.current !== null) {
       window.clearTimeout(autosaveTimeoutRef.current);
@@ -464,7 +485,13 @@ function App() {
         window.clearTimeout(autosaveTimeoutRef.current);
         autosaveTimeoutRef.current = null;
       }
-      persistWorkspace(workspaceRef.current);
+      const state = workspaceRef.current;
+      const fingerprint = buildAutosaveFingerprint(state);
+      if (lastPersistedAutosaveFingerprintRef.current === fingerprint) return;
+      const persisted = persistWorkspace(state);
+      if (persisted) {
+        lastPersistedAutosaveFingerprintRef.current = fingerprint;
+      }
     };
     window.addEventListener('beforeunload', flushAutosave);
     return () => {
@@ -1305,9 +1332,11 @@ function App() {
   };
 
   const handleSaveWorkspaceLocal = () => {
-    const persisted = persistWorkspace(workspaceRef.current);
+    const state = workspaceRef.current;
+    const persisted = persistWorkspace(state);
     setIsAutosavePending(false);
     if (persisted) {
+      lastPersistedAutosaveFingerprintRef.current = buildAutosaveFingerprint(state);
       setInfoMessage('Workspace saved in this browser.');
       return;
     }
