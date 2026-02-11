@@ -548,6 +548,7 @@ details > summary {
 .room-object {
   color: var(--room-object-text);
   border: 1px solid var(--room-object-border);
+  touch-action: none;
 }
 
 .room-object-furniture {

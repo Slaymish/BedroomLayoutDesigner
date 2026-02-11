@@ -2,6 +2,7 @@ import { memo } from "react";
 import type { OpeningWall } from "../types";
 import { inferWallFromRotation, rotationForWall } from "../utils/openings";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 
 interface RoomObjectProps {
     width?: number;
@@ -18,6 +19,7 @@ interface RoomObjectProps {
     showLabel?: boolean;
     bulgeOutward?: boolean;
     onMouseDown?: (e: ReactMouseEvent) => void;
+    onPointerDown?: (e: ReactPointerEvent) => void;
     onMouseClick?: (e: ReactMouseEvent) => void;
 }
 
@@ -36,6 +38,7 @@ function RoomObject({
     showLabel = true,
     bulgeOutward = false,
     onMouseDown, 
+    onPointerDown,
     onMouseClick 
 }: RoomObjectProps) {
     
@@ -144,6 +147,7 @@ function RoomObject({
     return (
         <div
             onMouseDown={onMouseDown}
+            onPointerDown={onPointerDown}
             onClick={onMouseClick}
             className={`room-object absolute rounded-sm cursor-move select-none flex items-center justify-center text-xs font-medium
                 ${isDoor ? 'room-object-door' : isWindow ? 'room-object-window' : 'room-object-furniture'}

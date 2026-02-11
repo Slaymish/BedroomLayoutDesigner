@@ -8,6 +8,7 @@ import {
   type CSSProperties,
   type Dispatch,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
 import RoomObject from "./RoomObject";
@@ -220,6 +221,7 @@ function RoomCanvasComponent({
   const activeMeasureDragRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const latestPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const activeInteractionPointerIdRef = useRef<number | null>(null);
   const telemetrySessionRef = useRef<TelemetrySession | null>(null);
   const measureCreateHandlersRef = useRef<{
     onMove: (event: MouseEvent) => void;
@@ -525,17 +527,14 @@ function RoomCanvasComponent({
       }
     };
 
-    const handleMouseMove = (event: MouseEvent) => {
-      scheduleFrame(event.clientX, event.clientY);
-    };
-
-    const handleMouseUp = () => {
+    const completePointerInteraction = () => {
       flushPointer();
       const hadResize = allowResize && isResizingRef.current !== null;
       const hadDrag = draggingIdRef.current !== null;
 
       isResizingRef.current = null;
       draggingIdRef.current = null;
+      activeInteractionPointerIdRef.current = null;
       setIsResizing(null);
       setDraggingId(null);
 
@@ -555,14 +554,28 @@ function RoomCanvasComponent({
       flushTelemetrySession();
     };
 
+    const handlePointerMove = (event: PointerEvent) => {
+      const activePointerId = activeInteractionPointerIdRef.current;
+      if (activePointerId === null || event.pointerId !== activePointerId) return;
+      scheduleFrame(event.clientX, event.clientY);
+    };
+
+    const handlePointerUpOrCancel = (event: PointerEvent) => {
+      const activePointerId = activeInteractionPointerIdRef.current;
+      if (activePointerId === null || event.pointerId !== activePointerId) return;
+      completePointerInteraction();
+    };
+
     if ((allowResize && isResizing) || draggingId !== null) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUpOrCancel);
+      window.addEventListener('pointercancel', handlePointerUpOrCancel);
     }
 
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUpOrCancel);
+      window.removeEventListener('pointercancel', handlePointerUpOrCancel);
       if (rafRef.current !== null) {
         window.cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -597,14 +610,20 @@ function RoomCanvasComponent({
     }
   }, [detachMeasureCreateListeners, detachMeasureEndpointListeners, onLayoutInteractionEnd]);
 
-  const handleObjectMouseDown = (event: ReactMouseEvent, id: number) => {
+  const handleObjectPointerDown = (event: ReactPointerEvent, id: number) => {
     if (measureMode) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.stopPropagation();
+    event.preventDefault();
     hasDragged.current = false;
     latestPointerRef.current = null;
 
     const item = localItemsRef.current.find((current) => current.id === id);
     if (!item || !canvasRef.current) return;
+
+    activeInteractionPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
 
     onLayoutInteractionStart?.();
     startTelemetrySession('drag', item.type || 'Object');
@@ -922,7 +941,7 @@ function RoomCanvasComponent({
                 isSelected={item.id === selectedItemId}
                 showLabel={item.type !== 'Door' && item.type !== 'Window'}
                 bulgeOutward={item.type === 'Window'}
-                onMouseDown={(event) => handleObjectMouseDown(event, item.id)}
+                onPointerDown={(event) => handleObjectPointerDown(event, item.id)}
                 onMouseClick={(event) => handleObjectClick(event, item.id)}
               />
             ))}
@@ -1057,7 +1076,13 @@ function RoomCanvasComponent({
             {allowResize && !measureMode && (
               <>
                 <div
-                  onMouseDown={() => {
+                  onPointerDown={(event) => {
+                    if (!event.isPrimary) return;
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    activeInteractionPointerIdRef.current = event.pointerId;
+                    event.currentTarget.setPointerCapture(event.pointerId);
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
@@ -1069,7 +1094,13 @@ function RoomCanvasComponent({
                 />
 
                 <div
-                  onMouseDown={() => {
+                  onPointerDown={(event) => {
+                    if (!event.isPrimary) return;
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    activeInteractionPointerIdRef.current = event.pointerId;
+                    event.currentTarget.setPointerCapture(event.pointerId);
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
@@ -1081,7 +1112,13 @@ function RoomCanvasComponent({
                 />
 
                 <div
-                  onMouseDown={() => {
+                  onPointerDown={(event) => {
+                    if (!event.isPrimary) return;
+                    if (event.pointerType === 'mouse' && event.button !== 0) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    activeInteractionPointerIdRef.current = event.pointerId;
+                    event.currentTarget.setPointerCapture(event.pointerId);
                     onLayoutInteractionStart?.();
                     startTelemetrySession('resize');
                     latestPointerRef.current = null;
