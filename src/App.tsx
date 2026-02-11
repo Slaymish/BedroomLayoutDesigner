@@ -24,6 +24,7 @@ import {
 import type { LayoutInteractionTelemetry, MeasureLine, RoomDesign, RoomItem, WorkspaceState } from './types';
 import { fromBaseCm, toBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
+import { getExportCaptureSize } from './utils/exportCapture';
 import {
   DEFAULT_PREFERENCES,
   SOFT_ROOM_WARNING_COUNT,
@@ -1229,10 +1230,18 @@ function App() {
             throw new Error(`Could not find canvas for ${room.name}.`);
           }
 
+          const captureSize = getExportCaptureSize(exportTarget);
           const imageData = await toPng(exportTarget, {
+            width: captureSize.width,
+            height: captureSize.height,
+            canvasWidth: captureSize.width,
+            canvasHeight: captureSize.height,
             pixelRatio: Math.max(2, Math.min(3, window.devicePixelRatio || 1)),
             cacheBust: true,
             skipFonts: true,
+            style: {
+              margin: '0',
+            },
           });
           const renderedImage = await loadExportImage(imageData, room.name);
           const trimmedImage = trimExportImageToVisibleBounds(renderedImage);
@@ -1900,7 +1909,7 @@ function App() {
             <span>
               Made by{' '}
               <a
-                href="https://hamishburke.dev"
+                href="https://hamishburke.dev/projects/bedroom-layout-designer"
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
