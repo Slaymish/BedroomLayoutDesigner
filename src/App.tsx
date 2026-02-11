@@ -6,6 +6,7 @@ import RoomCanvas from './components/RoomCanvas';
 import RoomWorkspace from './components/RoomWorkspace';
 import { BED_SIZE_PRESETS, OBJECT_PRESETS, type ObjectPreset } from './constants/objectPresets';
 import {
+  AlertTriangle,
   Archive,
   BedDouble,
   Grid2X2,
@@ -26,6 +27,7 @@ import { fromBaseCm, toBaseCm, type Unit } from './utils/units';
 import { isOpening } from './utils/openings';
 import { getExportCaptureSize } from './utils/exportCapture';
 import { buildAutosaveFingerprint } from './utils/autosave';
+import { evaluateRoomFengShui } from './utils/fengShui';
 import {
   DEFAULT_PREFERENCES,
   OPENING_PRESETS,
@@ -212,6 +214,7 @@ function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furniturePopoverRef = useRef<HTMLDetailsElement>(null);
+  const fengShuiWarningDetailsRef = useRef<HTMLDetailsElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
@@ -252,6 +255,23 @@ function App() {
     }
     return systemPrefersDark ? 'dark' : 'light';
   }, [systemPrefersDark, workspace.preferences.themeMode]);
+  const activeRoomFengShui = useMemo(
+    () => (activeRoom ? evaluateRoomFengShui(activeRoom) : null),
+    [activeRoom]
+  );
+  const fengShuiWarningCount = activeRoomFengShui?.violations.length ?? 0;
+  const fengShuiWarningTooltip = useMemo(() => {
+    if (!activeRoom || !activeRoomFengShui || activeRoomFengShui.violations.length === 0) {
+      return '';
+    }
+    return `Click to view ${activeRoomFengShui.violations.length} feng shui reminder${activeRoomFengShui.violations.length === 1 ? '' : 's'} for ${activeRoom.name}.`;
+  }, [activeRoom, activeRoomFengShui]);
+
+  useEffect(() => {
+    const details = fengShuiWarningDetailsRef.current;
+    if (!details?.open) return;
+    details.open = false;
+  }, [activeRoom?.id, fengShuiWarningCount]);
 
   const effectiveGridSpacing = gridSpacingPreview ?? workspace.preferences.gridSpacing;
   const effectiveGridColor = useMemo(() => {
@@ -1856,6 +1876,27 @@ function App() {
           </div>
 
           <div className="command-toolbar-meta">
+            {fengShuiWarningCount > 0 && (
+              <details className="feng-shui-warning-details" ref={fengShuiWarningDetailsRef}>
+                <summary
+                  className="feng-shui-warning-chip feng-shui-warning-summary"
+                  title={fengShuiWarningTooltip}
+                  aria-label={`${fengShuiWarningCount} feng shui rule${fengShuiWarningCount === 1 ? '' : 's'} need attention in ${activeRoom?.name || 'the active room'}. Click for details.`}
+                >
+                  <AlertTriangle className={iconClassName} />
+                  <strong>{fengShuiWarningCount}</strong>
+                </summary>
+                <div className="feng-shui-warning-popover">
+                  <p className="feng-shui-warning-title">Feng shui reminders</p>
+                  <p className="feng-shui-warning-room">{activeRoom?.name || 'Active room'}</p>
+                  {activeRoomFengShui?.violations.map((violation, index) => (
+                    <p key={violation.ruleId} className="feng-shui-warning-row">
+                      <strong>{index + 1}. {violation.title}</strong> {violation.detail}
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
             <span className={`autosave-status-chip ${isAutosavePending ? 'autosave-status-chip-pending' : ''}`}>
               {autosaveStatusLabel}
             </span>

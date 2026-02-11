@@ -79,6 +79,9 @@
   --pending-text: #8a3e12;
   --pending-border: rgb(217 119 6 / 0.45);
   --pending-bg: #fff9ee;
+  --feng-shui-warning-text: #9a3412;
+  --feng-shui-warning-border: rgb(249 115 22 / 0.44);
+  --feng-shui-warning-bg: #fff5e8;
 
   --popover-bg: #ffffff;
   --popover-shadow: 0 12px 30px -20px rgb(15 23 42 / 0.45);
@@ -227,6 +230,9 @@
   --pending-text: #f6c89f;
   --pending-border: rgb(245 158 11 / 0.5);
   --pending-bg: rgb(120 53 15 / 0.3);
+  --feng-shui-warning-text: #ffd7af;
+  --feng-shui-warning-border: rgb(251 146 60 / 0.62);
+  --feng-shui-warning-bg: rgb(124 45 18 / 0.35);
 
   --popover-bg: #1a2c35;
   --popover-shadow: 0 14px 30px -18px rgb(0 0 0 / 0.65);

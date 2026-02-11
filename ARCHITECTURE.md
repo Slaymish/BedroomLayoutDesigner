@@ -57,6 +57,7 @@ Currently not wired into `App.tsx`:
 - `src/utils/autosave.ts`: autosave fingerprint builder.
 - `src/utils/workspaceFile.ts`: workspace export file format + parser + download.
 - `src/utils/exportCapture.ts`: robust capture bounds for PDF image generation.
+- `src/utils/fengShui.ts`: active-room feng shui rule catalog and geometry-based violation detection.
 
 ### Styling and Runtime Assets
 
@@ -160,6 +161,7 @@ Current automated tests (Node test runner) cover utility contracts:
 - `tests/workspaceFile.test.ts`: export/import schema validation.
 - `tests/autosave.test.ts`: autosave fingerprint semantics.
 - `tests/exportCapture.test.ts`: capture-size fallback logic.
+- `tests/fengShui.test.ts`: feng shui detector rules for safe and violating layouts.
 
 Most UI interactions are not yet covered by integration/e2e tests.
 

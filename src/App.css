@@ -337,6 +337,81 @@
   background: var(--pending-bg) !important;
 }
 
+.feng-shui-warning-chip {
+  border-style: solid !important;
+  border-color: var(--feng-shui-warning-border) !important;
+  background: var(--feng-shui-warning-bg) !important;
+  color: var(--feng-shui-warning-text) !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  cursor: pointer;
+}
+
+.feng-shui-warning-chip .toolbar-icon-svg {
+  width: 0.88rem;
+  height: 0.88rem;
+  stroke-width: 2;
+}
+
+.feng-shui-warning-chip strong {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.feng-shui-warning-details {
+  position: relative;
+}
+
+.feng-shui-warning-summary::-webkit-details-marker {
+  display: none;
+}
+
+.feng-shui-warning-summary {
+  list-style: none;
+}
+
+.feng-shui-warning-details[open] .feng-shui-warning-chip {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.feng-shui-warning-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.38rem);
+  z-index: 25;
+  width: min(24rem, calc(100vw - 2rem));
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.7rem;
+  background: var(--popover-bg);
+  box-shadow: var(--popover-shadow);
+  padding: 0.58rem 0.62rem;
+}
+
+.feng-shui-warning-title {
+  margin: 0;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.feng-shui-warning-room {
+  margin: 0.12rem 0 0.45rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.feng-shui-warning-row {
+  margin: 0.22rem 0 0;
+  font-size: 0.74rem;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+.feng-shui-warning-row strong {
+  color: var(--text-strong);
+}
+
 .toolbar-divider {
   width: 1px;
   height: 1.8rem;
@@ -676,6 +751,12 @@ details > summary {
     right: auto;
     left: 0;
     width: min(18rem, calc(100vw - 2rem));
+  }
+
+  .feng-shui-warning-popover {
+    right: auto;
+    left: 0;
+    width: min(19rem, calc(100vw - 2rem));
   }
 
   .room-dimension-edit-btn {
