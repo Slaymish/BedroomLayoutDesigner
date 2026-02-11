@@ -224,13 +224,15 @@ function RoomCanvasComponent({
   const activeInteractionPointerIdRef = useRef<number | null>(null);
   const telemetrySessionRef = useRef<TelemetrySession | null>(null);
   const measureCreateHandlersRef = useRef<{
-    onMove: (event: MouseEvent) => void;
-    onUp: (event: MouseEvent) => void;
+    onMove: (event: PointerEvent) => void;
+    onUp: (event: PointerEvent) => void;
   } | null>(null);
   const measureEndpointHandlersRef = useRef<{
-    onMove: (event: MouseEvent) => void;
-    onUp: (event: MouseEvent) => void;
+    onMove: (event: PointerEvent) => void;
+    onUp: (event: PointerEvent) => void;
   } | null>(null);
+  const measureCreatePointerIdRef = useRef<number | null>(null);
+  const measureEndpointPointerIdRef = useRef<number | null>(null);
   const measureInteractionActiveRef = useRef(false);
 
   const setNextLocalItems = useCallback((next: RoomItem[]) => {
@@ -246,17 +248,21 @@ function RoomCanvasComponent({
   const detachMeasureCreateListeners = useCallback(() => {
     const handlers = measureCreateHandlersRef.current;
     if (!handlers) return;
-    window.removeEventListener('mousemove', handlers.onMove);
-    window.removeEventListener('mouseup', handlers.onUp);
+    window.removeEventListener('pointermove', handlers.onMove);
+    window.removeEventListener('pointerup', handlers.onUp);
+    window.removeEventListener('pointercancel', handlers.onUp);
     measureCreateHandlersRef.current = null;
+    measureCreatePointerIdRef.current = null;
   }, []);
 
   const detachMeasureEndpointListeners = useCallback(() => {
     const handlers = measureEndpointHandlersRef.current;
     if (!handlers) return;
-    window.removeEventListener('mousemove', handlers.onMove);
-    window.removeEventListener('mouseup', handlers.onUp);
+    window.removeEventListener('pointermove', handlers.onMove);
+    window.removeEventListener('pointerup', handlers.onUp);
+    window.removeEventListener('pointercancel', handlers.onUp);
     measureEndpointHandlersRef.current = null;
+    measureEndpointPointerIdRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -657,15 +663,19 @@ function RoomCanvasComponent({
     onEditItem(id);
   };
 
-  const beginMeasureCreate = (event: ReactMouseEvent<HTMLDivElement>) => {
+  const beginMeasureCreate = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!measureMode || !onMeasuresChange || !canvasRef.current || isExportingPdf) {
       return;
     }
 
-    if (event.button !== 0) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.preventDefault();
+    event.stopPropagation();
 
     const rect = canvasRef.current.getBoundingClientRect();
+    measureCreatePointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
     const startRaw = toPointInRoom(event.clientX, event.clientY, rect, widthRef.current, heightRef.current);
     const start = applyMeasureConstraint(
       startRaw,
@@ -691,7 +701,8 @@ function RoomCanvasComponent({
       includeInPdf: false,
     });
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== measureCreatePointerIdRef.current) return;
       const raw = toPointInRoom(moveEvent.clientX, moveEvent.clientY, rect, widthRef.current, heightRef.current);
       const constrained = applyMeasureConstraint(
         raw,
@@ -704,7 +715,8 @@ function RoomCanvasComponent({
       setDraftMeasure((prev) => (prev ? { ...prev, x2: constrained.x, y2: constrained.y } : prev));
     };
 
-    const finish = (upEvent: MouseEvent) => {
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== measureCreatePointerIdRef.current) return;
       const raw = toPointInRoom(upEvent.clientX, upEvent.clientY, rect, widthRef.current, heightRef.current);
       const constrained = applyMeasureConstraint(
         raw,
@@ -738,21 +750,26 @@ function RoomCanvasComponent({
       detachMeasureCreateListeners();
     };
 
-    measureCreateHandlersRef.current = { onMove: handleMouseMove, onUp: finish };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', finish);
+    measureCreateHandlersRef.current = { onMove: handlePointerMove, onUp: finish };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const beginMeasureEndpointDrag = (
-    event: ReactMouseEvent,
+    event: ReactPointerEvent,
     measure: MeasureLine,
     endpoint: 'start' | 'end'
   ) => {
     if (!measureMode || !onMeasuresChange || !canvasRef.current || isExportingPdf) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
 
     const rect = canvasRef.current.getBoundingClientRect();
+    measureEndpointPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
     const anchor = endpoint === 'start'
       ? { x: measure.x2, y: measure.y2 }
       : { x: measure.x1, y: measure.y1 };
@@ -765,7 +782,8 @@ function RoomCanvasComponent({
     onEditItem(null);
     onSelectMeasure?.(measure.id);
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== measureEndpointPointerIdRef.current) return;
       const raw = toPointInRoom(moveEvent.clientX, moveEvent.clientY, rect, widthRef.current, heightRef.current);
       const constrained = applyMeasureConstraint(
         raw,
@@ -786,7 +804,8 @@ function RoomCanvasComponent({
       setNextLocalMeasures(nextMeasures);
     };
 
-    const finish = () => {
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== measureEndpointPointerIdRef.current) return;
       if (measuresDirtyRef.current) {
         measuresDirtyRef.current = false;
         onMeasuresChange(localMeasuresRef.current.map((candidate) => ({ ...candidate })));
@@ -799,9 +818,10 @@ function RoomCanvasComponent({
       detachMeasureEndpointListeners();
     };
 
-    measureEndpointHandlersRef.current = { onMove: handleMouseMove, onUp: finish };
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', finish);
+    measureEndpointHandlersRef.current = { onMove: handlePointerMove, onUp: finish };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const displayedMeasures = useMemo(() => {
@@ -858,6 +878,7 @@ function RoomCanvasComponent({
     const baseStyle = {
       width,
       height,
+      touchAction: measureMode ? 'none' : 'auto',
       '--grid-size': `${minorGridSizePx.toFixed(2)}px`,
       '--grid-color': gridColor ?? 'var(--grid-line-color)',
     } as CSSProperties & Record<'--grid-size' | '--grid-color', string>;
@@ -889,7 +910,7 @@ function RoomCanvasComponent({
       borderColor: '#b6c2cf',
       boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 -14px 24px -20px rgba(15, 23, 42, 0.28)',
     };
-  }, [gridColor, gridSpacingCm, height, isExportingPdf, width]);
+  }, [gridColor, gridSpacingCm, height, isExportingPdf, measureMode, width]);
 
   const displayWidth = fromBaseCm(width, unit);
   const displayHeight = fromBaseCm(height, unit);
@@ -910,7 +931,7 @@ function RoomCanvasComponent({
         >
           <div
             ref={canvasRef}
-            onMouseDown={beginMeasureCreate}
+            onPointerDown={beginMeasureCreate}
             onClick={() => {
               onEditItem(null);
               onSelectMeasure?.(null);
@@ -985,9 +1006,12 @@ function RoomCanvasComponent({
                       strokeWidth={selected ? 2.2 : 1.8}
                       strokeDasharray={measure.includeInPdf ? '0' : '5 3'}
                       className={isExportingPdf ? '' : 'cursor-pointer pointer-events-auto'}
-                      onMouseDown={(event) => {
+                      onPointerDown={(event) => {
                         if (isExportingPdf) return;
+                        if (!event.isPrimary) return;
+                        if (event.pointerType === 'mouse' && event.button !== 0) return;
                         event.stopPropagation();
+                        event.preventDefault();
                         onEditItem(null);
                         onSelectMeasure?.(measure.id);
                       }}
@@ -1005,8 +1029,11 @@ function RoomCanvasComponent({
                         stroke="transparent"
                         strokeWidth={12}
                         className="cursor-pointer pointer-events-auto"
-                        onMouseDown={(event) => {
+                        onPointerDown={(event) => {
+                          if (!event.isPrimary) return;
+                          if (event.pointerType === 'mouse' && event.button !== 0) return;
                           event.stopPropagation();
+                          event.preventDefault();
                           onEditItem(null);
                           onSelectMeasure?.(measure.id);
                         }}
@@ -1038,7 +1065,7 @@ function RoomCanvasComponent({
                           r={4.5}
                           fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
-                          onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'start')}
+                          onPointerDown={(event) => beginMeasureEndpointDrag(event, measure, 'start')}
                           onClick={(event) => {
                             event.stopPropagation();
                           }}
@@ -1049,7 +1076,7 @@ function RoomCanvasComponent({
                           r={4.5}
                           fill={selected ? 'var(--measure-line-selected)' : 'var(--measure-handle)'}
                           className="cursor-grab pointer-events-auto"
-                          onMouseDown={(event) => beginMeasureEndpointDrag(event, measure, 'end')}
+                          onPointerDown={(event) => beginMeasureEndpointDrag(event, measure, 'end')}
                           onClick={(event) => {
                             event.stopPropagation();
                           }}
