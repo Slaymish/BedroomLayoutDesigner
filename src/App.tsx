@@ -1898,6 +1898,7 @@ function App() {
               rooms={workspace.rooms}
               activeRoomId={workspace.activeRoomId}
               unit={activeUnit}
+              measureMode={measureMode}
               roomUiStateTokens={roomUiStateTokens}
               onActivateRoom={handleActivateRoom}
               onEditRoomDimensions={openRoomDimensionEditor}

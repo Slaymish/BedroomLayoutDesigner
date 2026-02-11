@@ -431,9 +431,27 @@ function RoomCanvasComponent({
 
   useEffect(() => {
     if (measureMode && !isExportingPdf) return;
+    detachMeasureCreateListeners();
+    detachMeasureEndpointListeners();
+    detachMeasureLabelListeners();
+    activeMeasureDragRef.current = false;
+    setDraftMeasure(null);
+    setMeasureSnapPreview(null);
+    setHoveredMeasureAnchorKey(null);
     setHoveredWallMeasureKey(null);
     setActiveWallMeasureKey(null);
-  }, [isExportingPdf, measureMode]);
+    if (measureInteractionActiveRef.current) {
+      measureInteractionActiveRef.current = false;
+      onLayoutInteractionEnd?.();
+    }
+  }, [
+    detachMeasureCreateListeners,
+    detachMeasureEndpointListeners,
+    detachMeasureLabelListeners,
+    isExportingPdf,
+    measureMode,
+    onLayoutInteractionEnd,
+  ]);
 
   const snapTargets = useMemo(() => {
     const points: Point[] = [

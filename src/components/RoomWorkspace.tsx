@@ -7,6 +7,7 @@ interface RoomWorkspaceProps {
   rooms: RoomDesign[];
   activeRoomId: string;
   unit: Unit;
+  measureMode: boolean;
   roomUiStateTokens: Record<string, string>;
   onActivateRoom: (roomId: string) => void;
   onEditRoomDimensions: (roomId: string) => void;
@@ -20,6 +21,7 @@ function RoomWorkspace({
   rooms,
   activeRoomId,
   unit,
+  measureMode,
   roomUiStateTokens,
   onActivateRoom,
   onEditRoomDimensions,
@@ -50,6 +52,7 @@ function RoomWorkspace({
               key={room.id}
               room={room}
               unit={unit}
+              measureMode={measureMode && isActive}
               isActive={isActive}
               uiStateToken={roomUiStateTokens[room.id] || ''}
               canDelete={rooms.length > 1}

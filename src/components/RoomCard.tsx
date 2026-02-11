@@ -6,6 +6,7 @@ import { fromBaseCm, type Unit } from '../utils/units';
 interface RoomCardProps {
   room: RoomDesign;
   unit: Unit;
+  measureMode: boolean;
   isActive: boolean;
   uiStateToken: string;
   canDelete: boolean;
@@ -36,6 +37,7 @@ const isInteractiveTarget = (target: EventTarget | null): boolean => {
 function RoomCard({
   room,
   unit,
+  measureMode,
   isActive,
   uiStateToken,
   canDelete,
@@ -68,6 +70,7 @@ function RoomCard({
     <article
       className={`surface-card room-card ${isActive ? 'room-card-active' : ''}`}
       data-ui-state-token={uiStateToken}
+      data-measure-mode={measureMode ? 'on' : 'off'}
       onClick={(event) => {
         if (isInteractiveTarget(event.target)) return;
         onActivate(room.id);
@@ -192,6 +195,7 @@ function RoomCard({
 const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean => (
   prev.room === next.room &&
   prev.unit === next.unit &&
+  prev.measureMode === next.measureMode &&
   prev.isActive === next.isActive &&
   prev.uiStateToken === next.uiStateToken &&
   prev.canDelete === next.canDelete &&
