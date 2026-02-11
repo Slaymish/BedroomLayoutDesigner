@@ -5,7 +5,7 @@ import type { Preferences } from "../types";
 import { fromBaseCm, toBaseCm } from "../utils/units";
 
 type EditableNumericField = "width" | "height" | "x" | "y" | "rotate";
-type UpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic';
+type UpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic' | 'scrub';
 
 const formatDraftNumber = (value: number): string => {
     if (!Number.isFinite(value)) return "";
@@ -31,26 +31,36 @@ export default function EditObjectPanel({
     item,
     onChange,
     onRemove,
-    unit
+    unit,
+    onScrubStart,
+    onScrubEnd,
 }: {
     item: RoomItem;
     onChange: (updatedItem: RoomItem, intent?: UpdateIntent) => void;
     onRemove: () => void;
-    unit: Preferences['unit']
+    unit: Preferences['unit'];
+    onScrubStart?: () => void;
+    onScrubEnd?: () => void;
 }) {
     const u = unit || 'cm';
     const [draftValues, setDraftValues] = useState(() => createDraftValues(item, u));
 
-    const handleChangeBase = (field: keyof RoomItem, baseValue: number) => {
+    const handleChangeBase = (
+        field: keyof RoomItem,
+        baseValue: number,
+        overrideIntent?: UpdateIntent
+    ) => {
         if (!Number.isFinite(baseValue)) return;
         const updatedItem = { ...item, [field]: baseValue };
-        const intent: UpdateIntent = field === 'width' || field === 'height'
-            ? 'dimensions'
-            : field === 'rotate'
-                ? 'rotation'
-                : field === 'x' || field === 'y'
-                    ? 'position'
-                    : 'generic';
+        const intent: UpdateIntent = overrideIntent ?? (
+            field === 'width' || field === 'height'
+                ? 'dimensions'
+                : field === 'rotate'
+                    ? 'rotation'
+                    : field === 'x' || field === 'y'
+                        ? 'position'
+                        : 'generic'
+        );
         onChange(updatedItem, intent);
     };
 
@@ -60,10 +70,23 @@ export default function EditObjectPanel({
         startDisplayVal: 0,
         dragging: false,
     });
+    const dragHandlersRef = useRef<{ onMove: (ev: MouseEvent) => void; onUp: () => void } | null>(null);
 
     useEffect(() => {
         setDraftValues(createDraftValues(item, u));
     }, [item, u]);
+
+    useEffect(() => () => {
+        if (dragHandlersRef.current) {
+            window.removeEventListener('mousemove', dragHandlersRef.current.onMove);
+            window.removeEventListener('mouseup', dragHandlersRef.current.onUp);
+            dragHandlersRef.current = null;
+        }
+        if (dragRef.current.dragging) {
+            dragRef.current.dragging = false;
+            onScrubEnd?.();
+        }
+    }, [onScrubEnd]);
 
     const resetFieldDraft = (field: EditableNumericField) => {
         setDraftValues(prev => ({ ...prev, [field]: formatDraftNumber(toDisplayValue(item, field, u)) }));
@@ -108,6 +131,12 @@ export default function EditObjectPanel({
         // Alt+drag enables scrubbing while preserving normal click-to-edit behavior.
         if (!e.altKey) return;
         e.preventDefault();
+        if (dragHandlersRef.current) {
+            window.removeEventListener('mousemove', dragHandlersRef.current.onMove);
+            window.removeEventListener('mouseup', dragHandlersRef.current.onUp);
+            dragHandlersRef.current = null;
+        }
+        onScrubStart?.();
         const baseVal = Number(item[field] ?? 0) || 0;
         const displayVal = field === 'rotate' ? baseVal : fromBaseCm(baseVal, u);
         dragRef.current = { field, startX: e.clientX, startDisplayVal: displayVal, dragging: true };
@@ -122,12 +151,12 @@ export default function EditObjectPanel({
 
             if (dragRef.current.field === 'rotate') {
                 newDisplayVal = ((Math.round(newDisplayVal) % 360) + 360) % 360;
-                handleChangeBase('rotate', newDisplayVal);
+                handleChangeBase('rotate', newDisplayVal, 'scrub');
                 setDraftValues(prev => ({ ...prev, rotate: formatDraftNumber(newDisplayVal) }));
             } else {
                 newDisplayVal = Math.max(0, newDisplayVal);
                 const baseNew = toBaseCm(newDisplayVal, u);
-                handleChangeBase(dragRef.current.field, baseNew);
+                handleChangeBase(dragRef.current.field, baseNew, 'scrub');
                 setDraftValues(prev => ({ ...prev, [dragRef.current.field as EditableNumericField]: formatDraftNumber(newDisplayVal) }));
             }
         };
@@ -136,8 +165,11 @@ export default function EditObjectPanel({
             dragRef.current.dragging = false;
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
+            dragHandlersRef.current = null;
+            onScrubEnd?.();
         };
 
+        dragHandlersRef.current = { onMove, onUp };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);
     };

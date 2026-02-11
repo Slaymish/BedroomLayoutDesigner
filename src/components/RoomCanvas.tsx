@@ -221,6 +221,15 @@ function RoomCanvasComponent({
   const rafRef = useRef<number | null>(null);
   const latestPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
   const telemetrySessionRef = useRef<TelemetrySession | null>(null);
+  const measureCreateHandlersRef = useRef<{
+    onMove: (event: MouseEvent) => void;
+    onUp: (event: MouseEvent) => void;
+  } | null>(null);
+  const measureEndpointHandlersRef = useRef<{
+    onMove: (event: MouseEvent) => void;
+    onUp: (event: MouseEvent) => void;
+  } | null>(null);
+  const measureInteractionActiveRef = useRef(false);
 
   const setNextLocalItems = useCallback((next: RoomItem[]) => {
     localItemsRef.current = next;
@@ -230,6 +239,22 @@ function RoomCanvasComponent({
   const setNextLocalMeasures = useCallback((next: MeasureLine[]) => {
     localMeasuresRef.current = next;
     setLocalMeasures(next);
+  }, []);
+
+  const detachMeasureCreateListeners = useCallback(() => {
+    const handlers = measureCreateHandlersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('mousemove', handlers.onMove);
+    window.removeEventListener('mouseup', handlers.onUp);
+    measureCreateHandlersRef.current = null;
+  }, []);
+
+  const detachMeasureEndpointListeners = useCallback(() => {
+    const handlers = measureEndpointHandlersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('mousemove', handlers.onMove);
+    window.removeEventListener('mouseup', handlers.onUp);
+    measureEndpointHandlersRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -563,6 +588,15 @@ function RoomCanvasComponent({
     };
   }, [flushTelemetrySession]);
 
+  useEffect(() => () => {
+    detachMeasureCreateListeners();
+    detachMeasureEndpointListeners();
+    if (measureInteractionActiveRef.current) {
+      measureInteractionActiveRef.current = false;
+      onLayoutInteractionEnd?.();
+    }
+  }, [detachMeasureCreateListeners, detachMeasureEndpointListeners, onLayoutInteractionEnd]);
+
   const handleObjectMouseDown = (event: ReactMouseEvent, id: number) => {
     if (measureMode) return;
     event.stopPropagation();
@@ -623,6 +657,8 @@ function RoomCanvasComponent({
       heightRef.current
     );
 
+    detachMeasureCreateListeners();
+    measureInteractionActiveRef.current = true;
     onLayoutInteractionStart?.();
     onEditItem(null);
     onSelectMeasure?.(null);
@@ -676,11 +712,14 @@ function RoomCanvasComponent({
       }
 
       setDraftMeasure(null);
-      onLayoutInteractionEnd?.();
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', finish);
+      if (measureInteractionActiveRef.current) {
+        measureInteractionActiveRef.current = false;
+        onLayoutInteractionEnd?.();
+      }
+      detachMeasureCreateListeners();
     };
 
+    measureCreateHandlersRef.current = { onMove: handleMouseMove, onUp: finish };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', finish);
   };
@@ -699,7 +738,9 @@ function RoomCanvasComponent({
       ? { x: measure.x2, y: measure.y2 }
       : { x: measure.x1, y: measure.y1 };
 
+    detachMeasureEndpointListeners();
     activeMeasureDragRef.current = true;
+    measureInteractionActiveRef.current = true;
     measuresDirtyRef.current = false;
     onLayoutInteractionStart?.();
     onEditItem(null);
@@ -732,11 +773,14 @@ function RoomCanvasComponent({
         onMeasuresChange(localMeasuresRef.current.map((candidate) => ({ ...candidate })));
       }
       activeMeasureDragRef.current = false;
-      onLayoutInteractionEnd?.();
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', finish);
+      if (measureInteractionActiveRef.current) {
+        measureInteractionActiveRef.current = false;
+        onLayoutInteractionEnd?.();
+      }
+      detachMeasureEndpointListeners();
     };
 
+    measureEndpointHandlersRef.current = { onMove: handleMouseMove, onUp: finish };
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', finish);
   };

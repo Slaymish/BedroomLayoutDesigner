@@ -54,7 +54,7 @@ interface AddItemOptions {
   doorOpenSide?: 'left' | 'right';
 }
 
-type ItemUpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic';
+type ItemUpdateIntent = 'dimensions' | 'rotation' | 'position' | 'generic' | 'scrub';
 
 interface ScrollTelemetrySummary {
   sampleCount: number;
@@ -869,7 +869,7 @@ function App() {
           ...room,
           items: room.items.map((item) => (item.id === nextItem.id ? nextItem : item)),
         };
-      });
+      }, { recordHistory: intent !== 'scrub' });
     },
     [updateRoom]
   );
@@ -1128,7 +1128,12 @@ function App() {
     );
     if (!confirmed) return;
 
-    window.localStorage.removeItem(STORAGE_KEY);
+    try {
+      window.localStorage.removeItem(STORAGE_KEY);
+      setStorageErrorMessage(null);
+    } catch {
+      setStorageErrorMessage('Browser storage could not be cleared. The workspace has been reset in memory only.');
+    }
     setWorkspace(createDefaultWorkspaceState());
     setHistoryPast([]);
     setHistoryFuture([]);
@@ -1422,6 +1427,8 @@ function App() {
                 handleRoomMeasureSelection(room.id, null);
                 updateRoomItem(room.id, item, intent ?? 'generic');
               }}
+              onScrubStart={handleLayoutInteractionStart}
+              onScrubEnd={handleLayoutInteractionEnd}
               onRemove={() => removeSelectedItem(room.id)}
               unit={activeUnit}
             />
