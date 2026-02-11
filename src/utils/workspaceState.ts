@@ -36,6 +36,10 @@ export const STORAGE_KEY = 'bedroom-layout-designer:v1';
 export const WORKSPACE_STORAGE_VERSION = 5;
 export const DEFAULT_ROOM_WIDTH_CM = 360;
 export const DEFAULT_ROOM_HEIGHT_CM = 320;
+export const MAX_ROOM_DIMENSION_CM = 5000;
+export const MAX_ITEM_DIMENSION_CM = 2000;
+export const MAX_GRID_SPACING = 500;
+export const MAX_ABSOLUTE_COORDINATE_CM = MAX_ROOM_DIMENSION_CM * 4;
 export const SOFT_ROOM_WARNING_COUNT = 8;
 export const UNIT_OPTIONS: Unit[] = ['mm', 'cm', 'm', 'in', 'ft'];
 export const OPENING_PRESETS: Record<'Door' | 'Window', { widthCm: number; heightCm: number }> = {
@@ -69,6 +73,16 @@ const sanitizeNumber = (value: unknown, fallback: number, min?: number): number 
   if (typeof min === 'number') return Math.max(min, value);
   return value;
 };
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
+
+const sanitizeClampedNumber = (value: unknown, fallback: number, min: number, max: number): number => (
+  clamp(sanitizeNumber(value, fallback, min), min, max)
+);
+
+const sanitizePositiveInt = (value: unknown, fallback: number, min = 1): number => (
+  Math.max(min, Math.round(sanitizeNumber(value, fallback, min)))
+);
 
 export const cloneRoomItem = (item: RoomItem): RoomItem => ({ ...item });
 
@@ -111,10 +125,11 @@ export const normalizeOpeningForRoom = (
 const sanitizePreferences = (preferences: Preferences | undefined): Preferences => {
   const unit = isValidUnit(preferences?.unit) ? preferences?.unit : DEFAULT_PREFERENCES.unit;
   const legacyGridSize = sanitizeNumber(preferences?.gridSize, DEFAULT_PREFERENCES.gridSpacing, 2);
-  const gridSpacing = sanitizeNumber(
+  const gridSpacing = sanitizeClampedNumber(
     preferences?.gridSpacing,
     fromBaseCm(legacyGridSize, unit || 'cm'),
-    0.1
+    0.1,
+    MAX_GRID_SPACING
   );
   return {
     gridSpacing,
@@ -162,30 +177,61 @@ const sanitizeSetup = (
 };
 
 const sanitizeRoomItems = (items: RoomItem[], roomWidthCm: number, roomHeightCm: number): RoomItem[] => {
+  const usedIds = new Set<number>();
   return items.map((item, index) => {
+    let id = sanitizePositiveInt(item.id, index + 1, 1);
+    while (usedIds.has(id)) {
+      id += 1;
+    }
+    usedIds.add(id);
+
+    const type = item.type || 'Object';
+    const opening = type === 'Door' || type === 'Window';
+    const spanLimit = Math.min(MAX_ITEM_DIMENSION_CM, Math.max(roomWidthCm, roomHeightCm));
+    const widthLimit = opening
+      ? spanLimit
+      : Math.min(MAX_ITEM_DIMENSION_CM, roomWidthCm);
+    const heightLimit = opening
+      ? spanLimit
+      : Math.min(MAX_ITEM_DIMENSION_CM, roomHeightCm);
+    const width = sanitizeClampedNumber(item.width, 1, 1, Math.max(1, widthLimit));
+    const height = sanitizeClampedNumber(item.height, 1, 1, Math.max(1, heightLimit));
     const base: RoomItem = {
-      id: sanitizeNumber(item.id, index + 1, 1),
-      width: sanitizeNumber(item.width, 1, 1),
-      height: sanitizeNumber(item.height, 1, 1),
+      id,
+      width,
+      height,
       x: sanitizeNumber(item.x, 0),
       y: sanitizeNumber(item.y, 0),
       rotate: sanitizeNumber(item.rotate, 0),
-      type: item.type || 'Object',
+      type,
       doorOpenDirection: item.doorOpenDirection,
       doorOpenSide: item.doorOpenSide,
       openingWall: item.openingWall,
     };
-    if (!isOpening(base)) return base;
+    if (!isOpening(base)) {
+      const maxX = Math.max(0, roomWidthCm - width);
+      const maxY = Math.max(0, roomHeightCm - height);
+      return {
+        ...base,
+        x: clamp(base.x, 0, maxX),
+        y: clamp(base.y, 0, maxY),
+      };
+    }
     return normalizeOpeningForRoom(base, roomWidthCm, roomHeightCm);
   });
 };
 
-const sanitizeMeasureLine = (measure: Partial<MeasureLine>, fallbackId: number): MeasureLine => ({
-  id: sanitizeNumber(measure.id, fallbackId, 1),
-  x1: sanitizeNumber(measure.x1, 0),
-  y1: sanitizeNumber(measure.y1, 0),
-  x2: sanitizeNumber(measure.x2, 0),
-  y2: sanitizeNumber(measure.y2, 0),
+const sanitizeMeasureLine = (
+  measure: Partial<MeasureLine>,
+  fallbackId: number,
+  roomWidthCm: number,
+  roomHeightCm: number
+): MeasureLine => ({
+  id: sanitizePositiveInt(measure.id, fallbackId, 1),
+  x1: clamp(sanitizeNumber(measure.x1, 0), 0, roomWidthCm),
+  y1: clamp(sanitizeNumber(measure.y1, 0), 0, roomHeightCm),
+  x2: clamp(sanitizeNumber(measure.x2, 0), 0, roomWidthCm),
+  y2: clamp(sanitizeNumber(measure.y2, 0), 0, roomHeightCm),
   includeInPdf: typeof measure.includeInPdf === 'boolean' ? measure.includeInPdf : false,
   labelT: Math.min(1, sanitizeNumber(measure.labelT, 0.5, 0)),
 });
@@ -197,14 +243,23 @@ const sanitizeRoomName = (name: unknown, fallback: string): string => {
 };
 
 const sanitizeRoomDesign = (room: Partial<RoomDesign>, fallbackName: string): RoomDesign => {
-  const roomWidthCm = sanitizeNumber(room.roomWidthCm, DEFAULT_ROOM_WIDTH_CM, 180);
-  const roomHeightCm = sanitizeNumber(room.roomHeightCm, DEFAULT_ROOM_HEIGHT_CM, 180);
+  const roomWidthCm = sanitizeClampedNumber(room.roomWidthCm, DEFAULT_ROOM_WIDTH_CM, 180, MAX_ROOM_DIMENSION_CM);
+  const roomHeightCm = sanitizeClampedNumber(room.roomHeightCm, DEFAULT_ROOM_HEIGHT_CM, 180, MAX_ROOM_DIMENSION_CM);
   const items = Array.isArray(room.items) ? sanitizeRoomItems(room.items, roomWidthCm, roomHeightCm) : [];
-  const measures = Array.isArray(room.measures)
-    ? room.measures.map((measure, index) => sanitizeMeasureLine(measure, index + 1))
+  const rawMeasures = Array.isArray(room.measures)
+    ? room.measures.map((measure, index) => sanitizeMeasureLine(measure, index + 1, roomWidthCm, roomHeightCm))
     : [];
+  const usedMeasureIds = new Set<number>();
+  const measures = rawMeasures.map((measure) => {
+    let id = measure.id;
+    while (usedMeasureIds.has(id)) {
+      id += 1;
+    }
+    usedMeasureIds.add(id);
+    return id === measure.id ? measure : { ...measure, id };
+  });
   const highestId = items.reduce((max, item) => Math.max(max, item.id), 0);
-  const nextItemId = Math.max(sanitizeNumber(room.nextItemId, 1, 1), highestId + 1);
+  const nextItemId = Math.max(sanitizePositiveInt(room.nextItemId, 1, 1), highestId + 1);
   const setup = sanitizeSetup(room.setup, true);
   const widthLabelT = sanitizeNumber(room.dimensionLabelLayout?.widthLabelT, 0.5, 0);
   const heightLabelT = sanitizeNumber(room.dimensionLabelLayout?.heightLabelT, 0.5, 0);
@@ -412,9 +467,18 @@ export const createDefaultWorkspaceState = (): WorkspaceState => {
 
 export const sanitizeWorkspaceState = (workspace: Partial<WorkspaceState>): WorkspaceState => {
   const rooms = Array.isArray(workspace.rooms) ? workspace.rooms : [];
-  const sanitizedRooms = rooms.length > 0
+  const roomCandidates = rooms.length > 0
     ? rooms.map((room, index) => sanitizeRoomDesign(room, `Room ${index + 1}`))
     : [createBlankRoom('Room 1')];
+  const seenRoomIds = new Set<string>();
+  const sanitizedRooms = roomCandidates.map((room) => {
+    let roomId = room.id;
+    while (seenRoomIds.has(roomId)) {
+      roomId = createRoomId();
+    }
+    seenRoomIds.add(roomId);
+    return roomId === room.id ? room : { ...room, id: roomId };
+  });
   const activeRoomId = sanitizedRooms.some((room) => room.id === workspace.activeRoomId)
     ? (workspace.activeRoomId as string)
     : sanitizedRooms[0].id;
@@ -426,9 +490,69 @@ export const sanitizeWorkspaceState = (workspace: Partial<WorkspaceState>): Work
   };
 };
 
+const exceedsCoordinateLimit = (value: unknown): boolean => (
+  typeof value === 'number' && Number.isFinite(value) && Math.abs(value) > MAX_ABSOLUTE_COORDINATE_CM
+);
+
+export const findWorkspaceBoundsViolation = (workspace: Partial<WorkspaceState>): string | null => {
+  const rooms = Array.isArray(workspace.rooms) ? workspace.rooms : [];
+
+  for (let roomIndex = 0; roomIndex < rooms.length; roomIndex += 1) {
+    const room = rooms[roomIndex];
+    const label = `Room ${roomIndex + 1}`;
+    if (typeof room.roomWidthCm === 'number' && room.roomWidthCm > MAX_ROOM_DIMENSION_CM) {
+      return `${label} width exceeds ${MAX_ROOM_DIMENSION_CM}cm.`;
+    }
+    if (typeof room.roomHeightCm === 'number' && room.roomHeightCm > MAX_ROOM_DIMENSION_CM) {
+      return `${label} height exceeds ${MAX_ROOM_DIMENSION_CM}cm.`;
+    }
+
+    if (Array.isArray(room.items)) {
+      for (let itemIndex = 0; itemIndex < room.items.length; itemIndex += 1) {
+        const item = room.items[itemIndex];
+        if (typeof item.width === 'number' && item.width > MAX_ITEM_DIMENSION_CM) {
+          return `${label} item ${itemIndex + 1} width exceeds ${MAX_ITEM_DIMENSION_CM}cm.`;
+        }
+        if (typeof item.height === 'number' && item.height > MAX_ITEM_DIMENSION_CM) {
+          return `${label} item ${itemIndex + 1} height exceeds ${MAX_ITEM_DIMENSION_CM}cm.`;
+        }
+        if (
+          exceedsCoordinateLimit(item.x) ||
+          exceedsCoordinateLimit(item.y)
+        ) {
+          return `${label} item ${itemIndex + 1} has unsupported coordinates.`;
+        }
+      }
+    }
+
+    if (Array.isArray(room.measures)) {
+      for (let measureIndex = 0; measureIndex < room.measures.length; measureIndex += 1) {
+        const measure = room.measures[measureIndex];
+        if (
+          exceedsCoordinateLimit(measure.x1) ||
+          exceedsCoordinateLimit(measure.y1) ||
+          exceedsCoordinateLimit(measure.x2) ||
+          exceedsCoordinateLimit(measure.y2)
+        ) {
+          return `${label} measure ${measureIndex + 1} has unsupported coordinates.`;
+        }
+      }
+    }
+  }
+
+  if (
+    typeof workspace.preferences?.gridSpacing === 'number' &&
+    workspace.preferences.gridSpacing > MAX_GRID_SPACING
+  ) {
+    return `Grid spacing exceeds ${MAX_GRID_SPACING}.`;
+  }
+
+  return null;
+};
+
 const migrateLegacyLayoutState = (legacy: LegacyStoredLayoutState): WorkspaceState => {
-  const roomWidthCm = sanitizeNumber(legacy.roomWidthCm, DEFAULT_ROOM_WIDTH_CM, 180);
-  const roomHeightCm = sanitizeNumber(legacy.roomHeightCm, DEFAULT_ROOM_HEIGHT_CM, 180);
+  const roomWidthCm = sanitizeClampedNumber(legacy.roomWidthCm, DEFAULT_ROOM_WIDTH_CM, 180, MAX_ROOM_DIMENSION_CM);
+  const roomHeightCm = sanitizeClampedNumber(legacy.roomHeightCm, DEFAULT_ROOM_HEIGHT_CM, 180, MAX_ROOM_DIMENSION_CM);
   const items = Array.isArray(legacy.items) ? sanitizeRoomItems(legacy.items, roomWidthCm, roomHeightCm) : [];
   const highestId = items.reduce((max, item) => Math.max(max, item.id), 0);
   const room = createBlankRoom('Room 1');

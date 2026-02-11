@@ -1,5 +1,5 @@
 import type { WorkspaceFile, WorkspaceState } from '../types.js';
-import { sanitizeWorkspaceState } from './workspaceState.js';
+import { findWorkspaceBoundsViolation, sanitizeWorkspaceState } from './workspaceState.js';
 
 const WORKSPACE_FILE_KIND = 'BedroomLayoutWorkspace';
 const WORKSPACE_FILE_VERSION = 1;
@@ -32,6 +32,13 @@ export const parseWorkspaceFileContent = (raw: string): WorkspaceState => {
 
   if (!isWorkspaceFile(parsed)) {
     throw new Error('File is not a valid Bedroom Layout workspace export.');
+  }
+
+  const boundsViolation = findWorkspaceBoundsViolation(parsed.workspace);
+  if (boundsViolation) {
+    throw new Error(
+      `Workspace file contains unsupported dimensions. ${boundsViolation} Reduce large values and retry.`
+    );
   }
 
   return sanitizeWorkspaceState(parsed.workspace);

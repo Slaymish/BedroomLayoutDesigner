@@ -15,6 +15,15 @@ import RoomObject from "./RoomObject";
 import type { LayoutInteractionTelemetry, MeasureLine, OpeningWall, RoomItem } from "../types";
 import { fromBaseCm } from "../utils/units";
 import { inferWallFromRotation, isOpening, snapOpeningToNearestWall } from "../utils/openings";
+import {
+  applyMeasureConstraint,
+  clamp,
+  getBedPresetIndex,
+  projectPointToSegmentT,
+  subtractIntervals,
+  type MeasureConstraintResult,
+  type Point,
+} from "../utils/roomCanvasMath";
 import { BED_SIZE_PRESETS } from "../constants/objectPresets";
 
 interface RoomCanvasProps {
@@ -60,17 +69,6 @@ interface TelemetrySession {
   lastFrameAt: number | null;
 }
 
-interface Point {
-  x: number;
-  y: number;
-}
-
-interface MeasureConstraintResult {
-  point: Point;
-  snappedX: boolean;
-  snappedY: boolean;
-}
-
 interface MeasureSnapPreview {
   anchor: Point;
   point: Point;
@@ -110,8 +108,6 @@ const DOOR_SIDE_LABEL_EXTRA_CM = 8;
 const DIMENSION_LABEL_OFFSET_CM = 18;
 const WALL_PADDING_CM = 28;
 const BED_PRESET_DRAG_STEP_CM = 24;
-
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(value, max));
 
 const resolveOpeningWall = (item: RoomItem): OpeningWall => item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
 
@@ -214,121 +210,6 @@ const localToWorld = (point: Point, center: Point, rotation = 0): Point => {
   return {
     x: center.x + point.x * cos - point.y * sin,
     y: center.y + point.x * sin + point.y * cos,
-  };
-};
-
-const getBedPresetIndex = (item: RoomItem): number => {
-  const widthRounded = Math.round(item.width);
-  const heightRounded = Math.round(item.height);
-  const exact = BED_SIZE_PRESETS.findIndex(
-    (preset) => Math.round(preset.widthCm) === widthRounded && Math.round(preset.heightCm) === heightRounded
-  );
-  if (exact >= 0) return exact;
-  let closestIndex = 0;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  BED_SIZE_PRESETS.forEach((preset, index) => {
-    const distance = Math.abs(preset.widthCm - item.width) + Math.abs(preset.heightCm - item.height);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      closestIndex = index;
-    }
-  });
-  return closestIndex;
-};
-
-const projectPointToSegmentT = (point: Point, start: Point, end: Point): number => {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const lengthSq = dx * dx + dy * dy;
-  if (lengthSq <= 0.0001) return 0.5;
-  const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSq;
-  return clamp(t, 0, 1);
-};
-
-const subtractIntervals = (
-  length: number,
-  cutouts: Array<{ start: number; end: number }>
-): Array<{ start: number; end: number }> => {
-  const normalized = cutouts
-    .map((cutout) => ({
-      start: clamp(Math.min(cutout.start, cutout.end), 0, length),
-      end: clamp(Math.max(cutout.start, cutout.end), 0, length),
-    }))
-    .filter((cutout) => cutout.end > cutout.start)
-    .sort((left, right) => left.start - right.start);
-
-  const solids: Array<{ start: number; end: number }> = [];
-  let cursor = 0;
-  normalized.forEach((cutout) => {
-    if (cutout.start > cursor) {
-      solids.push({ start: cursor, end: cutout.start });
-    }
-    cursor = Math.max(cursor, cutout.end);
-  });
-  if (cursor < length) {
-    solids.push({ start: cursor, end: length });
-  }
-  return solids.filter((segment) => segment.end - segment.start > 0.2);
-};
-
-const applyMeasureConstraint = (
-  raw: Point,
-  anchor: Point,
-  isFreeMove: boolean,
-  snapTargets: Point[],
-  roomWidthCm: number,
-  roomHeightCm: number
-): MeasureConstraintResult => {
-  const constrained: Point = {
-    x: clamp(raw.x, 0, roomWidthCm),
-    y: clamp(raw.y, 0, roomHeightCm),
-  };
-
-  if (isFreeMove) {
-    return {
-      point: constrained,
-      snappedX: false,
-      snappedY: false,
-    };
-  }
-
-  const deltaX = Math.abs(constrained.x - anchor.x);
-  const deltaY = Math.abs(constrained.y - anchor.y);
-  if (deltaX >= deltaY) {
-    constrained.y = anchor.y;
-  } else {
-    constrained.x = anchor.x;
-  }
-
-  let bestXDelta = MEASURE_SNAP_THRESHOLD_CM + 1;
-  let bestYDelta = MEASURE_SNAP_THRESHOLD_CM + 1;
-
-  const xCandidates = [0, roomWidthCm, ...snapTargets.map((point) => point.x)];
-  const yCandidates = [0, roomHeightCm, ...snapTargets.map((point) => point.y)];
-
-  xCandidates.forEach((candidate) => {
-    const delta = Math.abs(candidate - constrained.x);
-    if (delta < bestXDelta) {
-      bestXDelta = delta;
-      constrained.x = candidate;
-    }
-  });
-
-  yCandidates.forEach((candidate) => {
-    const delta = Math.abs(candidate - constrained.y);
-    if (delta < bestYDelta) {
-      bestYDelta = delta;
-      constrained.y = candidate;
-    }
-  });
-
-  return {
-    point: {
-      x: clamp(constrained.x, 0, roomWidthCm),
-      y: clamp(constrained.y, 0, roomHeightCm),
-    },
-    snappedX: bestXDelta <= MEASURE_SNAP_THRESHOLD_CM,
-    snappedY: bestYDelta <= MEASURE_SNAP_THRESHOLD_CM,
   };
 };
 
@@ -1132,7 +1013,8 @@ function RoomCanvasComponent({
       event.shiftKey,
       snapTargets,
       widthRef.current,
-      heightRef.current
+      heightRef.current,
+      MEASURE_SNAP_THRESHOLD_CM
     );
     const start = startResult.point;
 
@@ -1162,7 +1044,8 @@ function RoomCanvasComponent({
         moveEvent.shiftKey,
         snapTargets,
         widthRef.current,
-        heightRef.current
+        heightRef.current,
+        MEASURE_SNAP_THRESHOLD_CM
       );
       updateMeasureSnapPreview(start, constrained);
       setDraftMeasure((prev) => (
@@ -1181,7 +1064,8 @@ function RoomCanvasComponent({
         upEvent.shiftKey,
         snapTargets,
         widthRef.current,
-        heightRef.current
+        heightRef.current,
+        MEASURE_SNAP_THRESHOLD_CM
       );
       const nextMeasure: Omit<MeasureLine, 'id'> = {
         x1: start.x,
@@ -1275,7 +1159,8 @@ function RoomCanvasComponent({
         moveEvent.shiftKey,
         snapTargets,
         widthRef.current,
-        heightRef.current
+        heightRef.current,
+        MEASURE_SNAP_THRESHOLD_CM
       );
       updateMeasureSnapPreview(anchor, constrained);
 

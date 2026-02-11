@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildWorkspaceFile, parseWorkspaceFileContent } from '../src/utils/workspaceFile.js';
-import { createDefaultWorkspaceState, WORKSPACE_STORAGE_VERSION } from '../src/utils/workspaceState.js';
+import {
+  MAX_ITEM_DIMENSION_CM,
+  WORKSPACE_STORAGE_VERSION,
+  createDefaultWorkspaceState,
+} from '../src/utils/workspaceState.js';
 
 test('workspace export parses and sanitizes persisted version', () => {
   const workspace = createDefaultWorkspaceState();
@@ -34,5 +38,24 @@ test('invalid workspace file kind is rejected', () => {
   assert.throws(
     () => parseWorkspaceFileContent(invalidPayload),
     /File is not a valid Bedroom Layout workspace export\./
+  );
+});
+
+test('workspace file rejects unsupported extreme geometry values', () => {
+  const workspace = createDefaultWorkspaceState();
+  workspace.rooms[0].items.push({
+    id: workspace.rooms[0].nextItemId,
+    width: MAX_ITEM_DIMENSION_CM + 1,
+    height: 40,
+    x: 20,
+    y: 20,
+    type: 'Desk',
+  });
+  workspace.rooms[0].nextItemId += 1;
+
+  const payload = buildWorkspaceFile(workspace);
+  assert.throws(
+    () => parseWorkspaceFileContent(JSON.stringify(payload)),
+    /Workspace file contains unsupported dimensions\./
   );
 });
