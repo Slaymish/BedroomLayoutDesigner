@@ -1,10 +1,13 @@
 {
   "name": "Bedroom Layout Designer",
   "short_name": "Bedroom Layout",
+  "description": "Design bedroom floor plans with room dimensions, furniture placement, and PDF export.",
+  "lang": "en-US",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#eff5f3",
   "theme_color": "#0e6a6f",
+  "categories": ["productivity", "utilities", "design"],
   "icons": [
     {
       "src": "/bed.svg",

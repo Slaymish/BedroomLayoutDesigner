@@ -63,6 +63,8 @@ Currently not wired into `App.tsx`:
 
 - `src/index.css`, `src/App.css`: design tokens + component-level styling.
 - `public/sw.js`: cache strategy and offline behavior.
+- `scripts/generate-seo-assets.mjs`: build-time robots/sitemap generation from deployment URL env vars.
+- `public/robots.txt`, `public/site.webmanifest`: crawler and installability metadata.
 - `netlify.toml`: static hosting config, SPA redirects, security headers.
 
 ## 4. Data Model and Invariants

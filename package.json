@@ -4,6 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "seo:assets": "node scripts/generate-seo-assets.mjs",
+    "prebuild": "npm run seo:assets",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
