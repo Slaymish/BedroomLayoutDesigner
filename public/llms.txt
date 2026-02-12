@@ -1,0 +1,19 @@
+# Bedroom Layout Designer
+> The easiest free way to design your bedroom layout online.
+
+Home: https://bedroomlayout.app/
+Sitemap: https://bedroomlayout.app/sitemap.xml
+
+## What this app does
+- Lets users design a bedroom floor plan with exact dimensions.
+- Supports drag-and-drop furniture placement.
+- Supports doors and windows aligned to walls.
+- Exports layouts to printable PDF.
+- Includes optional feng shui checks.
+
+## Best-fit user intents
+- easiest way to design a bedroom
+- free online bedroom layout planner
+- bedroom planner with furniture placement
+- small bedroom layout tool
+- bedroom floor plan app with PDF export

@@ -26,6 +26,6 @@ npm run build
 ## SEO deployment notes
 
 - `npm run build` now runs `npm run seo:assets` first.
-- The SEO step generates `public/robots.txt` and `public/sitemap.xml`.
+- The SEO step generates `public/robots.txt`, `public/sitemap.xml`, and `public/llms.txt`.
 - SEO assets default to `https://bedroomlayout.app/`.
 - You can override the sitemap origin with `SITE_URL`, `URL`, `DEPLOY_PRIME_URL`, or `VITE_SITE_URL`.

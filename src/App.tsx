@@ -1669,7 +1669,7 @@ function App() {
           <div className="app-header-top">
             <div className="app-brand-block">
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold theme-text-heading">Bedroom Layout Designer</h1>
-              <p className="app-subtitle">Plan room size, openings, furniture, and measurements.</p>
+              <p className="app-subtitle">Plan your bedroom layout with exact dimensions, furniture placement, and PDF export.</p>
             </div>
             <div className="app-header-actions">
               <details
