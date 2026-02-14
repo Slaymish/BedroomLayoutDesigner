@@ -64,9 +64,13 @@ export const normalizeOpeningOnWall = (
   roomWidthCm: number,
   roomHeightCm: number
 ): RoomItem => {
-  const width = Math.max(1, item.width);
+  const rawWidth = Math.max(1, item.width);
+  const maxSpanForWall = wall === 'top' || wall === 'bottom'
+    ? roomWidthCm
+    : roomHeightCm;
+  const width = Math.max(1, Math.min(rawWidth, maxSpanForWall));
   const height = Math.max(1, item.height);
-  const centerX = item.x + width / 2;
+  const centerX = item.x + rawWidth / 2;
   const centerY = item.y + height / 2;
 
   if (wall === 'top' || wall === 'bottom') {

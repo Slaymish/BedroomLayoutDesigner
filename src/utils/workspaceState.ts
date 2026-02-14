@@ -15,6 +15,7 @@ import {
   isOpening,
   normalizeOpeningOnWall,
 } from './openings.js';
+import { clamp } from './geometry.js';
 
 interface LegacyStoredLayoutState {
   version?: number;
@@ -73,8 +74,6 @@ const sanitizeNumber = (value: unknown, fallback: number, min?: number): number 
   if (typeof min === 'number') return Math.max(min, value);
   return value;
 };
-
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 const sanitizeClampedNumber = (value: unknown, fallback: number, min: number, max: number): number => (
   clamp(sanitizeNumber(value, fallback, min), min, max)

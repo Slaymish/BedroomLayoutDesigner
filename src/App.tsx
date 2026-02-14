@@ -28,6 +28,20 @@ import { isOpening } from './utils/openings';
 import { getExportCaptureSize } from './utils/exportCapture';
 import { buildAutosaveFingerprint } from './utils/autosave';
 import { evaluateRoomFengShui } from './utils/fengShui';
+import { clamp, getBoundingBox } from './utils/geometry';
+import {
+  formatMeasureLengthValue,
+  getMeasureInputStep,
+  getMeasureLengthCm,
+  getUnitDecimalPlaces,
+  MIN_MEASURE_EDIT_LENGTH_CM,
+  resizeMeasureToLengthInRoom,
+} from './utils/measureEditing';
+import {
+  canDeleteActiveSelection,
+  isEditableEventTarget,
+  isUnmodifiedDeleteShortcut,
+} from './utils/keyboardShortcuts';
 import {
   DEFAULT_PREFERENCES,
   OPENING_PRESETS,
@@ -76,12 +90,6 @@ interface ExportImageData {
   height: number;
 }
 
-const isEditableElement = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
-};
-
 const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
   sampleCount: 0,
   avgFrameMs: 0,
@@ -99,7 +107,6 @@ const iconClassName = 'toolbar-icon-svg';
 const FURNITURE_PRESETS = OBJECT_PRESETS.filter(
   (preset) => preset.type !== 'Door' && preset.type !== 'Window'
 );
-const MIN_MEASURE_EDIT_LENGTH_CM = 2;
 
 const loadExportImage = (dataUrl: string, roomName: string): Promise<HTMLImageElement> => (
   new Promise((resolve, reject) => {
@@ -188,68 +195,6 @@ const renderPresetIcon = (type: string) => {
   return <Square className={iconClassName} />;
 };
 
-const getMeasureLengthCm = (measure: Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'>): number => (
-  Math.hypot(measure.x2 - measure.x1, measure.y2 - measure.y1)
-);
-
-const getUnitDecimalPlaces = (unit: Unit): number => (
-  unit === 'm' || unit === 'ft' ? 2 : 1
-);
-
-const getMeasureInputStep = (unit: Unit): string => {
-  if (unit === 'mm') return '1';
-  if (unit === 'm' || unit === 'ft') return '0.01';
-  return '0.1';
-};
-
-const formatMeasureLengthValue = (lengthCm: number, unit: Unit): string => (
-  Number(fromBaseCm(lengthCm, unit).toFixed(getUnitDecimalPlaces(unit))).toString()
-);
-
-const resizeMeasureToLengthInRoom = (
-  measure: Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'>,
-  targetLengthCm: number,
-  roomWidthCm: number,
-  roomHeightCm: number
-): Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'> => {
-  const dx = measure.x2 - measure.x1;
-  const dy = measure.y2 - measure.y1;
-  const currentLength = Math.hypot(dx, dy);
-  const directionX = currentLength > 0.0001 ? dx / currentLength : 1;
-  const directionY = currentLength > 0.0001 ? dy / currentLength : 0;
-  const centerX = (measure.x1 + measure.x2) / 2;
-  const centerY = (measure.y1 + measure.y2) / 2;
-  const absDirectionX = Math.abs(directionX);
-  const absDirectionY = Math.abs(directionY);
-  const maxHalfLengthX = absDirectionX < 0.0001
-    ? Number.POSITIVE_INFINITY
-    : Math.min(centerX / absDirectionX, (roomWidthCm - centerX) / absDirectionX);
-  const maxHalfLengthY = absDirectionY < 0.0001
-    ? Number.POSITIVE_INFINITY
-    : Math.min(centerY / absDirectionY, (roomHeightCm - centerY) / absDirectionY);
-  const maxHalfLength = Math.max(0, Math.min(maxHalfLengthX, maxHalfLengthY));
-  if (maxHalfLength <= 0.0001) {
-    return {
-      x1: clamp(centerX, 0, roomWidthCm),
-      y1: clamp(centerY, 0, roomHeightCm),
-      x2: clamp(centerX, 0, roomWidthCm),
-      y2: clamp(centerY, 0, roomHeightCm),
-    };
-  }
-
-  const minHalfLength = Math.min(MIN_MEASURE_EDIT_LENGTH_CM / 2, maxHalfLength);
-  const targetHalfLength = Math.max(
-    minHalfLength,
-    Math.min(targetLengthCm / 2, maxHalfLength)
-  );
-
-  return {
-    x1: clamp(centerX - directionX * targetHalfLength, 0, roomWidthCm),
-    y1: clamp(centerY - directionY * targetHalfLength, 0, roomHeightCm),
-    x2: clamp(centerX + directionX * targetHalfLength, 0, roomWidthCm),
-    y2: clamp(centerY + directionY * targetHalfLength, 0, roomHeightCm),
-  };
-};
 
 function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
@@ -740,14 +685,12 @@ function App() {
         clearActiveSelections();
       }
 
-      const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
-      const isDeleteShortcut = event.key === 'Delete' || event.key === 'Backspace';
-      if (isDeleteShortcut && !hasModifier && !isEditableElement(event.target)) {
+      if (isUnmodifiedDeleteShortcut(event) && !isEditableEventTarget(event.target)) {
         const current = workspaceRef.current;
         const activeRoom = current.rooms.find((room) => room.id === current.activeRoomId);
         if (activeRoom) {
-          const roomNeedsDimensions = !activeRoom.setup.onboardingComplete || dimensionEditorRoomId === activeRoom.id;
-          if (!roomNeedsDimensions && activeRoom.editingItemId !== null) {
+          const isDimensionEditorOpen = dimensionEditorRoomId === activeRoom.id;
+          if (canDeleteActiveSelection(activeRoom.editingItemId, activeRoom.setup.onboardingComplete, isDimensionEditorOpen)) {
             event.preventDefault();
             updateRoom(activeRoom.id, (room) => {
               if (room.editingItemId === null) return room;
@@ -763,7 +706,7 @@ function App() {
       }
 
       if (!event.metaKey && !event.ctrlKey) return;
-      if (isEditableElement(event.target)) return;
+      if (isEditableEventTarget(event.target)) return;
 
       const key = event.key.toLowerCase();
       const undoShortcut = key === 'z' && !event.shiftKey;
@@ -2240,17 +2183,5 @@ function App() {
     </div>
   );
 }
-
-const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
-  const rad = (rotation * Math.PI) / 180;
-  const sin = Math.abs(Math.sin(rad));
-  const cos = Math.abs(Math.cos(rad));
-  return {
-    width: w * cos + h * sin,
-    height: w * sin + h * cos,
-  };
-};
-
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 export default App;

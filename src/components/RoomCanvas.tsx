@@ -17,13 +17,13 @@ import { fromBaseCm } from "../utils/units";
 import { inferWallFromRotation, isOpening, snapOpeningToNearestWall } from "../utils/openings";
 import {
   applyMeasureConstraint,
-  clamp,
   getBedPresetIndex,
   projectPointToSegmentT,
   subtractIntervals,
   type MeasureConstraintResult,
   type Point,
 } from "../utils/roomCanvasMath";
+import { clamp, getBoundingBox } from "../utils/geometry";
 import { BED_SIZE_PRESETS } from "../constants/objectPresets";
 
 interface RoomCanvasProps {
@@ -118,16 +118,6 @@ const getDoorWallCenterOffset = (wall: OpeningWall, wallThicknessCm: number): Po
   if (wall === 'bottom') return { x: 0, y: wallThicknessCm / 2 };
   if (wall === 'left') return { x: -wallThicknessCm / 2, y: 0 };
   return { x: wallThicknessCm / 2, y: 0 };
-};
-
-const getBoundingBox = (w: number, h: number, rotation: number = 0) => {
-  const rad = (rotation * Math.PI) / 180;
-  const sin = Math.abs(Math.sin(rad));
-  const cos = Math.abs(Math.cos(rad));
-  return {
-    width: w * cos + h * sin,
-    height: w * sin + h * cos,
-  };
 };
 
 const distanceBetween = (left: Point, right: Point): number => Math.hypot(right.x - left.x, right.y - left.y);

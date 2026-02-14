@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "test": "tsc -p tsconfig.test.json && node --experimental-specifier-resolution=node --test .test-dist/tests/**/*.test.js",
+    "test": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('.test-dist', { recursive: true, force: true });\" && tsc -p tsconfig.test.json && node --experimental-specifier-resolution=node --test .test-dist/tests/**/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

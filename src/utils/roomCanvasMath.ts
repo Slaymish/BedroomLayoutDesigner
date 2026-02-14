@@ -1,5 +1,6 @@
 import { BED_SIZE_PRESETS } from '../constants/objectPresets.js';
 import type { RoomItem } from '../types.js';
+import { clamp } from './geometry.js';
 
 export interface Point {
   x: number;
@@ -11,8 +12,6 @@ export interface MeasureConstraintResult {
   snappedX: boolean;
   snappedY: boolean;
 }
-
-export const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 export const getBedPresetIndex = (item: RoomItem): number => {
   const widthRounded = Math.round(item.width);

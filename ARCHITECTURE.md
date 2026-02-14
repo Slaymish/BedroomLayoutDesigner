@@ -44,11 +44,6 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 - `src/components/EditObjectPanel.tsx`: selected object editor (dimensions/position/rotation/door swing).
 - `src/components/PreferencesPanel.tsx`: workspace preferences and workspace file actions.
 
-Currently not wired into `App.tsx`:
-
-- `src/components/AddObjectPanel.tsx`
-- `src/components/RoomOnboardingPanel.tsx`
-
 ### Utilities
 
 - `src/utils/workspaceState.ts`: domain defaults, sanitization, cloning/equality, migration, room helpers.
@@ -58,6 +53,9 @@ Currently not wired into `App.tsx`:
 - `src/utils/workspaceFile.ts`: workspace export file format + parser + download.
 - `src/utils/exportCapture.ts`: robust capture bounds for PDF image generation.
 - `src/utils/fengShui.ts`: active-room feng shui rule catalog and geometry-based violation detection.
+- `src/utils/geometry.ts`: shared geometry helpers (`clamp`, rotated bounding boxes).
+- `src/utils/measureEditing.ts`: measure-length editing helpers used by `App.tsx`.
+- `src/utils/keyboardShortcuts.ts`: keyboard shortcut guard logic used by `App.tsx`.
 
 ### Styling and Runtime Assets
 
@@ -181,7 +179,6 @@ When adding features, preserve these rules:
 ## 11. Known Technical Debt
 
 - `src/App.tsx` is large and mixes orchestration with UI assembly.
-- Some components appear legacy/unwired (`AddObjectPanel`, `RoomOnboardingPanel`).
 - Limited UI-level automated testing for drag/measure/export workflows.
 
 The current structure is still coherent; refactors should be incremental and guided by concrete feature pressure.

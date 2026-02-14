@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -51,18 +51,30 @@ const buildRobotsTxt = (siteOrigin) => {
   return `${lines.join('\n')}\n`;
 };
 
-const buildSitemapXml = (siteOrigin) => {
-  const lastModified = new Date().toISOString().split('T')[0];
-  return `<?xml version="1.0" encoding="UTF-8"?>
+const buildSitemapXml = (siteOrigin) => `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>${siteOrigin}/</loc>
-    <lastmod>${lastModified}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 </urlset>
 `;
+
+const writeFileIfChanged = (filePath, nextContent) => {
+  let currentContent = null;
+  try {
+    currentContent = readFileSync(filePath, 'utf8');
+  } catch {
+    currentContent = null;
+  }
+
+  if (currentContent === nextContent) {
+    return false;
+  }
+
+  writeFileSync(filePath, nextContent, 'utf8');
+  return true;
 };
 
 const buildLlmsTxt = (siteOrigin) => `# Bedroom Layout Designer
@@ -89,8 +101,14 @@ Sitemap: ${siteOrigin}/sitemap.xml
 mkdirSync(publicDir, { recursive: true });
 
 const siteOrigin = resolveSiteOrigin();
-writeFileSync(robotsPath, buildRobotsTxt(siteOrigin), 'utf8');
-writeFileSync(sitemapPath, buildSitemapXml(siteOrigin), 'utf8');
-writeFileSync(llmsPath, buildLlmsTxt(siteOrigin), 'utf8');
+const changedFiles = [
+  writeFileIfChanged(robotsPath, buildRobotsTxt(siteOrigin)) ? 'robots.txt' : null,
+  writeFileIfChanged(sitemapPath, buildSitemapXml(siteOrigin)) ? 'sitemap.xml' : null,
+  writeFileIfChanged(llmsPath, buildLlmsTxt(siteOrigin)) ? 'llms.txt' : null,
+].filter(Boolean);
 rmSync(resolve(publicDir, 'sitemap.txt'), { force: true });
-console.log(`[seo] Generated robots.txt, sitemap.xml, and llms.txt for ${siteOrigin}`);
+if (changedFiles.length === 0) {
+  console.log(`[seo] No asset changes for ${siteOrigin}`);
+} else {
+  console.log(`[seo] Updated ${changedFiles.join(', ')} for ${siteOrigin}`);
+}
