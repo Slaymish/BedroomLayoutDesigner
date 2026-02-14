@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-14",
+  "personas": [
+    {
+      "id": "P1",
+      "name": "First-Time Planner",
+      "description": "A user planning a bedroom layout for the first time and needing guidance.",
+      "primaryGoals": [
+        "Get a valid room layout quickly",
+        "Avoid obvious placement mistakes",
+        "Export something shareable"
+      ],
+      "painPoints": [
+        "Does not know where to start",
+        "Gets overwhelmed by too many controls"
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "Precision Optimizer",
+      "description": "A user iterating on exact dimensions and clearances before buying or moving furniture.",
+      "primaryGoals": [
+        "Use exact measurements",
+        "Verify fit and movement space",
+        "Compare layout options quickly"
+      ],
+      "painPoints": [
+        "Manual measurement errors",
+        "Slow iteration when details are buried"
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "Repeat Workspace Manager",
+      "description": "A user managing multiple rooms/workspaces over time and reusing layouts.",
+      "primaryGoals": [
+        "Keep multiple room plans organized",
+        "Safely persist and restore work",
+        "Share/export plans with confidence"
+      ],
+      "painPoints": [
+        "Loses track of which layout version is current",
+        "Needs stronger confidence in import/export behavior"
+      ]
+    }
+  ]
+}

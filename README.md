@@ -23,6 +23,17 @@ npm run test
 npm run build
 ```
 
+## User story workflow
+
+- Workflow docs: `docs/user-story-workflow/README.md`
+- Persona catalog: `docs/user-story-workflow/personas.json`
+- Story backlog: `docs/user-story-workflow/backlog.json`
+- Prioritize stories for agent assignment:
+
+```bash
+npm run stories:prioritize
+```
+
 ## SEO deployment notes
 
 - `npm run build` now runs `npm run seo:assets` first.

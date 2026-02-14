@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "seo:assets": "node scripts/generate-seo-assets.mjs",
+    "stories:prioritize": "node scripts/prioritize-stories.mjs",
     "prebuild": "npm run seo:assets",
     "dev": "vite",
     "build": "tsc -b && vite build",

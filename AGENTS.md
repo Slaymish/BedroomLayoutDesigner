@@ -8,11 +8,13 @@ This file is a contents page for coding agents. Use it to find the right source 
 - System architecture and invariants: `ARCHITECTURE.md`
 - Execution plan standard (required for complex work): `PLANS.md`
 - Design docs index: `docs/design-docs/index.md`
+- User story workflow and backlog process: `docs/user-story-workflow/README.md`
 
 ## Design Docs
 
 - Design docs entry point: `docs/design-docs/index.md`
 - Core mission and style baseline: `docs/design-docs/core-beliefs.md`
+- User story planning workflow: `docs/user-story-workflow/README.md`
 
 ## ExecPlans
 

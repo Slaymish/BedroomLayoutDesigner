@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "updatedAt": "2026-02-14",
+  "stories": [
+    {
+      "id": "US-001",
+      "status": "ready",
+      "title": "Room setup quick-start",
+      "story": "As a First-Time Planner, I want a quick-start setup for room dimensions and door/window defaults, so that I can begin layout work without guessing.",
+      "personaIds": ["P1"],
+      "acceptanceCriteria": [
+        "A new workspace offers a guided setup path for room dimensions.",
+        "The setup path can be skipped without blocking manual editing.",
+        "The generated room state is valid and compatible with import/export."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 4,
+        "riskReduction": 3,
+        "confidence": 4,
+        "effort": 2
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry stored in centimeters in state.",
+        "Route all mutations through App update flow.",
+        "Add tests for new setup defaults and validation logic."
+      ]
+    },
+    {
+      "id": "US-002",
+      "status": "ready",
+      "title": "Clearance and collision helper",
+      "story": "As a Precision Optimizer, I want visual warnings for blocked paths and tight clearances, so that I can iterate on practical room arrangements faster.",
+      "personaIds": ["P2"],
+      "acceptanceCriteria": [
+        "Warnings appear when configured clearance thresholds are violated.",
+        "Warnings update during object movement without freezing interactions.",
+        "Warnings can be toggled in preferences."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 3,
+        "riskReduction": 4,
+        "confidence": 3,
+        "effort": 4
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep high-frequency interaction logic efficient in RoomCanvas.",
+        "Prefer pure utility functions for rule evaluation and unit tests."
+      ]
+    },
+    {
+      "id": "US-003",
+      "status": "backlog",
+      "title": "Saved layout snapshots",
+      "story": "As a Repeat Workspace Manager, I want named snapshots for each room, so that I can compare options and safely return to prior versions.",
+      "personaIds": ["P3"],
+      "acceptanceCriteria": [
+        "User can create, rename, and restore room snapshots.",
+        "Snapshot restore works with undo/redo expectations.",
+        "Snapshot data persists through autosave and workspace export/import."
+      ],
+      "scores": {
+        "impact": 4,
+        "urgency": 3,
+        "riskReduction": 4,
+        "confidence": 3,
+        "effort": 4
+      },
+      "dependencies": ["US-001"],
+      "agentHints": [
+        "Document persistence schema changes in workspaceState migration.",
+        "Validate import/export compatibility in workspaceFile tests."
+      ]
+    },
+    {
+      "id": "US-004",
+      "status": "icebox",
+      "title": "Persona-based onboarding presets",
+      "story": "As a First-Time Planner, I want onboarding presets based on my planning style, so that I get relevant defaults and tips quickly.",
+      "personaIds": ["P1", "P2"],
+      "acceptanceCriteria": [
+        "User can pick a planning style during onboarding.",
+        "Preset selection applies defaults without locking future edits."
+      ],
+      "scores": {
+        "impact": 3,
+        "urgency": 1,
+        "riskReduction": 2,
+        "confidence": 2,
+        "effort": 3
+      },
+      "dependencies": ["US-001"],
+      "agentHints": [
+        "Keep presets additive and avoid hidden state mutations."
+      ]
+    }
+  ]
+}
