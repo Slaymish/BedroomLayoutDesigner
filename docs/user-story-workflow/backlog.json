@@ -112,7 +112,7 @@
     },
     {
       "id": "US-005",
-      "status": "backlog",
+      "status": "done",
       "title": "Direct measure length input",
       "story": "As a Precision Optimizer, I want direct measure length input, so that the feedback concern \"Wants to be able to input a number for the measure line in the edit panel, and have it adjust to that length. Currently they have to keep ma...\" is resolved.",
       "personaIds": [

@@ -99,6 +99,7 @@ const iconClassName = 'toolbar-icon-svg';
 const FURNITURE_PRESETS = OBJECT_PRESETS.filter(
   (preset) => preset.type !== 'Door' && preset.type !== 'Window'
 );
+const MIN_MEASURE_EDIT_LENGTH_CM = 2;
 
 const loadExportImage = (dataUrl: string, roomName: string): Promise<HTMLImageElement> => (
   new Promise((resolve, reject) => {
@@ -185,6 +186,69 @@ const renderPresetIcon = (type: string) => {
   if (normalized === 'door') return <DoorOpen className={iconClassName} />;
   if (normalized === 'window') return <Grid2X2 className={iconClassName} />;
   return <Square className={iconClassName} />;
+};
+
+const getMeasureLengthCm = (measure: Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'>): number => (
+  Math.hypot(measure.x2 - measure.x1, measure.y2 - measure.y1)
+);
+
+const getUnitDecimalPlaces = (unit: Unit): number => (
+  unit === 'm' || unit === 'ft' ? 2 : 1
+);
+
+const getMeasureInputStep = (unit: Unit): string => {
+  if (unit === 'mm') return '1';
+  if (unit === 'm' || unit === 'ft') return '0.01';
+  return '0.1';
+};
+
+const formatMeasureLengthValue = (lengthCm: number, unit: Unit): string => (
+  Number(fromBaseCm(lengthCm, unit).toFixed(getUnitDecimalPlaces(unit))).toString()
+);
+
+const resizeMeasureToLengthInRoom = (
+  measure: Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'>,
+  targetLengthCm: number,
+  roomWidthCm: number,
+  roomHeightCm: number
+): Pick<MeasureLine, 'x1' | 'y1' | 'x2' | 'y2'> => {
+  const dx = measure.x2 - measure.x1;
+  const dy = measure.y2 - measure.y1;
+  const currentLength = Math.hypot(dx, dy);
+  const directionX = currentLength > 0.0001 ? dx / currentLength : 1;
+  const directionY = currentLength > 0.0001 ? dy / currentLength : 0;
+  const centerX = (measure.x1 + measure.x2) / 2;
+  const centerY = (measure.y1 + measure.y2) / 2;
+  const absDirectionX = Math.abs(directionX);
+  const absDirectionY = Math.abs(directionY);
+  const maxHalfLengthX = absDirectionX < 0.0001
+    ? Number.POSITIVE_INFINITY
+    : Math.min(centerX / absDirectionX, (roomWidthCm - centerX) / absDirectionX);
+  const maxHalfLengthY = absDirectionY < 0.0001
+    ? Number.POSITIVE_INFINITY
+    : Math.min(centerY / absDirectionY, (roomHeightCm - centerY) / absDirectionY);
+  const maxHalfLength = Math.max(0, Math.min(maxHalfLengthX, maxHalfLengthY));
+  if (maxHalfLength <= 0.0001) {
+    return {
+      x1: clamp(centerX, 0, roomWidthCm),
+      y1: clamp(centerY, 0, roomHeightCm),
+      x2: clamp(centerX, 0, roomWidthCm),
+      y2: clamp(centerY, 0, roomHeightCm),
+    };
+  }
+
+  const minHalfLength = Math.min(MIN_MEASURE_EDIT_LENGTH_CM / 2, maxHalfLength);
+  const targetHalfLength = Math.max(
+    minHalfLength,
+    Math.min(targetLengthCm / 2, maxHalfLength)
+  );
+
+  return {
+    x1: clamp(centerX - directionX * targetHalfLength, 0, roomWidthCm),
+    y1: clamp(centerY - directionY * targetHalfLength, 0, roomHeightCm),
+    x2: clamp(centerX + directionX * targetHalfLength, 0, roomWidthCm),
+    y2: clamp(centerY + directionY * targetHalfLength, 0, roomHeightCm),
+  };
 };
 
 function App() {
@@ -1006,6 +1070,49 @@ function App() {
     }));
   }, [updateRoom]);
 
+  const commitSelectedMeasureLength = useCallback((roomId: string, measureId: number, rawValue: string): boolean => {
+    const parsed = Number.parseFloat(rawValue.trim());
+    if (!Number.isFinite(parsed) || parsed <= 0) return false;
+
+    const targetLengthCm = toBaseCm(parsed, activeUnit);
+    if (!Number.isFinite(targetLengthCm) || targetLengthCm <= 0) return false;
+
+    updateRoom(roomId, (room) => {
+      const existingMeasure = room.measures.find((measure) => measure.id === measureId);
+      if (!existingMeasure) return room;
+
+      const resized = resizeMeasureToLengthInRoom(
+        existingMeasure,
+        targetLengthCm,
+        room.roomWidthCm,
+        room.roomHeightCm
+      );
+
+      if (
+        resized.x1 === existingMeasure.x1 &&
+        resized.y1 === existingMeasure.y1 &&
+        resized.x2 === existingMeasure.x2 &&
+        resized.y2 === existingMeasure.y2
+      ) {
+        return room;
+      }
+
+      return {
+        ...room,
+        measures: room.measures.map((measure) => (
+          measure.id === measureId
+            ? {
+                ...measure,
+                ...resized,
+              }
+            : measure
+        )),
+      };
+    });
+
+    return true;
+  }, [activeUnit, updateRoom]);
+
   const handleRoomSizeChange = useCallback(
     (roomId: string, widthCm: number, heightCm: number) => {
       updateRoom(
@@ -1480,12 +1587,8 @@ function App() {
         ? 'Edit Measurement'
         : 'Edit';
 
-    const measureLength = selectedMeasure
-      ? fromBaseCm(
-          Math.hypot(selectedMeasure.x2 - selectedMeasure.x1, selectedMeasure.y2 - selectedMeasure.y1),
-          activeUnit
-        )
-      : null;
+    const measureLengthCm = selectedMeasure ? getMeasureLengthCm(selectedMeasure) : null;
+    const measureLengthDecimals = getUnitDecimalPlaces(activeUnit);
     const isDimensionsEditorOpen = dimensionEditorRoomId === room.id;
     const roomNeedsDimensions = !room.setup.onboardingComplete || isDimensionsEditorOpen;
 
@@ -1558,9 +1661,37 @@ function App() {
               </p>
               <div className="surface-card-muted p-3 space-y-2">
                 <p className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Measurement</p>
-                <p className="text-sm theme-text-strong">
-                  Length: <strong>{Number((measureLength ?? 0).toFixed(activeUnit === 'm' || activeUnit === 'ft' ? 2 : 1))}{activeUnit}</strong>
-                </p>
+                <label className="space-y-1 block">
+                  <span className="text-xs theme-text-muted">Length ({activeUnit})</span>
+                  <input
+                    key={`measure-length-${selectedMeasure.id}-${formatMeasureLengthValue(measureLengthCm ?? 0, activeUnit)}`}
+                    type="number"
+                    className="ui-input w-full"
+                    defaultValue={formatMeasureLengthValue(measureLengthCm ?? 0, activeUnit)}
+                    min={Math.max(
+                      Number(fromBaseCm(MIN_MEASURE_EDIT_LENGTH_CM, activeUnit).toFixed(measureLengthDecimals)),
+                      0
+                    )}
+                    step={getMeasureInputStep(activeUnit)}
+                    onBlur={(event) => {
+                      const committed = commitSelectedMeasureLength(room.id, selectedMeasure.id, event.currentTarget.value);
+                      if (!committed) {
+                        event.currentTarget.value = formatMeasureLengthValue(measureLengthCm ?? 0, activeUnit);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        event.currentTarget.value = formatMeasureLengthValue(measureLengthCm ?? 0, activeUnit);
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                </label>
                 <label className="inline-flex items-center gap-2 text-sm theme-text-soft">
                   <input
                     type="checkbox"
@@ -1600,6 +1731,7 @@ function App() {
     );
   }, [
     activeUnit,
+    commitSelectedMeasureLength,
     dimensionEditorRoomId,
     gridSpacingCm,
     handleLayoutInteractionEnd,
