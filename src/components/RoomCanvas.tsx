@@ -53,6 +53,7 @@ interface RoomCanvasProps {
   measureMode?: boolean;
   selectedMeasureId?: number | null;
   onSelectMeasure?: (id: number | null) => void;
+  onMeasureCreated?: (measureId: number) => void;
   isExportingPdf?: boolean;
 }
 
@@ -108,6 +109,7 @@ const DOOR_SIDE_LABEL_EXTRA_CM = 8;
 const DIMENSION_LABEL_OFFSET_CM = 18;
 const WALL_PADDING_CM = 28;
 const BED_PRESET_DRAG_STEP_CM = 24;
+const MIN_WALL_MEASURE_TARGET_LENGTH_CM = 14;
 
 const resolveOpeningWall = (item: RoomItem): OpeningWall => item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
 
@@ -237,6 +239,7 @@ function RoomCanvasComponent({
   measureMode = false,
   selectedMeasureId = null,
   onSelectMeasure,
+  onMeasureCreated,
   isExportingPdf = false,
 }: RoomCanvasProps) {
   const [width, setWidth] = useState(roomWidthCm);
@@ -1100,6 +1103,7 @@ function RoomCanvasComponent({
         setNextLocalMeasures(nextMeasures);
         onMeasuresChange(nextMeasures.map((measure) => ({ ...measure })));
         onSelectMeasure?.(nextId);
+        onMeasureCreated?.(nextId);
       }
 
       setDraftMeasure(null);
@@ -1464,10 +1468,18 @@ function RoomCanvasComponent({
 
   const wallMeasureTargets = useMemo(() => {
     if (!measureMode || isExportingPdf) return [];
-    return wallSegments.map((segment) => ({
-      ...segment,
-      hitStrokeWidth: Math.max(10, wallThicknessCm * 0.9),
-    }));
+    return wallSegments
+      .filter((segment) => segment.end - segment.start >= MIN_WALL_MEASURE_TARGET_LENGTH_CM)
+      .map((segment) => ({
+        ...segment,
+        midpoint: {
+          x: (segment.centerlineStart.x + segment.centerlineEnd.x) / 2,
+          y: (segment.centerlineStart.y + segment.centerlineEnd.y) / 2,
+        },
+        guideStrokeWidth: Math.max(2.2, wallThicknessCm * 0.24),
+        emphasisStrokeWidth: Math.max(6, wallThicknessCm * 0.62),
+        hitStrokeWidth: Math.max(18, wallThicknessCm * 1.65),
+      }));
   }, [isExportingPdf, measureMode, wallSegments, wallThicknessCm]);
 
   const roomDimensionLabelPositions = useMemo(() => {
@@ -1668,9 +1680,27 @@ function RoomCanvasComponent({
                       y1={target.centerlineStart.y}
                       x2={target.centerlineEnd.x}
                       y2={target.centerlineEnd.y}
+                      stroke="var(--wall-measure-target-zone)"
+                      strokeWidth={target.emphasisStrokeWidth}
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1={target.centerlineStart.x}
+                      y1={target.centerlineStart.y}
+                      x2={target.centerlineEnd.x}
+                      y2={target.centerlineEnd.y}
                       stroke={stroke}
-                      strokeWidth={1.6}
-                      strokeDasharray="4 3"
+                      strokeWidth={target.guideStrokeWidth}
+                      strokeDasharray="6 4"
+                      strokeLinecap="round"
+                    />
+                    <circle
+                      cx={target.midpoint.x}
+                      cy={target.midpoint.y}
+                      r={isHovered || isActive ? 4.5 : 3.8}
+                      fill="var(--wall-measure-target-node-fill)"
+                      stroke={stroke}
+                      strokeWidth={1.3}
                     />
                     <line
                       x1={target.centerlineStart.x}

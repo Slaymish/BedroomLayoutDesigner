@@ -676,8 +676,29 @@ function App() {
         clearActiveSelections();
       }
 
-      const hasModifier = event.metaKey || event.ctrlKey;
-      if (!hasModifier || event.altKey) return;
+      const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
+      const isDeleteShortcut = event.key === 'Delete' || event.key === 'Backspace';
+      if (isDeleteShortcut && !hasModifier && !isEditableElement(event.target)) {
+        const current = workspaceRef.current;
+        const activeRoom = current.rooms.find((room) => room.id === current.activeRoomId);
+        if (activeRoom) {
+          const roomNeedsDimensions = !activeRoom.setup.onboardingComplete || dimensionEditorRoomId === activeRoom.id;
+          if (!roomNeedsDimensions && activeRoom.editingItemId !== null) {
+            event.preventDefault();
+            updateRoom(activeRoom.id, (room) => {
+              if (room.editingItemId === null) return room;
+              return {
+                ...room,
+                items: room.items.filter((item) => item.id !== room.editingItemId),
+                editingItemId: null,
+              };
+            });
+            return;
+          }
+        }
+      }
+
+      if (!event.metaKey && !event.ctrlKey) return;
       if (isEditableElement(event.target)) return;
 
       const key = event.key.toLowerCase();
@@ -701,7 +722,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [clearActiveSelections, historyPast.length, historyFuture.length, redo, undo]);
+  }, [clearActiveSelections, dimensionEditorRoomId, historyPast.length, historyFuture.length, redo, undo, updateRoom]);
 
   const setActiveRoom = useCallback(
     (roomId: string) => {
@@ -1494,6 +1515,7 @@ function App() {
           measureMode={measureMode && isActive && !roomNeedsDimensions}
           selectedMeasureId={selectedMeasureId}
           onSelectMeasure={(id) => handleRoomMeasureSelection(room.id, id)}
+          onMeasureCreated={() => setMeasureMode(false)}
           isExportingPdf={isExportingPdf}
         />
       </div>
@@ -1513,7 +1535,7 @@ function App() {
           {measureMode && (
             <div className="surface-card-muted px-3 py-2 mb-2">
               <p className="text-xs theme-text-soft">
-                Measure mode: drag on the canvas to draw a measure. Hold <strong>Shift</strong> to move freely.
+                Measure mode: drag from highlighted wall guides or object anchors to draw a measure. Hold <strong>Shift</strong> to move freely.
               </p>
             </div>
           )}
@@ -1563,7 +1585,7 @@ function App() {
             <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5">
               {measureMode ? (
                 <div className="space-y-2 text-sm theme-text-muted">
-                  <p>Drag on the canvas to draw a measure.</p>
+                  <p>Drag from highlighted wall guides or object anchors to draw a measure.</p>
                   <p>Hold <strong>Shift</strong> while dragging to move freely without snap/axis lock.</p>
                 </div>
               ) : (

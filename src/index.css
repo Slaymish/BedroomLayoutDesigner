@@ -106,6 +106,8 @@
   --wall-measure-target-stroke: #5b7188;
   --wall-measure-target-hover: #2563eb;
   --wall-measure-target-active: #1d4ed8;
+  --wall-measure-target-zone: rgb(37 99 235 / 0.16);
+  --wall-measure-target-node-fill: #f8fbff;
 
   --room-wall-fill: #d6dde8;
   --room-wall-stroke: #96a7bb;
@@ -257,6 +259,8 @@
   --wall-measure-target-stroke: #7e96a7;
   --wall-measure-target-hover: #7cc6ff;
   --wall-measure-target-active: #57a9e1;
+  --wall-measure-target-zone: rgb(124 198 255 / 0.22);
+  --wall-measure-target-node-fill: #102736;
 
   --room-wall-fill: #2b3f4f;
   --room-wall-stroke: #587083;

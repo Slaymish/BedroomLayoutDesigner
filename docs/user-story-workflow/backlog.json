@@ -7,7 +7,9 @@
       "status": "ready",
       "title": "Room setup quick-start",
       "story": "As a First-Time Planner, I want a quick-start setup for room dimensions and door/window defaults, so that I can begin layout work without guessing.",
-      "personaIds": ["P1"],
+      "personaIds": [
+        "P1"
+      ],
       "acceptanceCriteria": [
         "A new workspace offers a guided setup path for room dimensions.",
         "The setup path can be skipped without blocking manual editing.",
@@ -32,7 +34,9 @@
       "status": "ready",
       "title": "Clearance and collision helper",
       "story": "As a Precision Optimizer, I want visual warnings for blocked paths and tight clearances, so that I can iterate on practical room arrangements faster.",
-      "personaIds": ["P2"],
+      "personaIds": [
+        "P2"
+      ],
       "acceptanceCriteria": [
         "Warnings appear when configured clearance thresholds are violated.",
         "Warnings update during object movement without freezing interactions.",
@@ -56,7 +60,9 @@
       "status": "backlog",
       "title": "Saved layout snapshots",
       "story": "As a Repeat Workspace Manager, I want named snapshots for each room, so that I can compare options and safely return to prior versions.",
-      "personaIds": ["P3"],
+      "personaIds": [
+        "P3"
+      ],
       "acceptanceCriteria": [
         "User can create, rename, and restore room snapshots.",
         "Snapshot restore works with undo/redo expectations.",
@@ -69,7 +75,9 @@
         "confidence": 3,
         "effort": 4
       },
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "agentHints": [
         "Document persistence schema changes in workspaceState migration.",
         "Validate import/export compatibility in workspaceFile tests."
@@ -80,7 +88,10 @@
       "status": "icebox",
       "title": "Persona-based onboarding presets",
       "story": "As a First-Time Planner, I want onboarding presets based on my planning style, so that I get relevant defaults and tips quickly.",
-      "personaIds": ["P1", "P2"],
+      "personaIds": [
+        "P1",
+        "P2"
+      ],
       "acceptanceCriteria": [
         "User can pick a planning style during onboarding.",
         "Preset selection applies defaults without locking future edits."
@@ -92,9 +103,153 @@
         "confidence": 2,
         "effort": 3
       },
-      "dependencies": ["US-001"],
+      "dependencies": [
+        "US-001"
+      ],
       "agentHints": [
         "Keep presets additive and avoid hidden state mutations."
+      ]
+    },
+    {
+      "id": "US-005",
+      "status": "backlog",
+      "title": "Direct measure length input",
+      "story": "As a Precision Optimizer, I want direct measure length input, so that the feedback concern \"Wants to be able to input a number for the measure line in the edit panel, and have it adjust to that length. Currently they have to keep ma...\" is resolved.",
+      "personaIds": [
+        "P2"
+      ],
+      "acceptanceCriteria": [
+        "Edit panel allows numeric input for selected measure line length.",
+        "Updating the numeric length updates the measure line geometry to the requested value.",
+        "Measure edits remain stable with existing unit conversion boundaries."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 4,
+        "riskReduction": 3,
+        "confidence": 4,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-006",
+      "status": "done",
+      "title": "Improve wall measure drag affordance",
+      "story": "As a First-Time Planner, I want improve wall measure drag affordance, so that the feedback concern \"Make it clearer and easier to drag a measure from one of the walls. It is still difficult to do.\" is resolved.",
+      "personaIds": [
+        "P1",
+        "P2"
+      ],
+      "acceptanceCriteria": [
+        "Wall measure drag handles are visually clearer and easier to target.",
+        "Starting a wall-based measurement requires fewer failed attempts.",
+        "No regression to existing room/object dragging behavior."
+      ],
+      "scores": {
+        "impact": 4,
+        "urgency": 3,
+        "riskReduction": 2,
+        "confidence": 3,
+        "effort": 2
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-007",
+      "status": "done",
+      "title": "Keyboard delete for selected objects",
+      "story": "As a Precision Optimizer, I want keyboard delete for selected objects, so that the feedback concern \"Delete objects by using the delete or backspace key. It is too slow to click the remove button in the edit panel.\" is resolved.",
+      "personaIds": [
+        "P2",
+        "P3"
+      ],
+      "acceptanceCriteria": [
+        "Pressing Delete or Backspace removes selected objects when canvas/object focus is active.",
+        "Keyboard delete does not trigger while typing in text/number input fields.",
+        "Deletion remains undoable through existing undo/redo flow."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 4,
+        "riskReduction": 3,
+        "confidence": 4,
+        "effort": 2
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-008",
+      "status": "backlog",
+      "title": "Box selection for multi-object workflows",
+      "story": "As a Precision Optimizer, I want box selection for multi-object workflows, so that the feedback concern \"Add box select to select, delete, and move multiple objects.\" is resolved.",
+      "personaIds": [
+        "P2",
+        "P3"
+      ],
+      "acceptanceCriteria": [
+        "Drag gesture can create a selection box to select multiple objects.",
+        "Selected group can be moved together and deleted together.",
+        "Multi-select actions integrate cleanly with undo/redo snapshots."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 4
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-009",
+      "status": "done",
+      "title": "Auto-exit measure mode after creation",
+      "story": "As a First-Time Planner, I want auto-exit measure mode after creation, so that the feedback concern \"After adding a measure, turn off the measure tool. Currently they measure something and then go to move an object, and it draws another meas...\" is resolved.",
+      "personaIds": [
+        "P1",
+        "P2"
+      ],
+      "acceptanceCriteria": [
+        "After creating a measure line, measure mode turns off automatically.",
+        "Users can still intentionally create another measure by re-enabling measure mode.",
+        "Accidental extra measure creation is reduced during normal move/edit workflows."
+      ],
+      "scores": {
+        "impact": 4,
+        "urgency": 4,
+        "riskReduction": 3,
+        "confidence": 4,
+        "effort": 2
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
+        "Add or update focused tests for behavior changes."
       ]
     }
   ]
