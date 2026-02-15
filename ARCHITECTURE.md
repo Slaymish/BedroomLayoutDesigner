@@ -32,6 +32,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 ### Entrypoints
 
 - `src/main.tsx`: app bootstrap, route selection (`/` landing vs `/app` planner), route-level metadata updates, and service worker registration in production.
+- `src/RouteExperience.tsx`: route surface controller, landing overlay flow, planner lazy-loading/preload behavior, and route transition analytics.
 - `src/App.tsx`: workspace orchestration, commands, undo/redo, autosave, import/export, toolbar, modal flow.
 
 ### Domain Types
@@ -40,7 +41,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 
 ### UI Components
 
-- `src/components/LandingPage.tsx`: public landing experience with conversion copy, FAQ section, and feature-comparison table.
+- `src/components/LandingPage.tsx`: landing overlay dialog and full landing content sections (launchpad, capabilities, FAQ, comparison).
 - `src/components/RoomWorkspace.tsx`: room list shell and per-room card wiring.
 - `src/components/RoomCard.tsx`: room card chrome (rename/delete/reorder + injected room body).
 - `src/components/RoomCanvas.tsx`: high-frequency interactions (drag, resize, measurement drawing/editing), rendering floorplan.
@@ -167,6 +168,7 @@ High-frequency canvas interactions are locally buffered in `RoomCanvas` and comm
 
 Key techniques already in place:
 
+- Planner route is lazy-loaded and prewarmed while on the landing route, so `/` does not mount the full workspace coordinator.
 - Local interaction buffering in `RoomCanvas`.
 - `requestAnimationFrame` scheduling for pointer move processing.
 - Component memoization (`memo`) and explicit prop comparators.

@@ -1,3 +1,4 @@
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import './LandingPage.css';
 import {
   LANDING_COMPARISON_ROWS,
@@ -12,12 +13,63 @@ interface LandingPageProps {
   onStartPlanning: (placement: LandingCtaPlacement) => void;
   mode?: 'full' | 'overlay';
   onDismiss?: () => void;
+  isOpeningPlanner?: boolean;
 }
 
 const toSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 const OVERLAY_PREVIEW_BULLETS = LANDING_FEATURE_BULLETS.slice(0, 3);
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export default function LandingPage({ onStartPlanning, mode = 'full', onDismiss }: LandingPageProps) {
+export default function LandingPage({
+  onStartPlanning,
+  mode = 'full',
+  onDismiss,
+  isOpeningPlanner = false,
+}: LandingPageProps) {
+  const overlayPanelRef = useRef<HTMLElement | null>(null);
+  const overlayPrimaryCtaRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (mode !== 'overlay') return;
+    const previousActiveElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlayPrimaryCtaRef.current?.focus();
+    return () => {
+      previousActiveElement?.focus();
+    };
+  }, [mode]);
+
+  const handleOverlayKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onDismiss?.();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+    const panel = overlayPanelRef.current;
+    if (!panel) return;
+
+    const focusableItems = Array
+      .from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true');
+
+    if (focusableItems.length === 0) return;
+    const first = focusableItems[0];
+    const last = focusableItems[focusableItems.length - 1];
+    const activeElement = document.activeElement;
+
+    if (event.shiftKey && activeElement === first) {
+      event.preventDefault();
+      last.focus();
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   if (mode === 'overlay') {
     return (
       <div className="landing-overlay-root" role="dialog" aria-modal="true" aria-label="Planner introduction">
@@ -26,8 +78,14 @@ export default function LandingPage({ onStartPlanning, mode = 'full', onDismiss 
           type="button"
           aria-label="Dismiss intro panel"
           onClick={onDismiss}
+          disabled={isOpeningPlanner}
         />
-        <section className="landing-overlay-panel">
+        <section
+          ref={overlayPanelRef}
+          className="landing-overlay-panel"
+          tabIndex={-1}
+          onKeyDown={handleOverlayKeyDown}
+        >
           <p className="landing-overlay-kicker">Bedroom Layout Planner</p>
           <h1 className="landing-overlay-title">Design a layout that actually fits.</h1>
           <p className="landing-overlay-subtitle">
@@ -39,8 +97,20 @@ export default function LandingPage({ onStartPlanning, mode = 'full', onDismiss 
             ))}
           </ul>
           <div className="landing-overlay-actions">
-            <button className="ui-btn ui-btn-primary" onClick={() => onStartPlanning('launchpad')}>
-              Start Planning
+            <button
+              ref={overlayPrimaryCtaRef}
+              className="ui-btn ui-btn-primary"
+              onClick={() => onStartPlanning('launchpad')}
+              disabled={isOpeningPlanner}
+            >
+              {isOpeningPlanner ? 'Opening Planner...' : 'Start Planning'}
+            </button>
+            <button
+              className="ui-btn ui-btn-secondary"
+              onClick={onDismiss}
+              disabled={isOpeningPlanner}
+            >
+              Dismiss Intro
             </button>
           </div>
         </section>

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type SetStateAction } from 'react';
-import './App.css';
 import EditObjectPanel from './components/EditObjectPanel';
 import PreferencesPanel from './components/PreferencesPanel';
 import RoomCanvas from './components/RoomCanvas';
@@ -228,16 +227,52 @@ const copyTextToClipboard = async (value: string): Promise<void> => {
   }
 };
 
+interface WorkspaceBootstrapResult {
+  workspace: WorkspaceState;
+  storageErrorMessage: string | null;
+}
+
+const STORAGE_UNAVAILABLE_MESSAGE = 'Local browser storage is unavailable. Export your workspace file to avoid data loss.';
+const AUTOSAVE_FAILED_MESSAGE = 'Autosave failed. Export your workspace file to avoid data loss.';
+
+const bootstrapWorkspace = (): WorkspaceBootstrapResult => {
+  if (typeof window === 'undefined') {
+    return {
+      workspace: createDefaultWorkspaceState(),
+      storageErrorMessage: null,
+    };
+  }
+
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    const parsed = parseStoredWorkspaceState(stored);
+    return {
+      workspace: parsed ?? createDefaultWorkspaceState(),
+      storageErrorMessage: null,
+    };
+  } catch {
+    return {
+      workspace: createDefaultWorkspaceState(),
+      storageErrorMessage: STORAGE_UNAVAILABLE_MESSAGE,
+    };
+  }
+};
 
 function App() {
-  const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
-  const [isHydrated, setIsHydrated] = useState(false);
+  const bootstrapResultRef = useRef<WorkspaceBootstrapResult | null>(null);
+  if (bootstrapResultRef.current === null) {
+    bootstrapResultRef.current = bootstrapWorkspace();
+  }
+
+  const [workspace, setWorkspace] = useState<WorkspaceState>(() => bootstrapResultRef.current?.workspace ?? createDefaultWorkspaceState());
   const [preferencesPanelOpen, setPreferencesPanelOpen] = useState(false);
   const [historyPast, setHistoryPast] = useState<WorkspaceSnapshot[]>([]);
   const [historyFuture, setHistoryFuture] = useState<WorkspaceSnapshot[]>([]);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [storageErrorMessage, setStorageErrorMessage] = useState<string | null>(null);
+  const [storageErrorMessage, setStorageErrorMessage] = useState<string | null>(
+    () => bootstrapResultRef.current?.storageErrorMessage ?? null
+  );
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [lastAutosaveAt, setLastAutosaveAt] = useState<number | null>(null);
   const [isAutosavePending, setIsAutosavePending] = useState(false);
@@ -472,23 +507,7 @@ function App() {
   }, [restoreSnapshot]);
 
   useEffect(() => {
-    try {
-      try {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        const parsed = parseStoredWorkspaceState(stored);
-        if (parsed) {
-          setWorkspace(parsed);
-        }
-      } catch {
-        setStorageErrorMessage('Local browser storage is unavailable. Export your workspace file to avoid data loss.');
-      }
-    } finally {
-      setIsHydrated(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isHydrated || shareHashHandledRef.current || typeof window === 'undefined') return;
+    if (shareHashHandledRef.current || typeof window === 'undefined') return;
     shareHashHandledRef.current = true;
 
     const rawHash = window.location.hash;
@@ -512,7 +531,7 @@ function App() {
       const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`;
       window.history.replaceState(null, '', nextUrl);
     }
-  }, [isHydrated]);
+  }, []);
 
   const persistWorkspace = useCallback((state: WorkspaceState): boolean => {
     try {
@@ -528,7 +547,7 @@ function App() {
       setStorageErrorMessage(null);
       return true;
     } catch {
-      setStorageErrorMessage('Autosave failed. Export your workspace file to avoid data loss.');
+      setStorageErrorMessage(AUTOSAVE_FAILED_MESSAGE);
       return false;
     }
   }, []);
@@ -544,7 +563,6 @@ function App() {
   }, [persistWorkspace]);
 
   useEffect(() => {
-    if (!isHydrated) return;
     if (!autosaveWritesEnabled) {
       setIsAutosavePending(false);
       if (autosaveTimeoutRef.current !== null) {
@@ -584,10 +602,10 @@ function App() {
         window.clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [autosaveWritesEnabled, isHydrated, workspace, persistWorkspaceAutosave]);
+  }, [autosaveWritesEnabled, workspace, persistWorkspaceAutosave]);
 
   useEffect(() => {
-    if (!isHydrated || !autosaveWritesEnabled) return;
+    if (!autosaveWritesEnabled) return;
     const flushAutosave = () => {
       if (autosaveTimeoutRef.current !== null) {
         window.clearTimeout(autosaveTimeoutRef.current);
@@ -605,7 +623,7 @@ function App() {
     return () => {
       window.removeEventListener('beforeunload', flushAutosave);
     };
-  }, [autosaveWritesEnabled, isHydrated, persistWorkspace]);
+  }, [autosaveWritesEnabled, persistWorkspace]);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -2031,14 +2049,6 @@ function App() {
     workspace.activeRoomId,
     workspace.rooms,
   ]);
-
-  if (!isHydrated) {
-    return (
-      <div className="min-h-screen app-shell flex items-center justify-center px-6">
-        <div className="surface-card p-6 theme-text-soft">Loading your workspace...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen app-shell flex flex-col">

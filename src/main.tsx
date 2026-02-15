@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
+import './App.css'
 import RouteExperience from './RouteExperience'
 
 declare const __APP_BUILD_ID__: string;
@@ -33,6 +34,41 @@ declare global {
 type AppRoute = 'landing' | 'planner';
 type AnalyticsPrimitive = string | number | boolean;
 type AnalyticsParams = Record<string, AnalyticsPrimitive>;
+type ThemeMode = 'light' | 'dark' | 'system';
+
+const STORAGE_KEY = 'bedroom-layout-designer:v1';
+
+const readStoredThemeMode = (): ThemeMode => {
+  if (typeof window === 'undefined') return 'system';
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return 'system';
+    const parsed = JSON.parse(raw) as { preferences?: { themeMode?: unknown } };
+    const mode = parsed.preferences?.themeMode;
+    if (mode === 'light' || mode === 'dark' || mode === 'system') {
+      return mode;
+    }
+  } catch {
+    // Ignore malformed local storage payloads and use system preference.
+  }
+
+  return 'system';
+};
+
+const resolveThemeFromMode = (mode: ThemeMode): 'light' | 'dark' => {
+  if (mode === 'light' || mode === 'dark') return mode;
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
+  return 'light';
+};
+
+const applyThemePreference = () => {
+  const resolvedTheme = resolveThemeFromMode(readStoredThemeMode());
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.style.colorScheme = resolvedTheme;
+};
 
 interface RouteSeoConfig {
   title: string;
@@ -192,6 +228,7 @@ const trackAnalyticsEvent = (eventName: string, params: AnalyticsParams) => {
 };
 
 const route = resolveRoute(window.location.pathname);
+applyThemePreference();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
