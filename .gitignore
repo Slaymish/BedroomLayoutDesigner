@@ -2,3 +2,10 @@
 node_modules
 dist/
 .test-dist/
+.skills/
+.github/skills/frontend-design/SKILL.md
+.github/skills/frontend-design/.skill-meta.json
+.cursor/skills/frontend-design/.skill-meta.json
+.gitignore
+.gitignore
+.cursor/skills/frontend-design/SKILL.md
