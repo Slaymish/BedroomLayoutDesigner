@@ -5,6 +5,7 @@
 ### New
 - **Shareable layouts without accounts**: Create and share in-progress layout links without requiring sign-in, with autosave safeguards.
 - **New marketing landing page**: Added a dedicated homepage with a CTA-first layout, FAQ, comparison matrices, and improved responsive behavior.
+- **Overlay launch mode for planner**: Added a dismissible landing overlay and smoother transition into the live planner experience.
 - **Feng shui alignment detector**: Added built-in feng shui checks to help evaluate room setup alignment.
 - **Room reordering**: Reorder rooms directly in the workspace flow.
 - **Object presets**: Added quick presets to speed up adding common furniture/object setups.
@@ -15,6 +16,8 @@
 ### Improvements
 - **Measurement workflow updates**: Improved measure label positioning, added direct measuring support, and improved mobile measurement behavior.
 - **Canvas clarity upgrades**: Added opening labels and refined spacing/padding behavior in the UI.
+- **Share workflow clarity**: Share confirmation now appears inline beside the Share button, and shared-link entry/restore prompts were rewritten with clearer outcomes.
+- **Routing and discoverability updates**: Added route handling improvements for planner/share-link paths and refreshed `llms.txt` + SEO wiring.
 - **Search/LLM discoverability and branding**: Improved SEO metadata, branding content, and `llms.txt` discoverability support.
 - **Accessibility and UI polish**: Refined component styling and accessibility details across core screens.
 
