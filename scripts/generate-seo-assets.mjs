@@ -58,6 +58,11 @@ const buildSitemapXml = (siteOrigin) => `<?xml version="1.0" encoding="UTF-8"?>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+  <url>
+    <loc>${siteOrigin}/app</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
 </urlset>
 `;
 
@@ -81,6 +86,7 @@ const buildLlmsTxt = (siteOrigin) => `# Bedroom Layout Designer
 > Free bedroom layout planner for exact room measurements, furniture fit checks, and printable PDF export.
 
 Home: ${siteOrigin}/
+Planner: ${siteOrigin}/app
 Sitemap: ${siteOrigin}/sitemap.xml
 
 ## What this is

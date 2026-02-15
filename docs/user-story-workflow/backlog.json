@@ -285,7 +285,7 @@
     },
     {
       "id": "US-011",
-      "status": "backlog",
+      "status": "in_progress",
       "title": "Dedicated landing page with FAQ and comparison matrices",
       "story": "As a First-Time Planner, I want a dedicated landing page with clear value copy, FAQs, and honest comparison tables, so that I can quickly understand why this tool is the best fit and start planning.",
       "personaIds": [

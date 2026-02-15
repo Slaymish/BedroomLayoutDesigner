@@ -4,7 +4,10 @@ This document explains how the Bedroom Layout Designer is structured today, wher
 
 ## 1. System Overview
 
-Bedroom Layout Designer is a client-side React + TypeScript single-page app.
+Bedroom Layout Designer is a client-side React + TypeScript single-page app with two route surfaces:
+
+- `/`: search-oriented landing page.
+- `/app`: interactive planner workspace.
 
 - Runtime: browser only (no backend API).
 - Storage: `localStorage` autosave + explicit JSON import/export.
@@ -28,7 +31,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 
 ### Entrypoints
 
-- `src/main.tsx`: app bootstrap, stylesheet import, service worker registration in production.
+- `src/main.tsx`: app bootstrap, route selection (`/` landing vs `/app` planner), route-level metadata updates, and service worker registration in production.
 - `src/App.tsx`: workspace orchestration, commands, undo/redo, autosave, import/export, toolbar, modal flow.
 
 ### Domain Types
@@ -37,6 +40,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 
 ### UI Components
 
+- `src/components/LandingPage.tsx`: public landing experience with conversion copy, FAQ section, and feature-comparison table.
 - `src/components/RoomWorkspace.tsx`: room list shell and per-room card wiring.
 - `src/components/RoomCard.tsx`: room card chrome (rename/delete/reorder + injected room body).
 - `src/components/RoomCanvas.tsx`: high-frequency interactions (drag, resize, measurement drawing/editing), rendering floorplan.
@@ -46,6 +50,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 
 ### Utilities
 
+- `src/content/landingContent.ts`: source-of-truth landing copy for feature bullets, FAQ entries, and comparison rows.
 - `src/utils/workspaceState.ts`: domain defaults, sanitization, cloning/equality, migration, room helpers.
 - `src/utils/openings.ts`: opening normalization/snapping/wall inference.
 - `src/utils/units.ts`: unit conversion to/from base centimeters.
@@ -60,6 +65,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 ### Styling and Runtime Assets
 
 - `src/index.css`, `src/App.css`: design tokens + component-level styling.
+- `src/components/LandingPage.css`: landing-specific layout and typography styles.
 - `public/sw.js`: cache strategy and offline behavior.
 - `scripts/generate-seo-assets.mjs`: build-time robots/sitemap/llms metadata generation from deployment URL env vars.
 - `public/robots.txt`, `public/sitemap.xml`, `public/llms.txt`, `public/site.webmanifest`: crawler and installability metadata.

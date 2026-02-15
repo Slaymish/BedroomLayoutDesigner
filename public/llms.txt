@@ -2,6 +2,7 @@
 > Free bedroom layout planner for exact room measurements, furniture fit checks, and printable PDF export.
 
 Home: https://bedroomlayout.app/
+Planner: https://bedroomlayout.app/app
 Sitemap: https://bedroomlayout.app/sitemap.xml
 
 ## What this is
