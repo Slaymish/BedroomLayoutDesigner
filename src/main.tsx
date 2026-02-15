@@ -1,8 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
-import LandingPage, { type LandingCtaPlacement } from './components/LandingPage.tsx'
+import RouteExperience from './RouteExperience'
 
 declare const __APP_BUILD_ID__: string;
 const CANONICAL_ORIGIN = 'https://bedroomlayout.app';
@@ -193,30 +192,14 @@ const trackAnalyticsEvent = (eventName: string, params: AnalyticsParams) => {
 };
 
 const route = resolveRoute(window.location.pathname);
-setSeoForRoute(route);
-
-const handleStartPlanning = (placement: LandingCtaPlacement) => {
-  trackAnalyticsEvent('landing_start_planning_click', { placement });
-  window.location.assign('/app');
-};
-
-const handleDismissOverlay = () => {
-  trackAnalyticsEvent('landing_overlay_dismiss', { placement: 'overlay' });
-  window.location.assign('/app');
-};
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {route === 'planner' ? (
-      <App />
-    ) : (
-      <div className="landing-overlay-app-shell">
-        <div className="landing-preview-app" aria-hidden="true">
-          <App />
-        </div>
-        <LandingPage mode="overlay" onStartPlanning={handleStartPlanning} onDismiss={handleDismissOverlay} />
-      </div>
-    )}
+    <RouteExperience
+      initialRoute={route}
+      onSetSeoForRoute={setSeoForRoute}
+      onTrackAnalyticsEvent={trackAnalyticsEvent}
+    />
   </StrictMode>,
 )
 
