@@ -108,6 +108,7 @@ const DEFAULT_SCROLL_TELEMETRY: ScrollTelemetrySummary = {
 const SCROLL_SLOW_FRAME_MS = 24;
 const SCROLL_ACTIVE_WINDOW_MS = 140;
 const MAX_HISTORY_SNAPSHOTS = 80;
+const EMPTY_ITEM_SELECTION: number[] = [];
 
 const iconClassName = 'toolbar-icon-svg';
 const FURNITURE_PRESETS = OBJECT_PRESETS.filter(
@@ -248,6 +249,7 @@ function App() {
   });
   const [selectedBedPreset, setSelectedBedPreset] = useState(BED_SIZE_PRESETS[0]);
   const [measureMode, setMeasureMode] = useState(false);
+  const [selectedItemIdsByRoom, setSelectedItemIdsByRoom] = useState<Record<string, number[]>>({});
   const [selectedMeasureByRoom, setSelectedMeasureByRoom] = useState<Record<string, number | null>>({});
   const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
   const [dimensionEditorRoomId, setDimensionEditorRoomId] = useState<string | null>(null);
@@ -262,6 +264,7 @@ function App() {
   const fengShuiWarningDetailsRef = useRef<HTMLDetailsElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
+  const selectedItemIdsByRoomRef = useRef(selectedItemIdsByRoom);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const lastPersistedAutosaveFingerprintRef = useRef<string | null>(null);
   const shareHashHandledRef = useRef(false);
@@ -609,6 +612,34 @@ function App() {
   }, [workspace]);
 
   useEffect(() => {
+    selectedItemIdsByRoomRef.current = selectedItemIdsByRoom;
+  }, [selectedItemIdsByRoom]);
+
+  useEffect(() => {
+    setSelectedItemIdsByRoom((previous) => {
+      let changed = false;
+      const next: Record<string, number[]> = {};
+
+      workspace.rooms.forEach((room) => {
+        const allowedIds = new Set(room.items.map((item) => item.id));
+        const prior = previous[room.id] ?? EMPTY_ITEM_SELECTION;
+        const filtered = prior.filter((id) => allowedIds.has(id));
+        next[room.id] = filtered;
+
+        if (prior.length !== filtered.length || prior.some((id, index) => id !== filtered[index])) {
+          changed = true;
+        }
+      });
+
+      if (Object.keys(previous).length !== Object.keys(next).length) {
+        changed = true;
+      }
+
+      return changed ? next : previous;
+    });
+  }, [workspace.rooms]);
+
+  useEffect(() => {
     const previousUnit = dimensionDraftUnitRef.current;
     if (previousUnit === activeUnit) return;
 
@@ -738,18 +769,56 @@ function App() {
     };
   }, [debugTelemetryEnabled]);
 
-  const clearActiveSelections = useCallback(() => {
-    const roomId = workspaceRef.current.activeRoomId;
+  const getRoomSelectedItemIds = useCallback((roomId: string, editingItemId: number | null): number[] => {
+    const explicit = selectedItemIdsByRoomRef.current[roomId];
+    if (explicit && explicit.length > 0) return explicit;
+    return editingItemId === null ? EMPTY_ITEM_SELECTION : [editingItemId];
+  }, []);
+
+  const setRoomSelectedItems = useCallback((
+    roomId: string,
+    itemIds: number[],
+    options?: { clearMeasure?: boolean }
+  ) => {
+    const normalized = Array.from(new Set(itemIds));
+
+    setSelectedItemIdsByRoom((previous) => {
+      const prior = previous[roomId] ?? EMPTY_ITEM_SELECTION;
+      const sameLength = prior.length === normalized.length;
+      const unchanged = sameLength && prior.every((id, index) => id === normalized[index]);
+      if (unchanged) return previous;
+      return {
+        ...previous,
+        [roomId]: normalized,
+      };
+    });
+
     updateRoom(
       roomId,
-      (room) => ({
-        ...room,
-        editingItemId: null,
-      }),
+      (currentRoom) => {
+        const nextEditingItemId = normalized.length === 1 ? normalized[0] : null;
+        if (currentRoom.editingItemId === nextEditingItemId) return currentRoom;
+        return {
+          ...currentRoom,
+          editingItemId: nextEditingItemId,
+        };
+      },
       { recordHistory: false }
     );
-    setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
+
+    if (options?.clearMeasure ?? true) {
+      setSelectedMeasureByRoom((previous) => ({
+        ...previous,
+        [roomId]: null,
+      }));
+    }
   }, [updateRoom]);
+
+  const clearActiveSelections = useCallback(() => {
+    const roomId = workspaceRef.current.activeRoomId;
+    setRoomSelectedItems(roomId, [], { clearMeasure: false });
+    setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
+  }, [setRoomSelectedItems]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -762,17 +831,20 @@ function App() {
         const current = workspaceRef.current;
         const activeRoom = current.rooms.find((room) => room.id === current.activeRoomId);
         if (activeRoom) {
+          const selectedItemIds = getRoomSelectedItemIds(activeRoom.id, activeRoom.editingItemId);
           const isDimensionEditorOpen = dimensionEditorRoomId === activeRoom.id;
-          if (canDeleteActiveSelection(activeRoom.editingItemId, activeRoom.setup.onboardingComplete, isDimensionEditorOpen)) {
+          if (canDeleteActiveSelection(selectedItemIds.length, activeRoom.setup.onboardingComplete, isDimensionEditorOpen)) {
             event.preventDefault();
             updateRoom(activeRoom.id, (room) => {
-              if (room.editingItemId === null) return room;
+              if (selectedItemIds.length === 0) return room;
+              const selectedSet = new Set(selectedItemIds);
               return {
                 ...room,
-                items: room.items.filter((item) => item.id !== room.editingItemId),
+                items: room.items.filter((item) => !selectedSet.has(item.id)),
                 editingItemId: null,
               };
             });
+            setSelectedItemIdsByRoom((previous) => ({ ...previous, [activeRoom.id]: [] }));
             return;
           }
         }
@@ -802,7 +874,16 @@ function App() {
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [clearActiveSelections, dimensionEditorRoomId, historyPast.length, historyFuture.length, redo, undo, updateRoom]);
+  }, [
+    clearActiveSelections,
+    dimensionEditorRoomId,
+    getRoomSelectedItemIds,
+    historyPast.length,
+    historyFuture.length,
+    redo,
+    undo,
+    updateRoom,
+  ]);
 
   const setActiveRoom = useCallback(
     (roomId: string) => {
@@ -819,26 +900,20 @@ function App() {
 
   const setRoomEditingItem = useCallback(
     (roomId: string, itemId: number | null) => {
-      updateRoom(
-        roomId,
-        (room) => ({
-          ...room,
-          editingItemId: itemId,
-        }),
-        { recordHistory: false }
-      );
+      setRoomSelectedItems(roomId, itemId === null ? [] : [itemId], { clearMeasure: false });
     },
-    [updateRoom]
+    [setRoomSelectedItems]
   );
 
   const handleRoomItemSelection = useCallback((roomId: string, itemId: number | null) => {
     setActiveRoom(roomId);
-    setRoomEditingItem(roomId, itemId);
-    setSelectedMeasureByRoom((previous) => ({
-      ...previous,
-      [roomId]: null,
-    }));
-  }, [setActiveRoom, setRoomEditingItem]);
+    setRoomSelectedItems(roomId, itemId === null ? [] : [itemId]);
+  }, [setActiveRoom, setRoomSelectedItems]);
+
+  const handleRoomItemsSelection = useCallback((roomId: string, itemIds: number[]) => {
+    setActiveRoom(roomId);
+    setRoomSelectedItems(roomId, itemIds);
+  }, [setActiveRoom, setRoomSelectedItems]);
 
   const handleRoomMeasureSelection = useCallback((roomId: string, measureId: number | null) => {
     setActiveRoom(roomId);
@@ -847,9 +922,9 @@ function App() {
       [roomId]: measureId,
     }));
     if (measureId !== null) {
-      setRoomEditingItem(roomId, null);
+      setRoomSelectedItems(roomId, [], { clearMeasure: false });
     }
-  }, [setActiveRoom, setRoomEditingItem]);
+  }, [setActiveRoom, setRoomSelectedItems]);
 
   const handleLayoutInteractionStart = useCallback(() => {
     if (interactionStartSnapshotRef.current) return;
@@ -952,6 +1027,8 @@ function App() {
 
   const addItemToRoom = useCallback(
     (roomId: string, width: number, height: number, type: string, options?: AddItemOptions) => {
+      const shouldSelect = options?.select ?? true;
+      const predictedNextItemId = workspaceRef.current.rooms.find((room) => room.id === roomId)?.nextItemId ?? null;
       updateRoom(roomId, (room) => {
         const newId = room.nextItemId;
         const newItem: RoomItem = {
@@ -988,9 +1065,15 @@ function App() {
           ...room,
           items: [...room.items, nextItem],
           nextItemId: newId + 1,
-          editingItemId: options?.select ?? true ? newId : room.editingItemId,
+          editingItemId: shouldSelect ? newId : room.editingItemId,
         };
       });
+      if (shouldSelect && predictedNextItemId !== null) {
+        setSelectedItemIdsByRoom((previous) => ({
+          ...previous,
+          [roomId]: [predictedNextItemId],
+        }));
+      }
       setSelectedMeasureByRoom((previous) => ({ ...previous, [roomId]: null }));
     },
     [updateRoom]
@@ -1050,18 +1133,22 @@ function App() {
     [updateRoom]
   );
 
-  const removeSelectedItem = useCallback(
+  const removeSelectedItems = useCallback(
     (roomId: string) => {
+      const room = workspaceRef.current.rooms.find((candidate) => candidate.id === roomId);
+      const selectedIds = getRoomSelectedItemIds(roomId, room?.editingItemId ?? null);
+      if (selectedIds.length === 0) return;
+      const selectedIdSet = new Set(selectedIds);
       updateRoom(roomId, (room) => {
-        if (room.editingItemId === null) return room;
         return {
           ...room,
-          items: room.items.filter((item) => item.id !== room.editingItemId),
+          items: room.items.filter((item) => !selectedIdSet.has(item.id)),
           editingItemId: null,
         };
       });
+      setSelectedItemIdsByRoom((previous) => ({ ...previous, [roomId]: [] }));
     },
-    [updateRoom]
+    [getRoomSelectedItemIds, updateRoom]
   );
 
   const removeSelectedMeasure = useCallback((roomId: string, measureId: number) => {
@@ -1330,6 +1417,11 @@ function App() {
       delete next[roomId];
       return next;
     });
+    setSelectedItemIdsByRoom((previous) => {
+      const next = { ...previous };
+      delete next[roomId];
+      return next;
+    });
     clearDimensionDraft(roomId);
     setDimensionEditorRoomId((current) => (current === roomId ? null : current));
   }, [clearDimensionDraft, updateWorkspace, workspace.rooms]);
@@ -1357,6 +1449,7 @@ function App() {
     setHistoryPast([]);
     setHistoryFuture([]);
     setSelectedMeasureByRoom({});
+    setSelectedItemIdsByRoom({});
     setDimensionDraftByRoom({});
     setDimensionEditorRoomId(null);
     interactionStartSnapshotRef.current = null;
@@ -1594,6 +1687,7 @@ function App() {
       setHistoryPast([]);
       setHistoryFuture([]);
       setSelectedMeasureByRoom({});
+      setSelectedItemIdsByRoom({});
       setDimensionDraftByRoom({});
       setDimensionEditorRoomId(null);
       interactionStartSnapshotRef.current = null;
@@ -1618,6 +1712,7 @@ function App() {
     setHistoryPast([]);
     setHistoryFuture([]);
     setSelectedMeasureByRoom({});
+    setSelectedItemIdsByRoom({});
     setDimensionDraftByRoom({});
     setDimensionEditorRoomId(null);
     interactionStartSnapshotRef.current = null;
@@ -1644,6 +1739,7 @@ function App() {
     setHistoryPast([]);
     setHistoryFuture([]);
     setSelectedMeasureByRoom({});
+    setSelectedItemIdsByRoom({});
     setDimensionDraftByRoom({});
     setDimensionEditorRoomId(null);
     interactionStartSnapshotRef.current = null;
@@ -1680,11 +1776,15 @@ function App() {
     const selectedMeasure = selectedMeasureId !== null
       ? room.measures.find((measure) => measure.id === selectedMeasureId) || null
       : null;
-    const editingItem = room.editingItemId !== null
-      ? room.items.find((item) => item.id === room.editingItemId) || null
+    const selectedItemIds = getRoomSelectedItemIds(room.id, room.editingItemId);
+    const editingItem = selectedItemIds.length === 1
+      ? room.items.find((item) => item.id === selectedItemIds[0]) || null
       : null;
+    const hasMultiItemSelection = selectedItemIds.length > 1;
     const editPanelTitle = editingItem
       ? `Edit ${(editingItem.type || 'Object').trim() || 'Object'}`
+      : hasMultiItemSelection
+        ? `${selectedItemIds.length} Objects Selected`
       : selectedMeasure
         ? 'Edit Measurement'
         : 'Edit';
@@ -1701,6 +1801,8 @@ function App() {
           onItemsChange={(update) => handleRoomItemsChange(room.id, update)}
           onEditItem={(itemId) => handleRoomItemSelection(room.id, itemId)}
           selectedItemId={room.editingItemId}
+          selectedItemIds={selectedItemIds}
+          onSelectItems={(itemIds) => handleRoomItemsSelection(room.id, itemIds)}
           roomWidthCm={room.roomWidthCm}
           roomHeightCm={room.roomHeightCm}
           wallThicknessCm={workspace.preferences.wallThicknessCm}
@@ -1753,9 +1855,27 @@ function App() {
               }}
               onScrubStart={handleLayoutInteractionStart}
               onScrubEnd={handleLayoutInteractionEnd}
-              onRemove={() => removeSelectedItem(room.id)}
+              onRemove={() => removeSelectedItems(room.id)}
               unit={activeUnit}
             />
+          ) : hasMultiItemSelection ? (
+            <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3">
+              <div className="surface-card-muted p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Selection</p>
+                <p className="text-sm theme-text-soft">
+                  {selectedItemIds.length} objects selected. Drag any selected object to move the group.
+                </p>
+                <p className="text-xs theme-text-muted">
+                  Press <strong>Delete</strong> or <strong>Backspace</strong> to remove all selected objects.
+                </p>
+              </div>
+              <button
+                className="ui-btn ui-btn-secondary w-full"
+                onClick={() => removeSelectedItems(room.id)}
+              >
+                Delete Selected Objects
+              </button>
+            </div>
           ) : selectedMeasure ? (
             <div className="panel-shell w-full min-w-0 p-3 sm:p-3.5 space-y-3">
               <p className="text-xs theme-text-muted">
@@ -1839,7 +1959,9 @@ function App() {
     handleLayoutInteractionEnd,
     handleLayoutInteractionStart,
     handleLayoutTelemetry,
+    getRoomSelectedItemIds,
     handleRoomItemSelection,
+    handleRoomItemsSelection,
     handleRoomItemsChange,
     handleRoomDimensionLabelLayoutChange,
     handleRoomMeasureSelection,
@@ -1847,7 +1969,7 @@ function App() {
     handleRoomSizeChange,
     isExportingPdf,
     measureMode,
-    removeSelectedItem,
+    removeSelectedItems,
     removeSelectedMeasure,
     selectedMeasureByRoom,
     updateRoomItem,
@@ -1876,11 +1998,17 @@ function App() {
     const tokens: Record<string, string> = {};
     workspace.rooms.forEach((room) => {
       const isActive = room.id === workspace.activeRoomId;
+      const activeSelectedItemIds = isActive
+        ? (selectedItemIdsByRoom[room.id] && selectedItemIdsByRoom[room.id].length > 0
+          ? selectedItemIdsByRoom[room.id]
+          : (room.editingItemId === null ? EMPTY_ITEM_SELECTION : [room.editingItemId]))
+        : EMPTY_ITEM_SELECTION;
       const roomDraft = dimensionDraftByRoom[room.id];
       tokens[room.id] = [
         globalVisualToken,
         isActive ? 'active' : 'inactive',
         isActive ? (measureMode ? 'measure-on' : 'measure-off') : 'na',
+        isActive ? (activeSelectedItemIds.join(',') || 'none') : 'na',
         isActive ? String(selectedMeasureByRoom[room.id] ?? 'none') : 'na',
         room.setup.onboardingComplete ? 'ready' : 'needs-dimensions',
         dimensionEditorRoomId === room.id ? 'dimension-editor-open' : 'dimension-editor-closed',
@@ -1895,6 +2023,7 @@ function App() {
     gridSpacingCm,
     isExportingPdf,
     measureMode,
+    selectedItemIdsByRoom,
     selectedMeasureByRoom,
     effectiveGridSpacing,
     effectiveGridColor,
@@ -1929,7 +2058,7 @@ function App() {
                   Bedroom Layout Planner
                 </a>
               </h1>
-              <p className="app-subtitle">Design a layout that actually fits with exact dimensions, furniture placement, and printable PDF export.</p>
+              <p className="app-subtitle">Use exact room dimensions, place furniture with confidence, and export a printable PDF.</p>
             </div>
             <div className="app-header-actions">
               <details

@@ -60,6 +60,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 - `src/utils/exportCapture.ts`: robust capture bounds for PDF image generation.
 - `src/utils/fengShui.ts`: active-room feng shui rule catalog and geometry-based violation detection.
 - `src/utils/geometry.ts`: shared geometry helpers (`clamp`, rotated bounding boxes).
+- `src/utils/selectionBox.ts`: selection-rectangle normalization and item hit-testing for box-select workflows.
 - `src/utils/measureEditing.ts`: measure-length editing helpers used by `App.tsx`.
 - `src/utils/keyboardShortcuts.ts`: keyboard shortcut guard logic used by `App.tsx`.
 
@@ -102,6 +103,7 @@ Persistence invariants:
 `App.tsx` owns the canonical `WorkspaceState` and all global UI state:
 
 - selection state
+- transient multi-selection ids per room (UI-only, not persisted)
 - measure mode
 - history stacks
 - autosave bookkeeping
@@ -180,6 +182,7 @@ Current automated tests (Node test runner) cover utility contracts:
 - `tests/autosave.test.ts`: autosave fingerprint semantics.
 - `tests/exportCapture.test.ts`: capture-size fallback logic.
 - `tests/fengShui.test.ts`: feng shui detector rules for safe and violating layouts.
+- `tests/selectionBox.test.ts`: box-selection rectangle and hit-testing behavior.
 
 Most UI interactions are not yet covered by integration/e2e tests.
 

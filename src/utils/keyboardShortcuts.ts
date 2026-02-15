@@ -14,11 +14,11 @@ export const isUnmodifiedDeleteShortcut = (
 );
 
 export const canDeleteActiveSelection = (
-  editingItemId: number | null,
+  selectedItemCount: number,
   onboardingComplete: boolean,
   isDimensionEditorOpen: boolean
 ): boolean => (
-  editingItemId !== null &&
+  selectedItemCount > 0 &&
   onboardingComplete &&
   !isDimensionEditorOpen
 );

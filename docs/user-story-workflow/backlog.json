@@ -197,7 +197,7 @@
     },
     {
       "id": "US-008",
-      "status": "backlog",
+      "status": "done",
       "title": "Box selection for multi-object workflows",
       "story": "As a Precision Optimizer, I want box selection for multi-object workflows, so that the feedback concern \"Add box select to select, delete, and move multiple objects.\" is resolved.",
       "personaIds": [
@@ -285,7 +285,7 @@
     },
     {
       "id": "US-011",
-      "status": "in_progress",
+      "status": "done",
       "title": "Dedicated landing page with FAQ and comparison matrices",
       "story": "As a First-Time Planner, I want a dedicated landing page with clear value copy, FAQs, and honest comparison tables, so that I can quickly understand why this tool is the best fit and start planning.",
       "personaIds": [
@@ -315,7 +315,7 @@
     },
     {
       "id": "US-012",
-      "status": "in_progress",
+      "status": "done",
       "title": "Account-free share links for in-progress layouts",
       "story": "As a Repeat Workspace Manager, I want to generate shareable links for my current layout without creating an account, so that I can get feedback and bring people back to the site.",
       "personaIds": [

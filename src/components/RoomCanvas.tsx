@@ -25,12 +25,21 @@ import {
 } from "../utils/roomCanvasMath";
 import { clamp, getBoundingBox } from "../utils/geometry";
 import { BED_SIZE_PRESETS } from "../constants/objectPresets";
+import {
+  createSelectionBounds,
+  getSelectableItemIds,
+  getSelectionDragDistance,
+  getSelectionSize,
+  type SelectionPoint,
+} from "../utils/selectionBox";
 
 interface RoomCanvasProps {
   items: RoomItem[];
   onItemsChange: Dispatch<SetStateAction<RoomItem[]>>;
   onEditItem: (id: number | null) => void;
   selectedItemId: number | null;
+  selectedItemIds?: number[];
+  onSelectItems?: (ids: number[]) => void;
   roomWidthCm?: number;
   roomHeightCm?: number;
   wallThicknessCm?: number;
@@ -84,6 +93,23 @@ interface ObjectResizeState {
   currentPresetIndex: number;
 }
 
+interface DragGroupState {
+  pointerStart: Point;
+  members: Array<{
+    id: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    rotate?: number;
+  }>;
+}
+
+interface SelectionDraft {
+  start: SelectionPoint;
+  end: SelectionPoint;
+}
+
 interface WallSegment {
   key: string;
   wall: OpeningWall;
@@ -110,6 +136,7 @@ const DIMENSION_LABEL_OFFSET_CM = 18;
 const WALL_PADDING_CM = 28;
 const BED_PRESET_DRAG_STEP_CM = 24;
 const MIN_WALL_MEASURE_TARGET_LENGTH_CM = 14;
+const MIN_BOX_SELECTION_DRAG_CM = 4;
 
 const resolveOpeningWall = (item: RoomItem): OpeningWall => item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
 
@@ -210,6 +237,8 @@ function RoomCanvasComponent({
   onItemsChange,
   onEditItem,
   selectedItemId,
+  selectedItemIds = [],
+  onSelectItems,
   roomWidthCm = 800,
   roomHeightCm = 600,
   wallThicknessCm = 12,
@@ -239,6 +268,8 @@ function RoomCanvasComponent({
   const [isResizing, setIsResizing] = useState<null | 'right' | 'bottom' | 'corner'>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragGroupState, setDragGroupState] = useState<DragGroupState | null>(null);
+  const [selectionDraft, setSelectionDraft] = useState<SelectionDraft | null>(null);
   const [draftMeasure, setDraftMeasure] = useState<MeasureLine | null>(null);
   const [measureSnapPreview, setMeasureSnapPreview] = useState<MeasureSnapPreview | null>(null);
   const [objectResizeState, setObjectResizeState] = useState<ObjectResizeState | null>(null);
@@ -260,6 +291,8 @@ function RoomCanvasComponent({
   const heightRef = useRef(height);
   const dragOffsetRef = useRef(dragOffset);
   const draggingIdRef = useRef<number | null>(draggingId);
+  const dragGroupStateRef = useRef<DragGroupState | null>(dragGroupState);
+  const selectedItemIdsRef = useRef<number[]>(selectedItemIds);
   const isResizingRef = useRef<null | 'right' | 'bottom' | 'corner'>(isResizing);
   const objectResizeStateRef = useRef<ObjectResizeState | null>(objectResizeState);
   const localDimensionLabelLayoutRef = useRef(localDimensionLabelLayout);
@@ -292,6 +325,11 @@ function RoomCanvasComponent({
     onUp: (event: PointerEvent) => void;
   } | null>(null);
   const dimensionLabelPointerIdRef = useRef<number | null>(null);
+  const boxSelectionHandlersRef = useRef<{
+    onMove: (event: PointerEvent) => void;
+    onUp: (event: PointerEvent) => void;
+  } | null>(null);
+  const boxSelectionPointerIdRef = useRef<number | null>(null);
 
   const setNextLocalItems = useCallback((next: RoomItem[]) => {
     localItemsRef.current = next;
@@ -354,6 +392,16 @@ function RoomCanvasComponent({
     dimensionLabelPointerIdRef.current = null;
   }, []);
 
+  const detachBoxSelectionListeners = useCallback(() => {
+    const handlers = boxSelectionHandlersRef.current;
+    if (!handlers) return;
+    window.removeEventListener('pointermove', handlers.onMove);
+    window.removeEventListener('pointerup', handlers.onUp);
+    window.removeEventListener('pointercancel', handlers.onUp);
+    boxSelectionHandlersRef.current = null;
+    boxSelectionPointerIdRef.current = null;
+  }, []);
+
   useEffect(() => {
     setWidth(roomWidthCm);
   }, [roomWidthCm]);
@@ -411,6 +459,14 @@ function RoomCanvasComponent({
   }, [draggingId]);
 
   useEffect(() => {
+    dragGroupStateRef.current = dragGroupState;
+  }, [dragGroupState]);
+
+  useEffect(() => {
+    selectedItemIdsRef.current = selectedItemIds;
+  }, [selectedItemIds]);
+
+  useEffect(() => {
     isResizingRef.current = isResizing;
   }, [isResizing]);
 
@@ -424,6 +480,8 @@ function RoomCanvasComponent({
 
   useEffect(() => {
     if (measureMode && !isExportingPdf) return;
+    detachBoxSelectionListeners();
+    setSelectionDraft(null);
     detachMeasureCreateListeners();
     detachMeasureEndpointListeners();
     detachMeasureLabelListeners();
@@ -439,6 +497,7 @@ function RoomCanvasComponent({
     }
   }, [
     detachMeasureCreateListeners,
+    detachBoxSelectionListeners,
     detachMeasureEndpointListeners,
     detachMeasureLabelListeners,
     isExportingPdf,
@@ -759,6 +818,56 @@ function RoomCanvasComponent({
     if (targetIndex < 0) return;
 
     const item = previousItems[targetIndex];
+    const activeDragGroup = dragGroupStateRef.current;
+
+    if (activeDragGroup && activeDragGroup.members.some((member) => member.id === activeDraggingId)) {
+      const rawDeltaX = mouseXInCanvas - activeDragGroup.pointerStart.x;
+      const rawDeltaY = mouseYInCanvas - activeDragGroup.pointerStart.y;
+
+      let minAllowedDeltaX = Number.NEGATIVE_INFINITY;
+      let maxAllowedDeltaX = Number.POSITIVE_INFINITY;
+      let minAllowedDeltaY = Number.NEGATIVE_INFINITY;
+      let maxAllowedDeltaY = Number.POSITIVE_INFINITY;
+
+      activeDragGroup.members.forEach((member) => {
+        const bbox = getBoundingBox(member.width, member.height, member.rotate);
+        const minX = (bbox.width - member.width) / 2;
+        const maxX = currentWidth - (member.width + bbox.width) / 2;
+        const minY = (bbox.height - member.height) / 2;
+        const maxY = currentHeight - (member.height + bbox.height) / 2;
+        minAllowedDeltaX = Math.max(minAllowedDeltaX, minX - member.x);
+        maxAllowedDeltaX = Math.min(maxAllowedDeltaX, maxX - member.x);
+        minAllowedDeltaY = Math.max(minAllowedDeltaY, minY - member.y);
+        maxAllowedDeltaY = Math.min(maxAllowedDeltaY, maxY - member.y);
+      });
+
+      const clampedDeltaX = clamp(rawDeltaX, minAllowedDeltaX, maxAllowedDeltaX);
+      const clampedDeltaY = clamp(rawDeltaY, minAllowedDeltaY, maxAllowedDeltaY);
+
+      const nextItems = [...previousItems];
+      let changed = false;
+      activeDragGroup.members.forEach((member) => {
+        const index = previousItems.findIndex((candidate) => candidate.id === member.id);
+        if (index < 0) return;
+        const candidate = previousItems[index];
+        const nextX = member.x + clampedDeltaX;
+        const nextY = member.y + clampedDeltaY;
+        if (nextX === candidate.x && nextY === candidate.y) return;
+        nextItems[index] = {
+          ...candidate,
+          x: nextX,
+          y: nextY,
+        };
+        changed = true;
+      });
+
+      if (!changed) return;
+      markTelemetryChanged();
+      itemsDirtyRef.current = true;
+      setNextLocalItems(nextItems);
+      return;
+    }
+
     let nextItem = item;
 
     if (isOpening(item)) {
@@ -842,10 +951,12 @@ function RoomCanvasComponent({
 
       isResizingRef.current = null;
       draggingIdRef.current = null;
+      dragGroupStateRef.current = null;
       objectResizeStateRef.current = null;
       activeInteractionPointerIdRef.current = null;
       setIsResizing(null);
       setDraggingId(null);
+      setDragGroupState(null);
       setObjectResizeState(null);
       setBedPresetHint(null);
 
@@ -914,6 +1025,7 @@ function RoomCanvasComponent({
   }, [flushTelemetrySession]);
 
   useEffect(() => () => {
+    detachBoxSelectionListeners();
     detachMeasureCreateListeners();
     detachMeasureEndpointListeners();
     detachMeasureLabelListeners();
@@ -924,6 +1036,7 @@ function RoomCanvasComponent({
     }
     setMeasureSnapPreview(null);
   }, [
+    detachBoxSelectionListeners,
     detachDimensionLabelListeners,
     detachMeasureCreateListeners,
     detachMeasureEndpointListeners,
@@ -942,6 +1055,8 @@ function RoomCanvasComponent({
 
     const item = localItemsRef.current.find((current) => current.id === id);
     if (!item || !canvasRef.current) return;
+    const fallbackSelectedIds = selectedItemId === null ? [] : [selectedItemId];
+    const activeSelectedIds = selectedItemIdsRef.current.length > 0 ? selectedItemIdsRef.current : fallbackSelectedIds;
 
     activeInteractionPointerIdRef.current = event.pointerId;
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -952,6 +1067,35 @@ function RoomCanvasComponent({
     const rect = canvasRef.current.getBoundingClientRect();
     draggingIdRef.current = id;
     setDraggingId(id);
+
+    const groupMembers = activeSelectedIds.length > 1 && activeSelectedIds.includes(id)
+      ? localItemsRef.current
+        .filter((candidate) => activeSelectedIds.includes(candidate.id))
+        .filter((candidate) => !isOpening(candidate))
+        .map((candidate) => ({
+          id: candidate.id,
+          x: candidate.x,
+          y: candidate.y,
+          width: candidate.width,
+          height: candidate.height,
+          rotate: candidate.rotate,
+        }))
+      : [];
+
+    if (groupMembers.length > 1) {
+      const groupState: DragGroupState = {
+        pointerStart: {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        },
+        members: groupMembers,
+      };
+      dragGroupStateRef.current = groupState;
+      setDragGroupState(groupState);
+    } else {
+      dragGroupStateRef.current = null;
+      setDragGroupState(null);
+    }
 
     const mouseXInCanvas = event.clientX - rect.left;
     const mouseYInCanvas = event.clientY - rect.top;
@@ -975,7 +1119,61 @@ function RoomCanvasComponent({
     event.stopPropagation();
     if (hasDragged.current) return;
     onSelectMeasure?.(null);
+    onSelectItems?.([id]);
     onEditItem(id);
+  };
+
+  const beginBoxSelection = (event: ReactPointerEvent) => {
+    if (measureMode || isExportingPdf || !canvasRef.current) return;
+    if (!event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.target !== event.currentTarget) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const start = toPointInRoom(event.clientX, event.clientY, rect, widthRef.current, heightRef.current);
+    let latest = start;
+
+    boxSelectionPointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setSelectionDraft({ start, end: start });
+    onSelectMeasure?.(null);
+    detachBoxSelectionListeners();
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== boxSelectionPointerIdRef.current) return;
+      latest = toPointInRoom(moveEvent.clientX, moveEvent.clientY, rect, widthRef.current, heightRef.current);
+      setSelectionDraft({ start, end: latest });
+    };
+
+    const finish = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== boxSelectionPointerIdRef.current) return;
+      setSelectionDraft(null);
+      detachBoxSelectionListeners();
+
+      if (getSelectionDragDistance(start, latest) < MIN_BOX_SELECTION_DRAG_CM) {
+        return;
+      }
+
+      const selection = createSelectionBounds(start, latest);
+      const size = getSelectionSize(selection);
+      if (size.width <= 0 && size.height <= 0) return;
+
+      const selectedIds = getSelectableItemIds(localItemsRef.current, selection, {
+        includeItem: (candidate) => !isOpening(candidate),
+      });
+
+      onSelectItems?.(selectedIds);
+      onEditItem(selectedIds.length === 1 ? selectedIds[0] : null);
+      onSelectMeasure?.(null);
+    };
+
+    boxSelectionHandlersRef.current = { onMove: handlePointerMove, onUp: finish };
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const updateMeasureSnapPreview = useCallback((anchor: Point, result: MeasureConstraintResult) => {
@@ -1032,6 +1230,7 @@ function RoomCanvasComponent({
     detachMeasureCreateListeners();
     measureInteractionActiveRef.current = true;
     onLayoutInteractionStart?.();
+    onSelectItems?.([]);
     onEditItem(null);
     onSelectMeasure?.(null);
     updateMeasureSnapPreview(start, startResult);
@@ -1112,6 +1311,14 @@ function RoomCanvasComponent({
     window.addEventListener('pointercancel', finish);
   };
 
+  const handleCanvasPointerDown = (event: ReactPointerEvent) => {
+    if (measureMode) {
+      beginMeasureCreate(event);
+      return;
+    }
+    beginBoxSelection(event);
+  };
+
   const beginMeasureFromWallTarget = (event: ReactPointerEvent, target: WallSegment) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -1154,6 +1361,7 @@ function RoomCanvasComponent({
     measureInteractionActiveRef.current = true;
     measuresDirtyRef.current = false;
     onLayoutInteractionStart?.();
+    onSelectItems?.([]);
     onEditItem(null);
     onSelectMeasure?.(measure.id);
     setMeasureSnapPreview({
@@ -1223,6 +1431,7 @@ function RoomCanvasComponent({
     measureInteractionActiveRef.current = true;
     measuresDirtyRef.current = false;
     onLayoutInteractionStart?.();
+    onSelectItems?.([]);
     onEditItem(null);
     onSelectMeasure?.(measure.id);
 
@@ -1335,6 +1544,15 @@ function RoomCanvasComponent({
     return localMeasures.filter((measure) => measure.includeInPdf);
   }, [isExportingPdf, localMeasures]);
 
+  const effectiveSelectedItemIds = useMemo(() => {
+    if (selectedItemIds.length > 0) {
+      return Array.from(new Set(selectedItemIds));
+    }
+    return selectedItemId === null ? [] : [selectedItemId];
+  }, [selectedItemId, selectedItemIds]);
+
+  const selectedItemIdSet = useMemo(() => new Set(effectiveSelectedItemIds), [effectiveSelectedItemIds]);
+
   const openingLabels = useMemo(
     () => localItems
       .filter((item) => item.type === 'Door' || item.type === 'Window')
@@ -1373,11 +1591,11 @@ function RoomCanvasComponent({
           label: item.type || 'Opening',
           x: labelX,
           y: labelY,
-          selected: item.id === selectedItemId,
+          selected: selectedItemIdSet.has(item.id),
           isDoor,
         };
       }),
-    [height, localItems, selectedItemId, wallThicknessCm, width]
+    [height, localItems, selectedItemIdSet, wallThicknessCm, width]
   );
 
   const wallSegments = useMemo<WallSegment[]>(() => {
@@ -1533,12 +1751,24 @@ function RoomCanvasComponent({
   const canvasClassName = `room-canvas-surface relative rounded-xl shadow-sm overflow-visible ${
     isExportingPdf ? 'room-canvas-export-floor' : 'bg-grid'
   }`;
+  const selectionBoxFrame = useMemo(() => {
+    if (!selectionDraft || measureMode || isExportingPdf) return null;
+    const bounds = createSelectionBounds(selectionDraft.start, selectionDraft.end);
+    const size = getSelectionSize(bounds);
+    return {
+      left: bounds.left,
+      top: bounds.top,
+      width: size.width,
+      height: size.height,
+    };
+  }, [isExportingPdf, measureMode, selectionDraft]);
+
   const selectedResizableItem = useMemo(() => {
-    if (measureMode || selectedItemId === null) return null;
-    const candidate = localItems.find((item) => item.id === selectedItemId) ?? null;
+    if (measureMode || effectiveSelectedItemIds.length !== 1) return null;
+    const candidate = localItems.find((item) => item.id === effectiveSelectedItemIds[0]) ?? null;
     if (!candidate || isOpening(candidate)) return null;
     return candidate;
-  }, [localItems, measureMode, selectedItemId]);
+  }, [effectiveSelectedItemIds, localItems, measureMode]);
 
   const selectedResizeHandles = useMemo(() => {
     if (!selectedResizableItem) return [];
@@ -1574,8 +1804,9 @@ function RoomCanvasComponent({
         >
           <div
             ref={canvasRef}
-            onPointerDown={beginMeasureCreate}
+            onPointerDown={handleCanvasPointerDown}
             onClick={() => {
+              onSelectItems?.([]);
               onEditItem(null);
               onSelectMeasure?.(null);
             }}
@@ -1616,6 +1847,20 @@ function RoomCanvasComponent({
               ))}
             </svg>
 
+            {selectionBoxFrame && (
+              <div
+                className="absolute z-[2] pointer-events-none border"
+                style={{
+                  left: selectionBoxFrame.left,
+                  top: selectionBoxFrame.top,
+                  width: selectionBoxFrame.width,
+                  height: selectionBoxFrame.height,
+                  borderColor: 'var(--measure-line-selected)',
+                  backgroundColor: 'color-mix(in srgb, var(--measure-line-selected) 16%, transparent)',
+                }}
+              />
+            )}
+
             {localItems.map((item) => {
               const wall = resolveOpeningWall(item);
               const doorOffset = item.type === 'Door' ? getDoorWallCenterOffset(wall, wallThicknessCm) : { x: 0, y: 0 };
@@ -1632,7 +1877,7 @@ function RoomCanvasComponent({
                   doorOpenDirection={item.doorOpenDirection}
                   doorOpenSide={item.doorOpenSide}
                   openingWall={item.openingWall}
-                  isSelected={item.id === selectedItemId}
+                  isSelected={selectedItemIdSet.has(item.id)}
                   showLabel={item.type !== 'Door' && item.type !== 'Window'}
                   bulgeOutward={item.type === 'Window'}
                   onPointerDown={(event) => handleObjectPointerDown(event, item.id)}
@@ -1816,6 +2061,7 @@ function RoomCanvasComponent({
                         if (event.pointerType === 'mouse' && event.button !== 0) return;
                         event.stopPropagation();
                         event.preventDefault();
+                        onSelectItems?.([]);
                         onEditItem(null);
                         onSelectMeasure?.(measure.id);
                       }}
@@ -1838,6 +2084,7 @@ function RoomCanvasComponent({
                           if (event.pointerType === 'mouse' && event.button !== 0) return;
                           event.stopPropagation();
                           event.preventDefault();
+                          onSelectItems?.([]);
                           onEditItem(null);
                           onSelectMeasure?.(measure.id);
                         }}
@@ -1996,6 +2243,7 @@ function RoomCanvasComponent({
 const roomCanvasPropsEqual = (prev: RoomCanvasProps, next: RoomCanvasProps): boolean => (
   prev.items === next.items &&
   prev.selectedItemId === next.selectedItemId &&
+  prev.selectedItemIds === next.selectedItemIds &&
   prev.roomWidthCm === next.roomWidthCm &&
   prev.roomHeightCm === next.roomHeightCm &&
   prev.wallThicknessCm === next.wallThicknessCm &&

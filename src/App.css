@@ -1,16 +1,31 @@
 .app-shell {
-  background: var(--app-shell-bg);
+  background:
+    radial-gradient(circle at 8% -5%, color-mix(in srgb, var(--accent-strong) 14%, transparent), transparent 34%),
+    radial-gradient(circle at 92% -10%, color-mix(in srgb, var(--accent-strong) 10%, transparent), transparent 30%),
+    var(--app-shell-bg);
   min-height: 100%;
 }
 
 .app-header {
   border-bottom: 1px solid var(--app-header-border);
   background: var(--app-header-bg);
+  animation: app-fade-rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .app-header h1 {
   letter-spacing: -0.04em;
   color: var(--app-header-title);
+}
+
+@keyframes app-fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .app-header-top {
@@ -39,7 +54,9 @@
 .app-subtitle {
   margin: 0;
   color: var(--app-subtitle-color);
-  font-size: 0.86rem;
+  font-size: clamp(0.92rem, 0.2vw + 0.86rem, 1rem);
+  line-height: 1.5;
+  max-width: 76ch;
 }
 
 .app-header-actions {
@@ -150,10 +167,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.84rem;
+  font-size: 0.88rem;
   font-weight: 600;
   padding: 0.5rem 0.9rem;
-  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -171,10 +188,18 @@
   border-color: var(--btn-primary-border);
   background: var(--btn-primary-bg);
   color: var(--btn-primary-text);
+  box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--btn-primary-bg) 72%, transparent);
 }
 
 .ui-btn-primary:hover {
   background: var(--btn-primary-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 12px 20px -14px color-mix(in srgb, var(--btn-primary-bg) 72%, transparent);
+}
+
+.ui-btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 12px -12px color-mix(in srgb, var(--btn-primary-bg) 70%, transparent);
 }
 
 .ui-btn-secondary {
@@ -185,6 +210,7 @@
 
 .ui-btn-secondary:hover {
   background: var(--btn-secondary-bg-hover);
+  transform: translateY(-1px);
 }
 
 .ui-btn-ghost {
@@ -196,6 +222,7 @@
 .ui-btn-ghost:hover {
   background: var(--btn-ghost-bg-hover);
   border-color: var(--btn-ghost-border-hover);
+  transform: translateY(-1px);
 }
 
 .ui-btn-subtle {
@@ -206,6 +233,13 @@
 
 .ui-btn-subtle:hover {
   background: var(--btn-subtle-bg-hover);
+  transform: translateY(-1px);
+}
+
+.ui-btn-secondary:active,
+.ui-btn-ghost:active,
+.ui-btn-subtle:active {
+  transform: translateY(0);
 }
 
 .pref-color-input {
@@ -240,6 +274,7 @@
   box-shadow: var(--shadow-card);
   padding: 0.75rem;
   contain: layout paint style;
+  animation: app-fade-rise 520ms cubic-bezier(0.22, 1, 0.36, 1) 140ms both;
 }
 
 .room-workspace-list {
@@ -252,12 +287,16 @@
   width: 100%;
   min-width: 0;
   border-color: var(--room-card-border);
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
   padding: 0.85rem;
   background: var(--room-card-bg);
   content-visibility: auto;
   contain: layout paint style;
   contain-intrinsic-size: 780px;
+}
+
+.room-card:hover {
+  transform: translateY(-1px);
 }
 
 .room-card-active {
@@ -311,6 +350,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
+  animation: app-fade-rise 460ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
 }
 
 .command-toolbar-group {
@@ -326,13 +366,13 @@
   flex-wrap: wrap;
   gap: 0.55rem;
   color: var(--command-meta-color);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 .command-toolbar-meta span {
   border: 1px solid var(--command-chip-border);
   border-radius: 999px;
-  padding: 0.16rem 0.5rem;
+  padding: 0.2rem 0.54rem;
   background: var(--command-chip-bg);
 }
 
@@ -399,21 +439,21 @@
 
 .feng-shui-warning-title {
   margin: 0;
-  font-size: 0.74rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-strong);
 }
 
 .feng-shui-warning-room {
   margin: 0.12rem 0 0.45rem;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
 
 .feng-shui-warning-row {
   margin: 0.22rem 0 0;
-  font-size: 0.74rem;
-  line-height: 1.35;
+  font-size: 0.82rem;
+  line-height: 1.45;
   color: var(--text-soft);
 }
 
@@ -519,14 +559,14 @@
 
 .perf-title {
   margin: 0;
-  font-size: 0.71rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-soft);
 }
 
 .perf-row {
   margin: 0.18rem 0 0;
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
@@ -744,7 +784,7 @@ details > summary {
   }
 
   .app-subtitle {
-    font-size: 0.84rem;
+    font-size: 0.92rem;
   }
 
   .command-toolbar {
@@ -777,5 +817,27 @@ details > summary {
   .room-dimension-edit-btn {
     min-height: 1.45rem;
     width: 1.45rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header,
+  .command-toolbar,
+  .room-workspace-shell {
+    animation: none;
+  }
+
+  .ui-btn,
+  .room-card {
+    transition: none;
+  }
+
+  .ui-btn-primary:hover,
+  .ui-btn-secondary:hover,
+  .ui-btn-ghost:hover,
+  .ui-btn-subtle:hover,
+  .room-card:hover {
+    transform: none;
+    box-shadow: none;
   }
 }

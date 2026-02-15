@@ -14,10 +14,10 @@ test('isUnmodifiedDeleteShortcut only accepts unmodified delete/backspace keys',
 });
 
 test('canDeleteActiveSelection requires selection, completed onboarding, and closed dimension editor', () => {
-  assert.equal(canDeleteActiveSelection(12, true, false), true);
-  assert.equal(canDeleteActiveSelection(null, true, false), false);
-  assert.equal(canDeleteActiveSelection(12, false, false), false);
-  assert.equal(canDeleteActiveSelection(12, true, true), false);
+  assert.equal(canDeleteActiveSelection(1, true, false), true);
+  assert.equal(canDeleteActiveSelection(0, true, false), false);
+  assert.equal(canDeleteActiveSelection(2, false, false), false);
+  assert.equal(canDeleteActiveSelection(1, true, true), false);
 });
 
 test('isEditableEventTarget is safe in non-DOM test runtime', () => {
