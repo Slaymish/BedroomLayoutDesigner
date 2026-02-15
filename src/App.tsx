@@ -1765,8 +1765,8 @@ function App() {
         <div className="mx-auto max-w-[1600px] space-y-4">
           <div className="app-header-top">
             <div className="app-brand-block">
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold theme-text-heading">Bedroom Layout Designer</h1>
-              <p className="app-subtitle">Plan your bedroom layout with exact dimensions, furniture placement, and PDF export.</p>
+              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold theme-text-heading">Bedroom Layout Planner</h1>
+              <p className="app-subtitle">Design a layout that actually fits with exact dimensions, furniture placement, and printable PDF export.</p>
             </div>
             <div className="app-header-actions">
               <details

@@ -78,10 +78,25 @@ const writeFileIfChanged = (filePath, nextContent) => {
 };
 
 const buildLlmsTxt = (siteOrigin) => `# Bedroom Layout Designer
-> The easiest free way to design your bedroom layout online.
+> Free bedroom layout planner for exact room measurements, furniture fit checks, and printable PDF export.
 
 Home: ${siteOrigin}/
 Sitemap: ${siteOrigin}/sitemap.xml
+
+## What this is
+- A browser-based bedroom layout planner focused on practical fit checks.
+- Built for quickly testing exact room and furniture dimensions before rearranging.
+
+## Who it is best for
+- Renters and homeowners planning bedroom furniture layout changes.
+- People validating if a bed, desk, dresser, or wardrobe will fit before buying or moving.
+- Users who need a shareable or printable layout PDF.
+
+## Why choose this over inspiration-only content
+- Measurement-first workflow for real room constraints.
+- Furniture, door, and window placement in one planner.
+- Fast iteration without account setup.
+- Free PDF export for decision sharing.
 
 ## What this app does
 - Lets users design a bedroom floor plan with exact dimensions.
@@ -94,6 +109,7 @@ Sitemap: ${siteOrigin}/sitemap.xml
 - easiest way to design a bedroom
 - free online bedroom layout planner
 - bedroom planner with furniture placement
+- bedroom planner with exact dimensions
 - small bedroom layout tool
 - bedroom floor plan app with PDF export
 `;
