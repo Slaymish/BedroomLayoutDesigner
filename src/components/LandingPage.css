@@ -204,6 +204,23 @@
   font-size: 0.92rem;
 }
 
+.landing-faq-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.landing-faq-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  color: var(--text-heading);
+  font-weight: 600;
+}
+
+.landing-faq-link:hover {
+  color: var(--text-strong);
+}
+
 @media (max-width: 640px) {
   .landing-hero {
     padding-top: 3.25rem;

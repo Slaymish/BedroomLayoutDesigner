@@ -113,6 +113,21 @@ export default function LandingPage({ onStartPlanning }: LandingPageProps) {
                 <article key={item.question} id={`faq-${toSlug(item.question)}`} className="landing-faq-item">
                   <h3>{item.question}</h3>
                   <p>{item.answer}</p>
+                  {item.links && item.links.length > 0 && (
+                    <p className="landing-faq-links">
+                      {item.links.map((link) => (
+                        <a
+                          key={`${item.question}-${link.href}`}
+                          className="landing-faq-link"
+                          href={link.href}
+                          target={link.href.startsWith('http') ? '_blank' : undefined}
+                          rel={link.href.startsWith('http') ? 'noreferrer' : undefined}
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </p>
+                  )}
                 </article>
               ))}
             </div>

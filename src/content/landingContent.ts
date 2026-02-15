@@ -1,6 +1,10 @@
 export interface LandingFaqItem {
   question: string;
   answer: string;
+  links?: readonly {
+    label: string;
+    href: string;
+  }[];
 }
 
 export interface ComparisonMatrixRow {
@@ -35,6 +39,26 @@ export const LANDING_FAQ_ITEMS: readonly LandingFaqItem[] = [
   {
     question: 'Can I export and share my layout?',
     answer: 'Yes. You can export one room or all rooms as a printable PDF and also export workspace JSON files.',
+  },
+  {
+    question: 'Is this open source?',
+    answer: 'Yes. Bedroom Layout Planner is open source.',
+    links: [
+      {
+        label: 'View the code on GitHub',
+        href: 'https://github.com/Slaymish/BedroomLayoutDesigner',
+      },
+    ],
+  },
+  {
+    question: 'I have a bug or feature request!',
+    answer: 'Email me and I will review it.',
+    links: [
+      {
+        label: 'hamishapps@gmail.com',
+        href: 'mailto:hamishapps@gmail.com',
+      },
+    ],
   },
   {
     question: 'Is this only for bedrooms?',

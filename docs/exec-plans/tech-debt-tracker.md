@@ -16,6 +16,8 @@ The outcome is observable through faster and safer iteration: core interactions 
 - [x] (2026-02-11 22:58Z) Reviewed architecture, source modules, utility layer, tests, and build/config wiring.
 - [x] (2026-02-11 22:59Z) Ran quality gates (`npm run test`, `npm run lint`, `npm run build`) to establish baseline behavior.
 - [x] (2026-02-11 23:01Z) Recorded prioritized debt findings with file-level evidence and recommended remediation milestones.
+- [x] (2026-02-15 02:12Z) Refreshed debt evidence after landing-page and share-link work, including updated module size and quality-gate baselines.
+- [x] (2026-02-15 02:14Z) Fixed modal overflow regression in preferences and recorded responsive modal coverage as ongoing debt.
 - [ ] Execute Milestone 1 (test harness expansion for interaction-heavy UI paths).
 - [ ] Execute Milestone 2 (extract `App.tsx` orchestration into focused hooks/modules).
 - [ ] Execute Milestone 3 (extract `RoomCanvas.tsx` interaction controllers).
@@ -24,13 +26,13 @@ The outcome is observable through faster and safer iteration: core interactions 
 ## Surprises & Discoveries
 
 - Observation: CI, lint, tests, and build are all green despite sizable architecture debt.
-  Evidence: `npm run test` passed 6/6 suites, `npm run lint` exited cleanly, and `npm run build` completed successfully on 2026-02-11.
+  Evidence: `npm run test` passed 10/10 suites, `npm run lint` exited cleanly, and `npm run build` completed successfully on 2026-02-15.
 
 - Observation: Existing tests intentionally exclude React components and focus only on utility contracts.
   Evidence: `tsconfig.test.json:14` includes only `src/types.ts`, `src/utils/**/*.ts`, and `tests/**/*.ts`.
 
 - Observation: There are substantial modules with mixed responsibilities that already exceed maintainability-friendly size.
-  Evidence: `src/App.tsx` is 2102 lines; `src/components/RoomCanvas.tsx` is 1994 lines.
+  Evidence: `src/App.tsx` is 2387 lines; `src/components/RoomCanvas.tsx` is 2014 lines.
 
 ## Decision Log
 
@@ -69,19 +71,19 @@ This tracker covers repository-level technical debt (maintainability, reliabilit
 
 ### High: `App.tsx` and `RoomCanvas.tsx` are oversized mixed-responsibility modules
 
-- Evidence: `src/App.tsx` (2102 lines) combines persistence, history, export, telemetry, modal state, and rendering. `src/components/RoomCanvas.tsx` (1994 lines) combines rendering, pointer lifecycle, snapping, measurement editing, and telemetry.
+- Evidence: `src/App.tsx` (2387 lines) combines persistence, history, export, telemetry, shared-link orchestration, modal state, and rendering. `src/components/RoomCanvas.tsx` (2014 lines) combines rendering, pointer lifecycle, snapping, measurement editing, and telemetry.
 - Risk: High change coupling, difficult reasoning, and elevated regression probability for unrelated edits.
 - Recommendation: Refactor by extraction, not rewrite:
   1) Extract `App` concerns into hooks/modules (`useWorkspaceHistory`, `useWorkspaceAutosave`, `usePdfExport`).
   2) Extract canvas interaction controllers (`useObjectDragResize`, `useMeasureEditing`) from `RoomCanvas`.
 - Validation: Behavior parity tests pass, quality gates stay green, and each extracted module has focused tests.
 
-### Medium: Duplicate geometry helpers increase divergence risk
+### Medium: Modal responsiveness regressions are still easy to reintroduce without viewport tests
 
-- Evidence: `getBoundingBox` duplicated in `src/App.tsx:2090` and `src/components/RoomCanvas.tsx:121`; `clamp` duplicated in `src/App.tsx:2100`, `src/utils/workspaceState.ts:77`, and `src/utils/roomCanvasMath.ts:15`.
-- Risk: Future changes can silently diverge geometry behavior across mutation and rendering paths.
-- Recommendation: Introduce shared helpers (for example `src/utils/geometry.ts`) and replace local duplicates incrementally.
-- Validation: Utility tests for helper behavior plus no behavior regression in existing tests.
+- Evidence: Preferences modal previously clipped at top/bottom on smaller viewports; fixed with `overflow-y-auto` and bounded modal height in `src/App.tsx` and `src/App.css`, but no automated viewport assertions exist.
+- Risk: Future layout edits can silently reintroduce clipping or inaccessible controls on mobile/short-height screens.
+- Recommendation: Add at least one responsive UI test (component or Playwright smoke) that validates dialog accessibility across a short viewport.
+- Validation: Automated test fails when modal cannot scroll/reach controls and passes with the current responsive classes.
 
 ### Medium: History snapshots are cloned multiple times in hot paths
 
@@ -169,10 +171,10 @@ If a refactor milestone destabilizes behavior, revert only the in-progress extra
 
 ## Artifacts and Notes
 
-Baseline validation transcript summary (2026-02-11):
+Baseline validation transcript summary (2026-02-15):
 
     npm run test
-    # pass 6
+    # pass 10
     # fail 0
 
     npm run lint
@@ -180,20 +182,16 @@ Baseline validation transcript summary (2026-02-11):
 
     npm run build
     vite v7.2.6 building client environment for production...
-    ✓ built in 3.88s
+    ✓ built in 3.83s
 
 Key evidence snippets:
 
     wc -l src/App.tsx src/components/RoomCanvas.tsx
-    2102 src/App.tsx
-    1994 src/components/RoomCanvas.tsx
+    2387 src/App.tsx
+    2014 src/components/RoomCanvas.tsx
 
-    rg -n "const getBoundingBox|const clamp =|export const clamp" src/App.tsx src/components/RoomCanvas.tsx src/utils/roomCanvasMath.ts src/utils/workspaceState.ts
-    src/components/RoomCanvas.tsx:121:const getBoundingBox = ...
-    src/App.tsx:2090:const getBoundingBox = ...
-    src/App.tsx:2100:const clamp = ...
-    src/utils/workspaceState.ts:77:const clamp = ...
-    src/utils/roomCanvasMath.ts:15:export const clamp = ...
+    rg -n "export const clamp|export const getBoundingBox" src/utils/geometry.ts
+    src/utils/geometry.ts:6:export const clamp = ...
 
     rg -n "AddObjectPanel|RoomOnboardingPanel" src
     src/components/AddObjectPanel.tsx:11:export default function AddObjectPanel ...
@@ -212,3 +210,4 @@ Planned interfaces to introduce during remediation:
 - `src/utils/geometry.ts` (shared `clamp`, `getBoundingBox`, and related pure geometry helpers)
 
 Revision Note (2026-02-11 / Codex): Created this tracker from a full repository audit and baseline validation run to replace an empty placeholder and provide an executable debt reduction path.
+Revision Note (2026-02-15 / Codex): Refreshed evidence baselines, replaced stale geometry-duplication finding with modal responsiveness debt, and aligned counts with current repository state.

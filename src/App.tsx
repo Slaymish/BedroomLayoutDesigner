@@ -2307,8 +2307,8 @@ function App() {
         )}
 
         {preferencesPanelOpen && (
-          <div className="fixed inset-0 z-30 flex items-center justify-center p-4 modal-backdrop">
-            <div className="modal-shell p-5 w-full max-w-md">
+          <div className="fixed inset-0 z-30 flex items-start sm:items-center justify-center p-4 overflow-y-auto modal-backdrop">
+            <div className="modal-shell modal-shell-scrollable p-5 w-full max-w-md">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold theme-text-heading">Workspace Preferences</h2>
                 <button

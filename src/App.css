@@ -652,6 +652,12 @@ details > summary {
   box-shadow: var(--modal-shadow);
 }
 
+.modal-shell-scrollable {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .room-object {
   color: var(--room-object-text);
   border: 1px solid var(--room-object-border);
