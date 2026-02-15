@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-14",
+  "updatedAt": "2026-02-15",
   "stories": [
     {
       "id": "US-001",
@@ -250,6 +250,97 @@
         "Route workspace mutations through the App update flow with no direct nested mutation.",
         "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
         "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-010",
+      "status": "backlog",
+      "title": "Guardrailed title/meta optimizer using Search Console data",
+      "story": "As a Repeat Workspace Manager, I want a guardrailed service that evaluates approved homepage title/meta variants using Search Console performance and recommends the best option, so that SEO copy improves over time without risky manual guesswork.",
+      "personaIds": [
+        "P2",
+        "P3"
+      ],
+      "acceptanceCriteria": [
+        "A scheduled job can ingest Search Console data for configured pages/queries and ignore windows that are too recent for stable data.",
+        "A variant registry supports pre-approved title/meta options with minimum impression and confidence thresholds before any winner is selected.",
+        "Selection logic only recommends a winner when CTR improves without a material average-position regression, otherwise no change is applied.",
+        "The workflow outputs a traceable decision record and opens a PR with proposed metadata changes instead of directly mutating production.",
+        "The optimizer supports manual kill-switch and rollback to the last known good metadata variant."
+      ],
+      "scores": {
+        "impact": 4,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 4
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep SEO copy truthful and avoid manipulative or cloaked variants.",
+        "Metadata currently lives in index.html and build-generated SEO assets; keep both in sync.",
+        "Prefer PR-based rollout and auditable logs over fully autonomous deploys.",
+        "Add targeted tests for decision thresholds and no-change guardrails."
+      ]
+    },
+    {
+      "id": "US-011",
+      "status": "backlog",
+      "title": "Dedicated landing page with FAQ and comparison matrices",
+      "story": "As a First-Time Planner, I want a dedicated landing page with clear value copy, FAQs, and honest comparison tables, so that I can quickly understand why this tool is the best fit and start planning.",
+      "personaIds": [
+        "P1",
+        "P2"
+      ],
+      "acceptanceCriteria": [
+        "The site has an indexable landing experience focused on search intent, with clear navigation to the planner tool.",
+        "Landing content includes FAQ sections that reflect real product behavior and is eligible for FAQ structured data where appropriate.",
+        "Comparison matrices against relevant alternatives are factual, maintained, and include clear feature differences.",
+        "Primary call-to-action paths from landing sections open the planner in one click and are measurable with analytics events.",
+        "Landing copy and metadata are consistent with product capabilities and avoid exaggerated claims."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 4,
+        "riskReduction": 3,
+        "confidence": 4,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Preserve existing app behavior while introducing landing-page structure.",
+        "Keep metadata, schema, and on-page copy aligned and truthful.",
+        "Update tests/build checks for any routing or rendering changes."
+      ]
+    },
+    {
+      "id": "US-012",
+      "status": "backlog",
+      "title": "Account-free share links for in-progress layouts",
+      "story": "As a Repeat Workspace Manager, I want to generate shareable links for my current layout without creating an account, so that I can get feedback and bring people back to the site.",
+      "personaIds": [
+        "P2",
+        "P3"
+      ],
+      "acceptanceCriteria": [
+        "Users can create a share link from the current workspace without authentication.",
+        "Opening a share link restores the shared layout state reliably in the app.",
+        "Share flow includes an explicit option to copy the link and a clear return path to continue editing on the site.",
+        "Shared-link behavior preserves import/export compatibility and does not corrupt autosaved local work.",
+        "The implementation documents limits and privacy considerations for shared data."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 4,
+        "riskReduction": 4,
+        "confidence": 3,
+        "effort": 4
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Preserve workspace import/export contracts in workspaceFile utilities.",
+        "Keep state mutation flow centralized through App-level updates.",
+        "Add targeted tests for shared-link encode/decode and migration edge cases."
       ]
     }
   ]
