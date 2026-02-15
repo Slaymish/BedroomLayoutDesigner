@@ -1,5 +1,5 @@
-import { memo, useState, type ReactNode } from 'react';
-import { ArrowDown, ArrowUp, Pencil } from 'lucide-react';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, Pencil, Share2 } from 'lucide-react';
 import type { RoomDesign } from '../types';
 import { fromBaseCm, type Unit } from '../utils/units';
 
@@ -19,6 +19,7 @@ interface RoomCardProps {
   canMoveDown: boolean;
   onMoveUp: (roomId: string) => void;
   onMoveDown: (roomId: string) => void;
+  onShareWorkspace: () => Promise<boolean>;
   renderRoomContent: (room: RoomDesign, isActive: boolean) => ReactNode;
 }
 
@@ -50,11 +51,20 @@ function RoomCard({
   canMoveDown,
   onMoveUp,
   onMoveDown,
+  onShareWorkspace,
   renderRoomContent,
 }: RoomCardProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(room.name);
+  const [showShareCopiedMessage, setShowShareCopiedMessage] = useState(false);
+  const shareCopiedTimeoutRef = useRef<number | null>(null);
   const openingCount = room.items.filter((item) => item.type === 'Door' || item.type === 'Window').length;
+
+  useEffect(() => () => {
+    if (shareCopiedTimeoutRef.current !== null) {
+      window.clearTimeout(shareCopiedTimeoutRef.current);
+    }
+  }, []);
 
   const submitRename = () => {
     const nextName = nameDraft.trim();
@@ -123,7 +133,7 @@ function RoomCard({
           </div>
           <p className="text-[11px] room-card-meta">{room.items.length} objects · {openingCount} openings</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2 flex-wrap">
           {showReorderControls && (
             <>
               <button
@@ -159,6 +169,38 @@ function RoomCard({
                 <ArrowDown className="h-3.5 w-3.5" />
               </button>
             </>
+          )}
+          {!isRenaming && showShareCopiedMessage && (
+            <span className="text-[11px] leading-tight theme-text-subtle">
+              Share link copied. Anyone with the link can open this layout.
+            </span>
+          )}
+          {!isRenaming && (
+            <button
+              className="ui-btn ui-btn-subtle min-h-0 px-2.5 py-1.5 text-xs"
+              onClick={(event) => {
+                event.stopPropagation();
+                void onShareWorkspace().then((copied) => {
+                  if (!copied) return;
+                  setShowShareCopiedMessage(true);
+                  if (shareCopiedTimeoutRef.current !== null) {
+                    window.clearTimeout(shareCopiedTimeoutRef.current);
+                  }
+                  shareCopiedTimeoutRef.current = window.setTimeout(() => {
+                    setShowShareCopiedMessage(false);
+                    shareCopiedTimeoutRef.current = null;
+                  }, 3200);
+                });
+              }}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              aria-label="Share workspace link"
+              title="Copy share link"
+            >
+              <Share2 className="h-3.5 w-3.5" />
+              Share
+            </button>
           )}
           {!isRenaming && (
             <button
@@ -207,7 +249,8 @@ const roomCardPropsEqual = (prev: RoomCardProps, next: RoomCardProps): boolean =
   prev.canMoveUp === next.canMoveUp &&
   prev.canMoveDown === next.canMoveDown &&
   prev.onMoveUp === next.onMoveUp &&
-  prev.onMoveDown === next.onMoveDown
+  prev.onMoveDown === next.onMoveDown &&
+  prev.onShareWorkspace === next.onShareWorkspace
 );
 
 export default memo(RoomCard, roomCardPropsEqual);

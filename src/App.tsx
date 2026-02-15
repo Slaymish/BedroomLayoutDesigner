@@ -521,7 +521,7 @@ function App() {
 
       setPendingSharedWorkspace(sharedWorkspace);
       setErrorMessage(null);
-      setInfoMessage('Shared layout detected. Choose whether to open it.');
+      setInfoMessage(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to open shared layout link.';
       setErrorMessage(message);
@@ -1673,8 +1673,8 @@ function App() {
     setInfoMessage('Workspace exported to JSON file.');
   };
 
-  const handleShareWorkspace = useCallback(async () => {
-    if (typeof window === 'undefined') return;
+  const handleShareWorkspace = useCallback(async (options?: { announceInInfoMessage?: boolean }) => {
+    if (typeof window === 'undefined') return false;
 
     try {
       const payload = buildWorkspaceSharePayload(sanitizeWorkspaceState(workspaceRef.current));
@@ -1683,10 +1683,14 @@ function App() {
 
       await copyTextToClipboard(shareUrl);
       setErrorMessage(null);
-      setInfoMessage('Share link copied. Anyone with the link can open this layout.');
+      if (options?.announceInInfoMessage ?? true) {
+        setInfoMessage('Share link copied. Anyone with the link can open this layout.');
+      }
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create share link.';
       setErrorMessage(message);
+      return false;
     }
   }, []);
 
@@ -1741,13 +1745,13 @@ function App() {
     setIsSharedSessionActive(true);
     setAutosaveWritesEnabled(false);
     setIsAutosavePending(false);
-    setInfoMessage('Shared layout opened. Autosave is paused until you save it to this browser.');
+    setInfoMessage(null);
   }, [pendingSharedWorkspace]);
 
   const handleKeepLocalWorkspace = useCallback(() => {
     setPendingSharedWorkspace(null);
     setErrorMessage(null);
-    setInfoMessage('Kept your local workspace.');
+    setInfoMessage(null);
   }, []);
 
   const handleReturnToLocalWorkspace = useCallback(() => {
@@ -2115,34 +2119,48 @@ function App() {
         )}
         {pendingSharedWorkspace && (
           <div className="mx-auto mb-3 max-w-[1600px] surface-card-muted px-3 py-3 sm:px-4 sm:py-3">
-            <p className="text-sm theme-text-soft">
-              A shared layout link was detected. Opening it will pause autosave for your local workspace until you choose to save.
+            <h2 className="text-sm font-semibold theme-text-heading">Shared link found</h2>
+            <p className="mt-1 text-sm theme-text-soft">
+              Choose how to continue. Your current browser layout is preserved unless you explicitly save the shared layout.
+            </p>
+            <p className="mt-2 text-xs theme-text-subtle">
+              View Shared Layout: opens the shared link in a temporary session and pauses autosave for your current local layout.
+            </p>
+            <p className="mt-1 text-xs theme-text-subtle">
+              Stay On Current Layout: ignores this shared link and keeps your workspace exactly as it is.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="ui-btn ui-btn-primary" onClick={handleOpenPendingSharedWorkspace}>
-                Open Shared Layout
+                View Shared Layout
               </button>
               <button className="ui-btn ui-btn-secondary" onClick={handleKeepLocalWorkspace}>
-                Keep My Local Workspace
+                Stay On Current Layout
               </button>
             </div>
           </div>
         )}
         {isSharedSessionActive && (
           <div className="mx-auto mb-3 max-w-[1600px] surface-card-muted px-3 py-3 sm:px-4 sm:py-3">
-            <p className="text-sm theme-text-soft">
-              You are viewing a shared layout. Autosave is paused to protect your existing browser workspace.
+            <h2 className="text-sm font-semibold theme-text-heading">Viewing shared layout</h2>
+            <p className="mt-1 text-sm theme-text-soft">
+              Autosave for your previous local layout is paused while you review this shared version.
+            </p>
+            <p className="mt-2 text-xs theme-text-subtle">
+              Save Shared Layout writes this shared version to this browser and resumes autosave.
+            </p>
+            <p className="mt-1 text-xs theme-text-subtle">
+              Return To My Local Layout closes the shared session and restores your previous local layout.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <button className="ui-btn ui-btn-primary" onClick={handleSaveWorkspaceLocal}>
-                Save Shared Layout To This Browser
+                Save Shared Layout
               </button>
               <button
                 className="ui-btn ui-btn-secondary"
                 onClick={handleReturnToLocalWorkspace}
                 disabled={!localWorkspaceBeforeShare}
               >
-                Return To My Local Workspace
+                Return To My Local Layout
               </button>
             </div>
           </div>
@@ -2379,6 +2397,7 @@ function App() {
               onRenameRoom={handleRenameRoom}
               onDeleteRoom={handleDeleteRoom}
               onReorderRooms={handleReorderRooms}
+              onShareWorkspace={() => handleShareWorkspace({ announceInInfoMessage: false })}
               renderRoomContent={renderRoomContentStable}
             />
           </section>

@@ -14,6 +14,7 @@ interface RoomWorkspaceProps {
   onRenameRoom: (roomId: string, name: string) => void;
   onDeleteRoom: (roomId: string) => void;
   onReorderRooms: (sourceRoomId: string, targetRoomId: string) => void;
+  onShareWorkspace: () => Promise<boolean>;
   renderRoomContent: (room: RoomDesign, isActive: boolean) => ReactNode;
 }
 
@@ -28,6 +29,7 @@ function RoomWorkspace({
   onRenameRoom,
   onDeleteRoom,
   onReorderRooms,
+  onShareWorkspace,
   renderRoomContent,
 }: RoomWorkspaceProps) {
   const handleMoveUp = useCallback((roomId: string) => {
@@ -65,6 +67,7 @@ function RoomWorkspace({
               canMoveDown={index < rooms.length - 1}
               onMoveUp={handleMoveUp}
               onMoveDown={handleMoveDown}
+              onShareWorkspace={onShareWorkspace}
               renderRoomContent={renderRoomContent}
             />
           );
