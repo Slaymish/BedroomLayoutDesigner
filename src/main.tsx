@@ -196,9 +196,23 @@ const handleStartPlanning = (placement: LandingCtaPlacement) => {
   window.location.assign('/app');
 };
 
+const handleDismissOverlay = () => {
+  trackAnalyticsEvent('landing_overlay_dismiss', { placement: 'overlay' });
+  window.location.assign('/app');
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {route === 'planner' ? <App /> : <LandingPage onStartPlanning={handleStartPlanning} />}
+    {route === 'planner' ? (
+      <App />
+    ) : (
+      <div className="landing-overlay-app-shell">
+        <div className="landing-preview-app" aria-hidden="true">
+          <App />
+        </div>
+        <LandingPage mode="overlay" onStartPlanning={handleStartPlanning} onDismiss={handleDismissOverlay} />
+      </div>
+    )}
   </StrictMode>,
 )
 

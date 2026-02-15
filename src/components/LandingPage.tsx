@@ -10,11 +10,44 @@ type LandingCtaPlacement = 'launchpad' | 'comparison';
 
 interface LandingPageProps {
   onStartPlanning: (placement: LandingCtaPlacement) => void;
+  mode?: 'full' | 'overlay';
+  onDismiss?: () => void;
 }
 
 const toSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const OVERLAY_PREVIEW_BULLETS = LANDING_FEATURE_BULLETS.slice(0, 3);
 
-export default function LandingPage({ onStartPlanning }: LandingPageProps) {
+export default function LandingPage({ onStartPlanning, mode = 'full', onDismiss }: LandingPageProps) {
+  if (mode === 'overlay') {
+    return (
+      <div className="landing-overlay-root" role="dialog" aria-modal="true" aria-label="Planner introduction">
+        <button
+          className="landing-overlay-backdrop"
+          type="button"
+          aria-label="Dismiss intro panel"
+          onClick={onDismiss}
+        />
+        <section className="landing-overlay-panel">
+          <p className="landing-overlay-kicker">Bedroom Layout Planner</p>
+          <h1 className="landing-overlay-title">Design a layout that actually fits.</h1>
+          <p className="landing-overlay-subtitle">
+            Plan with exact dimensions, place furniture confidently, and export a printable PDF.
+          </p>
+          <ul className="landing-overlay-list" aria-label="Planner highlights">
+            {OVERLAY_PREVIEW_BULLETS.map((bullet) => (
+              <li key={bullet}>{bullet}</li>
+            ))}
+          </ul>
+          <div className="landing-overlay-actions">
+            <button className="ui-btn ui-btn-primary" onClick={() => onStartPlanning('launchpad')}>
+              Start Planning
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="landing-shell">
       <main>

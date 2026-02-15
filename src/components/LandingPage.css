@@ -1,3 +1,101 @@
+.landing-overlay-app-shell {
+  min-height: 100vh;
+  position: relative;
+}
+
+.landing-preview-app {
+  min-height: 100vh;
+}
+
+.landing-preview-app[aria-hidden='true'] {
+  pointer-events: none;
+  user-select: none;
+}
+
+.landing-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.landing-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgb(15 23 42 / 0.36);
+  backdrop-filter: blur(2px);
+  cursor: zoom-out;
+}
+
+.landing-overlay-panel {
+  position: relative;
+  width: min(34rem, 100%);
+  margin-top: clamp(0.75rem, 3.6vh, 2rem);
+  border: 1px solid var(--border-subtle);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--surface-card) 94%, transparent);
+  box-shadow: 0 24px 42px -26px rgb(15 23 42 / 0.52);
+  padding: 1rem;
+  display: grid;
+  gap: 0.82rem;
+  animation: landing-fade-rise 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.landing-overlay-kicker {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.landing-overlay-title {
+  margin: 0;
+  color: var(--text-heading);
+  font-size: clamp(1.48rem, 2.6vw, 2.05rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.landing-overlay-subtitle {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+  line-height: 1.52;
+}
+
+.landing-overlay-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.landing-overlay-list li {
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--surface-card) 84%, transparent);
+  padding: 0.66rem 0.76rem;
+  color: var(--text-soft);
+  font-size: 0.88rem;
+}
+
+.landing-overlay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.landing-overlay-actions .ui-btn {
+  min-height: 2.25rem;
+}
+
 .landing-shell {
   min-height: 100vh;
   background:
@@ -322,6 +420,24 @@
 }
 
 @media (max-width: 640px) {
+  .landing-overlay-root {
+    padding: 0.7rem;
+  }
+
+  .landing-overlay-panel {
+    margin-top: 0.4rem;
+    padding: 0.88rem;
+  }
+
+  .landing-overlay-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .landing-overlay-actions .ui-btn {
+    width: 100%;
+  }
+
   .landing-container {
     width: min(1120px, calc(100% - 1.2rem));
   }
@@ -346,6 +462,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .landing-overlay-panel {
+    animation: none;
+  }
+
   .landing-launchpad-inner > *,
   .landing-section .landing-container {
     opacity: 1;
