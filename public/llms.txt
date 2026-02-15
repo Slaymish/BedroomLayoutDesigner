@@ -1,13 +1,18 @@
 # Bedroom Layout Designer
-> Free bedroom layout planner for exact room measurements, furniture fit checks, and printable PDF export.
+> Free browser-based bedroom layout planner for exact room measurements, furniture fit checks, and printable PDF export.
 
-Home: https://bedroomlayout.app/
-Planner: https://bedroomlayout.app/app
+Home: https://bedroomlayout.app/ (intro panel over planner preview)
+Planner: https://bedroomlayout.app/app (direct workspace)
 Sitemap: https://bedroomlayout.app/sitemap.xml
 
 ## What this is
 - A browser-based bedroom layout planner focused on practical fit checks.
 - Built for quickly testing exact room and furniture dimensions before rearranging.
+
+## Access model
+- Free to use with no account required.
+- Works in modern desktop and mobile browsers.
+- Local autosave in the browser with JSON workspace export/import.
 
 ## Who it is best for
 - Renters and homeowners planning bedroom furniture layout changes.

@@ -3,10 +3,25 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import LandingPage, { type LandingCtaPlacement } from './components/LandingPage.tsx'
-import { LANDING_FAQ_ITEMS } from './content/landingContent'
 
 declare const __APP_BUILD_ID__: string;
 const CANONICAL_ORIGIN = 'https://bedroomlayout.app';
+const SEO_PREVIEW_IMAGE = `${CANONICAL_ORIGIN}/seo-preview.svg`;
+const SOFTWARE_FEATURE_LIST = [
+  'Exact room dimensions in metric and imperial units',
+  'Drag-and-drop furniture, doors, and windows',
+  'Multi-room planning',
+  'PDF export for sharing and printing',
+  'Optional feng shui layout checks',
+];
+const SOFTWARE_KEYWORDS = [
+  'bedroom layout planner',
+  'free online bedroom planner',
+  'bedroom planner with exact dimensions',
+  'furniture layout planner',
+  'bedroom floor plan app',
+  'bedroom planner with PDF export',
+];
 
 declare global {
   interface Window {
@@ -58,30 +73,16 @@ const buildLandingSchema = (): Record<string, unknown> => ({
       operatingSystem: 'Any',
       inLanguage: 'en-US',
       browserRequirements: 'Requires JavaScript',
+      description: 'Free online bedroom layout planner with exact dimensions, drag-and-drop furniture placement, and printable PDF export.',
+      image: SEO_PREVIEW_IMAGE,
       isAccessibleForFree: true,
       offers: {
         '@type': 'Offer',
         price: '0',
         priceCurrency: 'USD',
       },
-      featureList: [
-        'Exact room dimensions in metric and imperial units',
-        'Drag-and-drop furniture, doors, and windows',
-        'Multi-room planning',
-        'PDF export for sharing and printing',
-        'Optional feng shui layout checks',
-      ],
-    },
-    {
-      '@type': 'FAQPage',
-      mainEntity: LANDING_FAQ_ITEMS.map((item) => ({
-        '@type': 'Question',
-        name: item.question,
-        acceptedAnswer: {
-          '@type': 'Answer',
-          text: item.answer,
-        },
-      })),
+      featureList: SOFTWARE_FEATURE_LIST,
+      keywords: SOFTWARE_KEYWORDS,
     },
   ],
 });
@@ -97,12 +98,15 @@ const buildPlannerSchema = (): Record<string, unknown> => ({
   inLanguage: 'en-US',
   browserRequirements: 'Requires JavaScript',
   description: 'Plan a bedroom with exact dimensions, furniture placement tools, and printable PDF export.',
+  image: SEO_PREVIEW_IMAGE,
   isAccessibleForFree: true,
   offers: {
     '@type': 'Offer',
     price: '0',
     priceCurrency: 'USD',
   },
+  featureList: SOFTWARE_FEATURE_LIST,
+  keywords: SOFTWARE_KEYWORDS,
 });
 
 const ROUTE_SEO: Record<AppRoute, RouteSeoConfig> = {
