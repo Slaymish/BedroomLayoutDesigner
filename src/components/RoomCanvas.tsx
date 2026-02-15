@@ -1154,6 +1154,10 @@ function RoomCanvasComponent({
       detachBoxSelectionListeners();
 
       if (getSelectionDragDistance(start, latest) < MIN_BOX_SELECTION_DRAG_CM) {
+        // Pointerdown prevents the native click path; treat tiny drags as blank-click deselect.
+        onSelectItems?.([]);
+        onEditItem(null);
+        onSelectMeasure?.(null);
         return;
       }
 
