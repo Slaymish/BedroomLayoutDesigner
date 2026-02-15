@@ -342,6 +342,33 @@
         "Keep state mutation flow centralized through App-level updates.",
         "Add targeted tests for shared-link encode/decode and migration edge cases."
       ]
+    },
+    {
+      "id": "US-013",
+      "status": "done",
+      "title": "Commented how the landing page feels too 'producty',...",
+      "story": "As a First-Time Planner, I want commented how the landing page feels too 'producty',..., so that the feedback concern \"Commented how the landing page feels too 'producty', saying it seems like i'm trying to sell something. They suggested making the only thing...\" is resolved.",
+      "personaIds": [
+        "P1"
+      ],
+      "acceptanceCriteria": [
+        "The feedback item \"Commented how the landing page feels too 'producty', saying it seems like i'm trying to sell something. They suggested m...\" is addressed by observable product behavior.",
+        "The workflow is testable end-to-end without regressions in existing core behavior.",
+        "The change includes validation through existing quality gates or targeted tests."
+      ],
+      "scores": {
+        "impact": 3,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
     }
   ]
 }

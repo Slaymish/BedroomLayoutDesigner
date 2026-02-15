@@ -6,7 +6,7 @@ import {
   LANDING_FEATURE_BULLETS,
 } from '../content/landingContent';
 
-type LandingCtaPlacement = 'header' | 'hero' | 'comparison';
+type LandingCtaPlacement = 'launchpad' | 'comparison';
 
 interface LandingPageProps {
   onStartPlanning: (placement: LandingCtaPlacement) => void;
@@ -17,35 +17,23 @@ const toSlug = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-'
 export default function LandingPage({ onStartPlanning }: LandingPageProps) {
   return (
     <div className="landing-shell">
-      <header className="landing-header">
-        <div className="landing-container landing-header-inner">
-          <a className="landing-brand" href="/" aria-label="Bedroom Layout Planner home">
-            Bedroom Layout Planner
-          </a>
-          <button className="ui-btn ui-btn-primary" onClick={() => onStartPlanning('header')}>
-            Start Planning
-          </button>
-        </div>
-      </header>
-
       <main>
-        <section className="landing-hero">
-          <div className="landing-container landing-hero-inner">
-            <p className="landing-kicker">Bedroom Layout Planner</p>
-            <h1 className="landing-title">Design A Bedroom Layout That Actually Fits</h1>
-            <p className="landing-subtitle">
-              Enter exact room dimensions, place furniture and openings, and export a printable layout in minutes.
-              No account required.
+        <h1 className="landing-sr-only">Bedroom Layout Planner</h1>
+
+        <section className="landing-launchpad" aria-label="Start planning">
+          <button className="ui-btn ui-btn-primary landing-launchpad-cta" onClick={() => onStartPlanning('launchpad')}>
+            Open The Planner
+          </button>
+        </section>
+
+        <section className="landing-section landing-details-intro" id="details">
+          <div className="landing-container">
+            <h2 className="landing-section-title">What You Can Do In The Planner</h2>
+            <p className="landing-section-subtitle">
+              If you want details first, scroll this page. If you already know what you need, use the button above and
+              start planning immediately.
             </p>
-            <div className="landing-cta-row">
-              <button className="ui-btn ui-btn-primary" onClick={() => onStartPlanning('hero')}>
-                Open The Planner
-              </button>
-              <a className="ui-btn ui-btn-ghost" href="#comparison">
-                Compare Features
-              </a>
-            </div>
-            <ul className="landing-proof-list" aria-label="Core benefits">
+            <ul className="landing-proof-list" aria-label="Core planner details">
               {LANDING_CREDIBILITY_BULLETS.map((bullet) => (
                 <li key={bullet}>{bullet}</li>
               ))}
@@ -55,9 +43,9 @@ export default function LandingPage({ onStartPlanning }: LandingPageProps) {
 
         <section className="landing-section" id="features">
           <div className="landing-container">
-            <h2 className="landing-section-title">Built For Practical Room Decisions</h2>
+            <h2 className="landing-section-title">Planner Capabilities</h2>
             <p className="landing-section-subtitle">
-              This tool is designed for furniture-fit decisions, not inspiration-only browsing.
+              Built for practical room-fit decisions with exact measurements.
             </p>
             <ul className="landing-feature-grid" aria-label="Planner capabilities">
               {LANDING_FEATURE_BULLETS.map((feature) => (
@@ -71,9 +59,9 @@ export default function LandingPage({ onStartPlanning }: LandingPageProps) {
 
         <section className="landing-section" id="comparison">
           <div className="landing-container">
-            <h2 className="landing-section-title">Feature Comparison</h2>
+            <h2 className="landing-section-title">How This Compares</h2>
             <p className="landing-section-subtitle">
-              A factual matrix of practical capabilities people usually need before moving or buying furniture.
+              A factual matrix of capabilities people typically need before moving or buying furniture.
             </p>
             <div className="landing-table-wrap" role="region" aria-label="Feature comparison table">
               <table className="landing-table">
@@ -99,7 +87,7 @@ export default function LandingPage({ onStartPlanning }: LandingPageProps) {
             </div>
             <div className="landing-comparison-cta">
               <button className="ui-btn ui-btn-primary" onClick={() => onStartPlanning('comparison')}>
-                Start Planning My Room
+                Open The Planner
               </button>
             </div>
           </div>
