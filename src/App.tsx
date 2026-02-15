@@ -59,10 +59,16 @@ import {
   normalizeOpeningForRoom,
   parseStoredWorkspaceState,
   reorderRooms,
+  sanitizeWorkspaceState,
   workspaceSnapshotEquals,
   type WorkspaceSnapshot,
 } from './utils/workspaceState';
 import { downloadWorkspaceFile, parseWorkspaceFileContent } from './utils/workspaceFile';
+import {
+  buildWorkspaceSharePayload,
+  encodeWorkspaceSharePayload,
+  readSharePayloadFromHash,
+} from './utils/workspaceShare';
 
 interface AddItemOptions {
   select?: boolean;
@@ -195,6 +201,32 @@ const renderPresetIcon = (type: string) => {
   return <Square className={iconClassName} />;
 };
 
+const copyTextToClipboard = async (value: string): Promise<void> => {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+
+  if (typeof document === 'undefined') {
+    throw new Error('Clipboard is unavailable in this browser. Copy the link manually.');
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  textarea.style.pointerEvents = 'none';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('Clipboard copy failed. Copy the link manually.');
+  }
+};
+
 
 function App() {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => createDefaultWorkspaceState());
@@ -220,6 +252,10 @@ function App() {
   const [dimensionDraftByRoom, setDimensionDraftByRoom] = useState<Record<string, { width: string; height: string }>>({});
   const [dimensionEditorRoomId, setDimensionEditorRoomId] = useState<string | null>(null);
   const [gridSpacingPreview, setGridSpacingPreview] = useState<number | null>(null);
+  const [pendingSharedWorkspace, setPendingSharedWorkspace] = useState<WorkspaceState | null>(null);
+  const [localWorkspaceBeforeShare, setLocalWorkspaceBeforeShare] = useState<WorkspaceState | null>(null);
+  const [isSharedSessionActive, setIsSharedSessionActive] = useState(false);
+  const [autosaveWritesEnabled, setAutosaveWritesEnabled] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const furniturePopoverRef = useRef<HTMLDetailsElement>(null);
@@ -228,6 +264,7 @@ function App() {
   const workspaceRef = useRef(workspace);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const lastPersistedAutosaveFingerprintRef = useRef<string | null>(null);
+  const shareHashHandledRef = useRef(false);
   const exportDepsPromiseRef = useRef<Promise<[typeof import('html-to-image'), typeof import('jspdf')]> | null>(null);
   const scrollTelemetryRef = useRef({
     lastFrameAt: 0,
@@ -447,6 +484,33 @@ function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isHydrated || shareHashHandledRef.current || typeof window === 'undefined') return;
+    shareHashHandledRef.current = true;
+
+    const rawHash = window.location.hash;
+    const normalizedHash = rawHash.startsWith('#') ? rawHash.slice(1) : rawHash;
+    const hashParams = new URLSearchParams(normalizedHash);
+    if (!hashParams.has('share')) return;
+
+    try {
+      const sharedWorkspace = readSharePayloadFromHash(rawHash);
+      if (!sharedWorkspace) return;
+
+      setPendingSharedWorkspace(sharedWorkspace);
+      setErrorMessage(null);
+      setInfoMessage('Shared layout detected. Choose whether to open it.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to open shared layout link.';
+      setErrorMessage(message);
+    } finally {
+      hashParams.delete('share');
+      const nextHash = hashParams.toString();
+      const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ''}`;
+      window.history.replaceState(null, '', nextUrl);
+    }
+  }, [isHydrated]);
+
   const persistWorkspace = useCallback((state: WorkspaceState): boolean => {
     try {
       const payload: WorkspaceState = {
@@ -478,6 +542,15 @@ function App() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    if (!autosaveWritesEnabled) {
+      setIsAutosavePending(false);
+      if (autosaveTimeoutRef.current !== null) {
+        window.clearTimeout(autosaveTimeoutRef.current);
+        autosaveTimeoutRef.current = null;
+      }
+      return;
+    }
+
     const fingerprint = buildAutosaveFingerprint(workspace);
 
     if (lastPersistedAutosaveFingerprintRef.current === null) {
@@ -508,10 +581,10 @@ function App() {
         window.clearTimeout(autosaveTimeoutRef.current);
       }
     };
-  }, [isHydrated, workspace, persistWorkspaceAutosave]);
+  }, [autosaveWritesEnabled, isHydrated, workspace, persistWorkspaceAutosave]);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || !autosaveWritesEnabled) return;
     const flushAutosave = () => {
       if (autosaveTimeoutRef.current !== null) {
         window.clearTimeout(autosaveTimeoutRef.current);
@@ -529,7 +602,7 @@ function App() {
     return () => {
       window.removeEventListener('beforeunload', flushAutosave);
     };
-  }, [isHydrated, persistWorkspace]);
+  }, [autosaveWritesEnabled, isHydrated, persistWorkspace]);
 
   useEffect(() => {
     workspaceRef.current = workspace;
@@ -1292,6 +1365,11 @@ function App() {
     setPreferencesPanelOpen(false);
     setMeasureMode(false);
     setGridSpacingPreview(null);
+    setPendingSharedWorkspace(null);
+    setLocalWorkspaceBeforeShare(null);
+    setIsSharedSessionActive(false);
+    setAutosaveWritesEnabled(true);
+    shareHashHandledRef.current = true;
   };
 
   const handlePreferencesChange = (preferences: WorkspaceState['preferences']) => {
@@ -1464,7 +1542,16 @@ function App() {
     setIsAutosavePending(false);
     if (persisted) {
       lastPersistedAutosaveFingerprintRef.current = buildAutosaveFingerprint(state);
-      setInfoMessage('Workspace saved in this browser.');
+      setLastAutosaveAt(Date.now());
+      if (isSharedSessionActive) {
+        setAutosaveWritesEnabled(true);
+        setIsSharedSessionActive(false);
+        setLocalWorkspaceBeforeShare(null);
+        setPendingSharedWorkspace(null);
+        setInfoMessage('Shared layout saved in this browser. Autosave resumed.');
+      } else {
+        setInfoMessage('Workspace saved in this browser.');
+      }
       return;
     }
     setErrorMessage('Could not save workspace in this browser.');
@@ -1474,6 +1561,23 @@ function App() {
     downloadWorkspaceFile(workspaceRef.current);
     setInfoMessage('Workspace exported to JSON file.');
   };
+
+  const handleShareWorkspace = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const payload = buildWorkspaceSharePayload(sanitizeWorkspaceState(workspaceRef.current));
+      const encoded = encodeWorkspaceSharePayload(payload);
+      const shareUrl = `${window.location.origin}/app#share=${encoded}`;
+
+      await copyTextToClipboard(shareUrl);
+      setErrorMessage(null);
+      setInfoMessage('Share link copied. Anyone with the link can open this layout.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create share link.';
+      setErrorMessage(message);
+    }
+  }, []);
 
   const handleLoadWorkspaceFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1496,13 +1600,68 @@ function App() {
       setErrorMessage(null);
       setInfoMessage('Workspace loaded successfully.');
       setMeasureMode(false);
+      setPendingSharedWorkspace(null);
+      setLocalWorkspaceBeforeShare(null);
+      setIsSharedSessionActive(false);
+      setAutosaveWritesEnabled(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load workspace file.';
       setErrorMessage(message);
     }
   };
 
+  const handleOpenPendingSharedWorkspace = useCallback(() => {
+    if (!pendingSharedWorkspace) return;
+
+    setLocalWorkspaceBeforeShare(sanitizeWorkspaceState(workspaceRef.current));
+    setWorkspace(sanitizeWorkspaceState(pendingSharedWorkspace));
+    setHistoryPast([]);
+    setHistoryFuture([]);
+    setSelectedMeasureByRoom({});
+    setDimensionDraftByRoom({});
+    setDimensionEditorRoomId(null);
+    interactionStartSnapshotRef.current = null;
+    setMeasureMode(false);
+    setGridSpacingPreview(null);
+    setPendingSharedWorkspace(null);
+    setErrorMessage(null);
+    setIsSharedSessionActive(true);
+    setAutosaveWritesEnabled(false);
+    setIsAutosavePending(false);
+    setInfoMessage('Shared layout opened. Autosave is paused until you save it to this browser.');
+  }, [pendingSharedWorkspace]);
+
+  const handleKeepLocalWorkspace = useCallback(() => {
+    setPendingSharedWorkspace(null);
+    setErrorMessage(null);
+    setInfoMessage('Kept your local workspace.');
+  }, []);
+
+  const handleReturnToLocalWorkspace = useCallback(() => {
+    if (!localWorkspaceBeforeShare) return;
+
+    setWorkspace(sanitizeWorkspaceState(localWorkspaceBeforeShare));
+    setHistoryPast([]);
+    setHistoryFuture([]);
+    setSelectedMeasureByRoom({});
+    setDimensionDraftByRoom({});
+    setDimensionEditorRoomId(null);
+    interactionStartSnapshotRef.current = null;
+    setMeasureMode(false);
+    setGridSpacingPreview(null);
+    setPendingSharedWorkspace(null);
+    setLocalWorkspaceBeforeShare(null);
+    setIsSharedSessionActive(false);
+    setAutosaveWritesEnabled(true);
+    setIsAutosavePending(false);
+    setErrorMessage(null);
+    setInfoMessage('Returned to your local workspace. Autosave resumed.');
+  }, [localWorkspaceBeforeShare]);
+
   const autosaveStatusLabel = useMemo(() => {
+    if (!autosaveWritesEnabled) {
+      return 'Autosave paused for shared layout';
+    }
     if (isAutosavePending) {
       return 'Autosave pending...';
     }
@@ -1514,7 +1673,7 @@ function App() {
       minute: '2-digit',
       second: '2-digit',
     })}`;
-  }, [isAutosavePending, lastAutosaveAt]);
+  }, [autosaveWritesEnabled, isAutosavePending, lastAutosaveAt]);
 
   const renderRoomContent = useCallback((room: RoomDesign, isActive: boolean) => {
     const selectedMeasureId = selectedMeasureByRoom[room.id] ?? null;
@@ -1814,6 +1973,40 @@ function App() {
         )}
         {infoMessage && (
           <p className="mx-auto mb-3 max-w-[1600px] text-sm app-message-info">{infoMessage}</p>
+        )}
+        {pendingSharedWorkspace && (
+          <div className="mx-auto mb-3 max-w-[1600px] surface-card-muted px-3 py-3 sm:px-4 sm:py-3">
+            <p className="text-sm theme-text-soft">
+              A shared layout link was detected. Opening it will pause autosave for your local workspace until you choose to save.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="ui-btn ui-btn-primary" onClick={handleOpenPendingSharedWorkspace}>
+                Open Shared Layout
+              </button>
+              <button className="ui-btn ui-btn-secondary" onClick={handleKeepLocalWorkspace}>
+                Keep My Local Workspace
+              </button>
+            </div>
+          </div>
+        )}
+        {isSharedSessionActive && (
+          <div className="mx-auto mb-3 max-w-[1600px] surface-card-muted px-3 py-3 sm:px-4 sm:py-3">
+            <p className="text-sm theme-text-soft">
+              You are viewing a shared layout. Autosave is paused to protect your existing browser workspace.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button className="ui-btn ui-btn-primary" onClick={handleSaveWorkspaceLocal}>
+                Save Shared Layout To This Browser
+              </button>
+              <button
+                className="ui-btn ui-btn-secondary"
+                onClick={handleReturnToLocalWorkspace}
+                disabled={!localWorkspaceBeforeShare}
+              >
+                Return To My Local Workspace
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="mx-auto mb-3 max-w-[1600px] command-toolbar">
@@ -2136,6 +2329,9 @@ function App() {
                 onSaveWorkspace={handleSaveWorkspaceLocal}
                 onExportWorkspace={handleExportWorkspaceFile}
                 onLoadWorkspace={() => fileInputRef.current?.click()}
+                onShareWorkspace={() => {
+                  void handleShareWorkspace();
+                }}
                 autosaveStatusLabel={autosaveStatusLabel}
               />
               <div className="mt-4 text-xs theme-text-subtle">

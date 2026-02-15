@@ -56,6 +56,7 @@ This is not strict Clean Architecture. Instead, it optimizes for low indirection
 - `src/utils/units.ts`: unit conversion to/from base centimeters.
 - `src/utils/autosave.ts`: autosave fingerprint builder.
 - `src/utils/workspaceFile.ts`: workspace export file format + parser + download.
+- `src/utils/workspaceShare.ts`: versioned share-link payload encode/decode and `#share=` hash parsing.
 - `src/utils/exportCapture.ts`: robust capture bounds for PDF image generation.
 - `src/utils/fengShui.ts`: active-room feng shui rule catalog and geometry-based violation detection.
 - `src/utils/geometry.ts`: shared geometry helpers (`clamp`, rotated bounding boxes).
@@ -104,6 +105,7 @@ Persistence invariants:
 - measure mode
 - history stacks
 - autosave bookkeeping
+- shared-session state for incoming share links (pending payload, local-restore snapshot, autosave pause gate)
 - telemetry state
 - transient modal drafts
 
@@ -131,11 +133,21 @@ High-frequency canvas interactions are locally buffered in `RoomCanvas` and comm
 - Autosave is fingerprint-driven and debounced (220ms).
 - Fingerprint ignores transient click-only selection fields (for fewer meaningless writes).
 - `beforeunload` flushes pending autosave.
+- In shared-link sessions, autosave writes are explicitly paused until the user chooses to save shared state to local storage.
 
 ### Workspace file import/export
 
 - Export format: `WorkspaceFile` (`kind`, `version`, timestamp, sanitized workspace payload).
 - Import path validates kind/version and sanitizes before replacing in-memory workspace.
+
+### Share links (account-free)
+
+- Outbound links are generated from sanitized workspace state and encoded as `/app#share=<payload>`.
+- Payload contract is versioned (`WorkspaceSharePayload`) with guardrails for malformed data and maximum URL length.
+- Inbound links are decoded after hydration and require explicit user choice:
+  - open shared layout in a temporary shared session, or
+  - keep existing local workspace unchanged.
+- Shared sessions provide explicit controls to save shared state locally or restore the pre-share local snapshot.
 
 ### PDF export
 

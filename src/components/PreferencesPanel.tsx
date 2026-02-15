@@ -10,6 +10,7 @@ interface PreferencesPanelProps {
     onSaveWorkspace?: () => void;
     onExportWorkspace?: () => void;
     onLoadWorkspace?: () => void;
+    onShareWorkspace?: () => void;
     autosaveStatusLabel?: string;
 }
 
@@ -21,6 +22,7 @@ export default function PreferencesPanel({
     onSaveWorkspace,
     onExportWorkspace,
     onLoadWorkspace,
+    onShareWorkspace,
     autosaveStatusLabel,
 }: PreferencesPanelProps) {
     const activeUnit = preferences.unit || 'cm';
@@ -211,7 +213,7 @@ export default function PreferencesPanel({
                     Show debug performance
                 </label>
             </div>
-            {(onSaveWorkspace || onExportWorkspace || onLoadWorkspace) && (
+            {(onSaveWorkspace || onExportWorkspace || onLoadWorkspace || onShareWorkspace) && (
                 <div className="pt-3 border-t theme-divider-border space-y-2">
                     <p className="text-xs font-semibold uppercase tracking-wide theme-text-muted">Workspace</p>
                     {autosaveStatusLabel && (
@@ -239,6 +241,14 @@ export default function PreferencesPanel({
                             onClick={onLoadWorkspace}
                         >
                             Load Workspace
+                        </button>
+                    )}
+                    {onShareWorkspace && (
+                        <button
+                            className="ui-btn ui-btn-secondary w-full"
+                            onClick={onShareWorkspace}
+                        >
+                            Share Workspace
                         </button>
                     )}
                 </div>

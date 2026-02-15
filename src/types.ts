@@ -75,6 +75,13 @@ export interface WorkspaceFile {
     workspace: WorkspaceState;
 }
 
+export interface WorkspaceSharePayload {
+    kind: 'BedroomLayoutShare';
+    version: 1;
+    createdAtIso: string;
+    workspace: WorkspaceState;
+}
+
 export interface LayoutInteractionTelemetry {
     interaction: 'drag' | 'resize';
     itemType?: string;

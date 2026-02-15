@@ -315,7 +315,7 @@
     },
     {
       "id": "US-012",
-      "status": "backlog",
+      "status": "in_progress",
       "title": "Account-free share links for in-progress layouts",
       "story": "As a Repeat Workspace Manager, I want to generate shareable links for my current layout without creating an account, so that I can get feedback and bring people back to the site.",
       "personaIds": [
