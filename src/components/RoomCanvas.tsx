@@ -1085,6 +1085,13 @@ function RoomCanvasComponent({
     if (!item || !canvasRef.current) return;
     const fallbackSelectedIds = selectedItemId === null ? [] : [selectedItemId];
     const activeSelectedIds = selectedItemIdsRef.current.length > 0 ? selectedItemIdsRef.current : fallbackSelectedIds;
+    const isPartOfActiveSelection = activeSelectedIds.includes(id);
+
+    if (!isPartOfActiveSelection || activeSelectedIds.length <= 1) {
+      onSelectMeasure?.(null);
+      onSelectItems?.([id]);
+      onEditItem(id);
+    }
 
     activeInteractionPointerIdRef.current = event.pointerId;
     dragStartClientRef.current = { x: event.clientX, y: event.clientY };
@@ -1184,7 +1191,12 @@ function RoomCanvasComponent({
 
       const selection = createSelectionBounds(start, latest);
       const size = getSelectionSize(selection);
-      if (size.width <= 0 && size.height <= 0) return;
+      if (size.width <= 0 && size.height <= 0) {
+        onSelectItems?.([]);
+        onEditItem(null);
+        onSelectMeasure?.(null);
+        return;
+      }
 
       const selectedIds = getSelectableItemIds(localItemsRef.current, selection, {
         includeItem: (candidate) => !isOpening(candidate),
