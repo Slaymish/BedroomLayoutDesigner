@@ -7,6 +7,12 @@ export default defineConfig({
   define: {
     __APP_BUILD_ID__: JSON.stringify(Date.now().toString()),
   },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./tests/vitest.setup.ts'],
+    include: ['tests/ui/**/*.test.ts?(x)'],
+    css: true,
+  },
   plugins: [
     react({
       babel: {

@@ -41,6 +41,7 @@ import {
   isEditableEventTarget,
   isUnmodifiedDeleteShortcut,
 } from './utils/keyboardShortcuts';
+import { resolveRoomSelectedItemIds } from './utils/selectionState';
 import {
   DEFAULT_PREFERENCES,
   OPENING_PRESETS,
@@ -299,7 +300,6 @@ function App() {
   const fengShuiWarningDetailsRef = useRef<HTMLDetailsElement>(null);
   const interactionStartSnapshotRef = useRef<WorkspaceSnapshot | null>(null);
   const workspaceRef = useRef(workspace);
-  const selectedItemIdsByRoomRef = useRef(selectedItemIdsByRoom);
   const autosaveTimeoutRef = useRef<number | null>(null);
   const lastPersistedAutosaveFingerprintRef = useRef<string | null>(null);
   const shareHashHandledRef = useRef(false);
@@ -630,10 +630,6 @@ function App() {
   }, [workspace]);
 
   useEffect(() => {
-    selectedItemIdsByRoomRef.current = selectedItemIdsByRoom;
-  }, [selectedItemIdsByRoom]);
-
-  useEffect(() => {
     setSelectedItemIdsByRoom((previous) => {
       let changed = false;
       const next: Record<string, number[]> = {};
@@ -788,15 +784,8 @@ function App() {
   }, [debugTelemetryEnabled]);
 
   const getRoomSelectedItemIds = useCallback((roomId: string, editingItemId: number | null): number[] => {
-    const explicit = selectedItemIdsByRoomRef.current[roomId];
-    // Treat an explicitly-set empty array as an intentional deselect. Use
-    // hasOwnProperty to detect presence of the key rather than relying on
-    // truthiness/length so empty selections are preserved.
-    if (Object.prototype.hasOwnProperty.call(selectedItemIdsByRoomRef.current, roomId)) {
-      return explicit ?? EMPTY_ITEM_SELECTION;
-    }
-    return editingItemId === null ? EMPTY_ITEM_SELECTION : [editingItemId];
-  }, []);
+    return resolveRoomSelectedItemIds(selectedItemIdsByRoom, roomId, editingItemId);
+  }, [selectedItemIdsByRoom]);
 
   const setRoomSelectedItems = useCallback((
     roomId: string,
@@ -808,10 +797,8 @@ function App() {
     // Debug: log selection changes to help reproduce selection issues in-browser.
     // Print a stack trace for explicit deselects so we can identify the caller.
     // Remove or gate this in production if noisy.
-    // eslint-disable-next-line no-console
     console.debug('setRoomSelectedItems()', { roomId, itemIds: normalized, options });
     if (normalized.length === 0) {
-      // eslint-disable-next-line no-console
       console.trace('setRoomSelectedItems() explicit deselect', { roomId });
     }
 
