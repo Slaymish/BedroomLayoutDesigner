@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (February 10, 2026 - February 15, 2026)
+## Unreleased (February 10, 2026 - February 16, 2026)
 
 ### New
 - **Shareable layouts without accounts**: Create and share in-progress layout links without requiring sign-in, with autosave safeguards.
@@ -20,6 +20,7 @@
 - **Routing and discoverability updates**: Added route handling improvements for planner/share-link paths and refreshed `llms.txt` + SEO wiring.
 - **Search/LLM discoverability and branding**: Improved SEO metadata, branding content, and `llms.txt` discoverability support.
 - **Accessibility and UI polish**: Refined component styling and accessibility details across core screens.
+- **Selection and edit-panel reliability**: Selecting an object now consistently opens the edit panel immediately, and rotate/edit actions keep the object selected so editing stays in context.
 
 ### Fixes
 - Fixed door behavior issues.
@@ -32,3 +33,4 @@
 ### Internal
 - Added/updated CI and related test wiring.
 - Added and updated project architecture/agent/backlog documentation.
+- Added UI interaction regression coverage (Vitest + Testing Library) for selection and rotate flows to prevent edit-panel selection regressions.
