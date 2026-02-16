@@ -7,7 +7,6 @@ import {
   useState,
   type CSSProperties,
   type Dispatch,
-  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
@@ -32,6 +31,7 @@ import {
   getSelectionSize,
   type SelectionPoint,
 } from "../utils/selectionBox";
+import { hasPointerExceededDragThreshold } from "../utils/pointerDrag";
 
 interface RoomCanvasProps {
   items: RoomItem[];
@@ -137,6 +137,7 @@ const WALL_PADDING_CM = 28;
 const BED_PRESET_DRAG_STEP_CM = 24;
 const MIN_WALL_MEASURE_TARGET_LENGTH_CM = 14;
 const MIN_BOX_SELECTION_DRAG_CM = 4;
+const MIN_OBJECT_DRAG_DISTANCE_CM = 2;
 
 const resolveOpeningWall = (item: RoomItem): OpeningWall => item.openingWall ?? inferWallFromRotation(item.rotate) ?? 'bottom';
 
@@ -281,7 +282,6 @@ function RoomCanvasComponent({
   const [hoveredMeasureAnchorKey, setHoveredMeasureAnchorKey] = useState<string | null>(null);
   const [hoveredWallMeasureKey, setHoveredWallMeasureKey] = useState<string | null>(null);
   const [activeWallMeasureKey, setActiveWallMeasureKey] = useState<string | null>(null);
-  const hasDragged = useRef(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const localItemsRef = useRef(localItems);
@@ -302,6 +302,8 @@ function RoomCanvasComponent({
   const activeMeasureDragRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const latestPointerRef = useRef<{ clientX: number; clientY: number } | null>(null);
+  const dragStartClientRef = useRef<Point | null>(null);
+  const objectDragThresholdMetRef = useRef(false);
   const activeInteractionPointerIdRef = useRef<number | null>(null);
   const telemetrySessionRef = useRef<TelemetrySession | null>(null);
   const measureCreateHandlersRef = useRef<{
@@ -792,7 +794,6 @@ function RoomCanvasComponent({
         return;
       }
 
-      hasDragged.current = true;
       markTelemetryChanged();
       const nextItems = [...previousItems];
       nextItems[targetIndex] = nextItem;
@@ -805,7 +806,19 @@ function RoomCanvasComponent({
       return;
     }
 
-    hasDragged.current = true;
+    const dragStartClient = dragStartClientRef.current;
+    if (
+      dragStartClient
+      && !objectDragThresholdMetRef.current
+      && !hasPointerExceededDragThreshold(
+        dragStartClient,
+        { x: clientX, y: clientY },
+        MIN_OBJECT_DRAG_DISTANCE_CM
+      )
+    ) {
+      return;
+    }
+    objectDragThresholdMetRef.current = true;
     const rect = canvasRef.current.getBoundingClientRect();
     const mouseXInCanvas = clientX - rect.left;
     const mouseYInCanvas = clientY - rect.top;
@@ -943,16 +956,23 @@ function RoomCanvasComponent({
       }
     };
 
-    const completePointerInteraction = () => {
+    const completePointerInteraction = (commitSelectionOnRelease: boolean) => {
       flushPointer();
       const hadResize = allowResize && isResizingRef.current !== null;
       const hadDrag = draggingIdRef.current !== null;
       const hadObjectResize = objectResizeStateRef.current !== null;
+      const clickedObjectId = commitSelectionOnRelease
+        && draggingIdRef.current !== null
+        && !objectDragThresholdMetRef.current
+          ? draggingIdRef.current
+          : null;
 
       isResizingRef.current = null;
       draggingIdRef.current = null;
       dragGroupStateRef.current = null;
       objectResizeStateRef.current = null;
+      dragStartClientRef.current = null;
+      objectDragThresholdMetRef.current = false;
       activeInteractionPointerIdRef.current = null;
       setIsResizing(null);
       setDraggingId(null);
@@ -973,6 +993,12 @@ function RoomCanvasComponent({
       if (hadDrag || hadResize || hadObjectResize) {
         onLayoutInteractionEnd?.();
       }
+
+      if (clickedObjectId !== null) {
+        onSelectMeasure?.(null);
+        onSelectItems?.([clickedObjectId]);
+        onEditItem(clickedObjectId);
+      }
       flushTelemetrySession();
     };
 
@@ -985,7 +1011,7 @@ function RoomCanvasComponent({
     const handlePointerUpOrCancel = (event: PointerEvent) => {
       const activePointerId = activeInteractionPointerIdRef.current;
       if (activePointerId === null || event.pointerId !== activePointerId) return;
-      completePointerInteraction();
+      completePointerInteraction(event.type !== 'pointercancel');
     };
 
     if ((allowResize && isResizing) || draggingId !== null || objectResizeState !== null) {
@@ -1011,9 +1037,12 @@ function RoomCanvasComponent({
     flushTelemetrySession,
     isResizing,
     objectResizeState,
+    onEditItem,
     onItemsChange,
     onLayoutInteractionEnd,
     onRoomSizeChange,
+    onSelectItems,
+    onSelectMeasure,
     recordAppliedFrame,
     recordPointerEvent,
   ]);
@@ -1050,7 +1079,6 @@ function RoomCanvasComponent({
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     event.stopPropagation();
     event.preventDefault();
-    hasDragged.current = false;
     latestPointerRef.current = null;
 
     const item = localItemsRef.current.find((current) => current.id === id);
@@ -1059,6 +1087,8 @@ function RoomCanvasComponent({
     const activeSelectedIds = selectedItemIdsRef.current.length > 0 ? selectedItemIdsRef.current : fallbackSelectedIds;
 
     activeInteractionPointerIdRef.current = event.pointerId;
+    dragStartClientRef.current = { x: event.clientX, y: event.clientY };
+    objectDragThresholdMetRef.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
 
     onLayoutInteractionStart?.();
@@ -1112,15 +1142,6 @@ function RoomCanvasComponent({
     };
     setDragOffset(nextOffset);
     dragOffsetRef.current = nextOffset;
-  };
-
-  const handleObjectClick = (event: ReactMouseEvent, id: number) => {
-    if (measureMode) return;
-    event.stopPropagation();
-    if (hasDragged.current) return;
-    onSelectMeasure?.(null);
-    onSelectItems?.([id]);
-    onEditItem(id);
   };
 
   const beginBoxSelection = (event: ReactPointerEvent) => {
@@ -1809,11 +1830,6 @@ function RoomCanvasComponent({
           <div
             ref={canvasRef}
             onPointerDown={handleCanvasPointerDown}
-            onClick={() => {
-              onSelectItems?.([]);
-              onEditItem(null);
-              onSelectMeasure?.(null);
-            }}
             className={canvasClassName}
             style={canvasStyle}
           >
@@ -1885,7 +1901,6 @@ function RoomCanvasComponent({
                   showLabel={item.type !== 'Door' && item.type !== 'Window'}
                   bulgeOutward={item.type === 'Window'}
                   onPointerDown={(event) => handleObjectPointerDown(event, item.id)}
-                  onMouseClick={(event) => handleObjectClick(event, item.id)}
                 />
               );
             })}

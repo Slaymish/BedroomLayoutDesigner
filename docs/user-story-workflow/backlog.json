@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-02-15",
+  "updatedAt": "2026-02-16",
   "stories": [
     {
       "id": "US-001",
@@ -367,6 +367,116 @@
       "agentHints": [
         "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
         "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-014",
+      "status": "backlog",
+      "title": "When trying to measure between bed and wardrobe,...",
+      "story": "As a Precision Optimizer, I want when trying to measure between bed and wardrobe,..., so that the feedback concern \"When trying to measure between bed and wardrobe, it was giving me move mouse\" is resolved.",
+      "personaIds": [
+        "P2"
+      ],
+      "acceptanceCriteria": [
+        "The feedback item \"When trying to measure between bed and wardrobe, it was giving me move mouse\" is addressed by observable product behavior.",
+        "The workflow is testable end-to-end without regressions in existing core behavior.",
+        "The change includes validation through existing quality gates or targeted tests."
+      ],
+      "scores": {
+        "impact": 3,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-015",
+      "status": "backlog",
+      "title": "Box select selected stuff outside of box",
+      "story": "As a First-Time Planner, I want box select selected stuff outside of box, so that the feedback concern \"Box select selected stuff outside of box\" is resolved.",
+      "personaIds": [
+        "P1"
+      ],
+      "acceptanceCriteria": [
+        "The feedback item \"Box select selected stuff outside of box\" is addressed by observable product behavior.",
+        "The workflow is testable end-to-end without regressions in existing core behavior.",
+        "The change includes validation through existing quality gates or targeted tests."
+      ],
+      "scores": {
+        "impact": 3,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-016",
+      "status": "backlog",
+      "title": "Want to be able to zoom",
+      "story": "As a First-Time Planner, I want want to be able to zoom, so that the feedback concern \"Want to be able to zoom\" is resolved.",
+      "personaIds": [
+        "P1"
+      ],
+      "acceptanceCriteria": [
+        "The feedback item \"Want to be able to zoom\" is addressed by observable product behavior.",
+        "The workflow is testable end-to-end without regressions in existing core behavior.",
+        "The change includes validation through existing quality gates or targeted tests."
+      ],
+      "scores": {
+        "impact": 3,
+        "urgency": 3,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Add or update focused tests for behavior changes."
+      ]
+    },
+    {
+      "id": "US-017",
+      "status": "done",
+      "title": "Have to click twice on things (object, measures),...",
+      "story": "As a First-Time Planner, I want have to click twice on things (object, measures),..., so that the feedback concern \"Have to click twice on things (object, measures), sometimes I cannot reselect stuff at all\" is resolved.",
+      "personaIds": [
+        "P1"
+      ],
+      "acceptanceCriteria": [
+        "The feedback item \"Have to click twice on things (object, measures), sometimes I cannot reselect stuff at all\" is addressed by observable product behavior.",
+        "The workflow is testable end-to-end without regressions in existing core behavior.",
+        "The change includes validation through existing quality gates or targeted tests."
+      ],
+      "scores": {
+        "impact": 5,
+        "urgency": 5,
+        "riskReduction": 3,
+        "confidence": 3,
+        "effort": 3
+      },
+      "dependencies": [],
+      "agentHints": [
+        "Keep geometry in centimeters in state and convert units only at UI/input/output boundaries.",
+        "Route workspace mutations through the App update flow with no direct nested mutation.",
+        "Keep high-frequency RoomCanvas interactions efficient and buffer locally when appropriate.",
         "Add or update focused tests for behavior changes."
       ]
     }
