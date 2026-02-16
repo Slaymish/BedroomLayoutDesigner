@@ -789,7 +789,12 @@ function App() {
 
   const getRoomSelectedItemIds = useCallback((roomId: string, editingItemId: number | null): number[] => {
     const explicit = selectedItemIdsByRoomRef.current[roomId];
-    if (explicit && explicit.length > 0) return explicit;
+    // Treat an explicitly-set empty array as an intentional deselect. Use
+    // hasOwnProperty to detect presence of the key rather than relying on
+    // truthiness/length so empty selections are preserved.
+    if (Object.prototype.hasOwnProperty.call(selectedItemIdsByRoomRef.current, roomId)) {
+      return explicit ?? EMPTY_ITEM_SELECTION;
+    }
     return editingItemId === null ? EMPTY_ITEM_SELECTION : [editingItemId];
   }, []);
 
@@ -799,6 +804,16 @@ function App() {
     options?: { clearMeasure?: boolean }
   ) => {
     const normalized = Array.from(new Set(itemIds));
+
+    // Debug: log selection changes to help reproduce selection issues in-browser.
+    // Print a stack trace for explicit deselects so we can identify the caller.
+    // Remove or gate this in production if noisy.
+    // eslint-disable-next-line no-console
+    console.debug('setRoomSelectedItems()', { roomId, itemIds: normalized, options });
+    if (normalized.length === 0) {
+      // eslint-disable-next-line no-console
+      console.trace('setRoomSelectedItems() explicit deselect', { roomId });
+    }
 
     setSelectedItemIdsByRoom((previous) => {
       const prior = previous[roomId] ?? EMPTY_ITEM_SELECTION;
